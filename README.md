@@ -1,4 +1,4 @@
-# relaychat
+# 
 A BITNET re-implementation of RELAY CHAT 
 
 This Go program operates a chat server on the BITNET NJE protocol network, of which HNET is one operating implementation as of Dec 2019. 
