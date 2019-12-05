@@ -1,11 +1,11 @@
 package main
 
 /*
-   chat v.0.5 Dec 4 2019
+   chat v.0.9 Dec 5 2019
    a HNET (BITNET) chat daemon, starts and listens for input to a FIFO pipe
    defined in pipeFile
    invoke with:
-   chat /path/pipefile defaultlogofftime
+   chat &
    (c) 2019 by moshix
    Program source is under Apache license             */
 
@@ -15,27 +15,27 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// var pipeFile = "/tmp/chat.pipe"
+// change this to suit your needs
 var pipeFile = "/root/chat/chat.pipe"
 
-// build list of users here, which will be used by all functions and features
-// but possibly this structure is obsoleted by a map ... let's see.... lave for now
+var msgcount int64  // total messages sent, used by /STATS command
+var totaluser int64 // total users logged in, used by /STATS command
+
 type users struct {
-	useratnode   string
-	lastmessage  string
-	timer        int
-	lastactivity int64
+	useratnode   string //user@node
+	lastmessage  string //what was the last message setn by this user
+	timer        int    //what is this users desired logoff timer
+	lastactivity int64  //updated every time this user does something
 }
 
-var table map[string]users
+var table map[string]users // map of structs of all logged on users
 
 func main() {
-
-	// alternative user list as a table
 	table = make(map[string]users)
 
 	fmt.Println("HNET chat server started....")
@@ -46,12 +46,11 @@ func main() {
 		fmt.Print("FIFO pipe successfully opened and now listening\n")
 	}
 
+	// here is the pipe listening to all incoming messages
 	reader := bufio.NewReader(file)
-
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err == nil {
-			//fmt.Print("load string:" + string(line))
 			readcommand(strings.TrimSuffix(string(line), "\n")) //pass incoming line to messager parser
 
 		}
@@ -59,19 +58,18 @@ func main() {
 }
 func readcommand(fifoline string) {
 
-	//fifomsgtime := time.Now()
 	var fifouser string
 	var fifomsg string
 	var upperfifomsg string
 	var upperfifouser string
 
-	s := strings.Split(fifoline, ":")
+	s := strings.Split(fifoline, "}") //split this message into sender and msg content
 
 	fifouser = s[0]
 	fifomsg = s[1]                            //this is the payload part of the incoming msg
 	upperfifomsg = strings.ToUpper(fifomsg)   //make upper case for commands processing
 	upperfifouser = strings.ToUpper(fifouser) //make user upper case
-	fmt.Printf("'%s' '%s'\n", upperfifouser, upperfifomsg)
+	fmt.Printf("'%s' '%s'\n", upperfifouser, fifomsg)
 
 	//at this point we have the user at node and the payload in fifomsg/upperfifomsg
 	//now we start some very simple processing
@@ -80,8 +78,6 @@ func readcommand(fifoline string) {
 	//   /WHO  sends a list of logged on (recently) users
 	//   /LOGON logs the user on and adds her to the list
 	//   /LOGOFF logs the user off and removes him from thelist
-	//   /TIMER30  sets the timer to 30 min for inactive users
-	//   /TIME60   sets the timer to 60 min for inactive users
 	//   //STATS   sends usage statistics
 	//---------------------------------------------------------------------------------
 
@@ -107,24 +103,22 @@ func readcommand(fifoline string) {
 		break
 	default:
 		// must be a regular chat message
-		//user sending to broadcast LOGGED on?? if so  broadcast
 
 		if _, ok := table[upperfifouser]; ok {
-			broacastmsg(upperfifouser, fifomsg)
+			broacastmsg(upperfifouser, fifouser, fifomsg)
 		} else {
 			cmd := exec.Command("/usr/local/bin/send", upperfifouser, "You are not logged on currently to RELAY chat")
 			_, err := cmd.CombinedOutput()
 			if err != nil {
 				log.Fatalf("cmd.Run() failed with %s\n", err)
 			}
+			msgcount++
 
 		}
 	}
 }
 
 func senduserlist(upperfifouser string) {
-	// looop thru user list and do
-	// /var/user/bin/send -u chat@relay user1...99
 
 	for user, _ := range table {
 		cmd := exec.Command("/usr/local/bin/send", upperfifouser, "Online last 30min: ", user)
@@ -132,59 +126,68 @@ func senduserlist(upperfifouser string) {
 		if err != nil {
 			log.Fatalf("cmd.Run() failed with %s\n", err)
 		}
+		msgcount++
 
 	}
 }
 
 func sendstats(user string) {
-	// /var/user/bin/send -u chat@relay string of usage stats we collect here
+	s := strconv.FormatInt(msgcount, 10)
+	t := strconv.FormatInt(totaluser, 10)
+	cmd := exec.Command("/usr/local/bin/send", user, " Total messages: ", s, "     Total users:", t)
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
+	}
+	msgcount++
 
 }
 
 func adduser(user string) {
-	//add user to struct userlist and infor him he has been added
-	// /var/user/bin/send -u chat@relay string of usage stats we collect here
 	table[user] = users{
 		lastactivity: time.Now().Unix(),
 	}
-	cmd := exec.Command("/usr/local/bin/send", user, " Welcome to RELAY CHAT v0.1.")
+	cmd := exec.Command("/usr/local/bin/send", user, " Welcome to RELAY CHAT v0.9")
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalf("cmd.Run() failed with %s\n", err)
 	}
+	msgcount++
+	totaluser++
 
 }
 
 func deluser(user string) {
-	//del user to struct userlist and infor him he has been added
-	// /var/user/bin/send -u chat@relay string of usage stats we collect here
 	delete(table, user)
-	cmd := exec.Command("/usr/local/bin/send", user, " Goodbye from RELAY CHAT v0.1..")
+	cmd := exec.Command("/usr/local/bin/send", user, " Goodbye from RELAY CHAT v0.9")
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalf("cmd.Run() failed with %s\n", err)
 	}
+	msgcount++
 
 }
 
-func broacastmsg(upperfifouser string, fifomsg string) {
-	//loop thru all user WHO HAVE NOT BEEN IDLE TOO long and
-	// THE SEND COMMAND NEEDS TO BE LIKE THIS: /usr/local/bin/send user fifommsg
-	//	 for username, userStruct := range table {
-	//	 if userStruct.lastActivity `is before 30 minutes` {
-	//	 	-->> QUESTION?   delete(table, username)   HOW DO I DO TIME.NOW-30M ?
-	// }
-	//	 }
+func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
+
+	// remove users inactive for 30 minutes
+	thirtyMinutesAgo := time.Now().Add(time.Duration(-30) * time.Minute).Unix()
+	for username, userStruct := range table {
+		if userStruct.lastactivity < thirtyMinutesAgo {
+			log.Printf("Deleting inactive user '%s'", username)
+			delete(table, username)
+		}
+	}
+
 	for upperfifouser, _ := range table {
 		if _, ok := table[upperfifouser]; ok {
-			cmd := exec.Command("/usr/local/bin/send", upperfifouser, fifomsg)
+			cmd := exec.Command("/usr/local/bin/send", upperfifouser, "> ", fifouser, fifomsg)
 			_, err := cmd.CombinedOutput()
 			if err != nil {
 				log.Fatalf("cmd.Run() failed with %s\n", err)
 			}
+			msgcount++
 
 		}
 	}
 }
-
-// end of chat program here
