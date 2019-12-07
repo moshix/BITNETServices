@@ -1,7 +1,7 @@
 package main
 
 /*
-   chat v.0.9 Dec 5 2019
+   chat v.0.9.2 Dec 5 2019
    a HNET (BITNET) chat daemon, starts and listens for input to a FIFO pipe
    defined in pipeFile
    invoke with:
@@ -19,13 +19,14 @@ import (
 	"strings"
 	"time"
 )
-
+vat version string
 // change this to suit your needs
 var pipeFile = "/root/chat/chat.pipe"
 
 var msgcount int64  // total messages sent, used by /STATS command
 var totaluser int64 // total users logged in, used by /STATS command
-
+//var prevmsg1 string  // last message for loop detector
+//var prevmsg2 string // before last message
 type users struct {
 	useratnode   string //user@node
 	lastmessage  string //what was the last message setn by this user
@@ -36,6 +37,9 @@ type users struct {
 var table map[string]users // map of structs of all logged on users
 
 func main() {
+	
+	version = "v0.9.2"
+	
 	table = make(map[string]users)
 
 	fmt.Println("HNET chat server started....")
@@ -121,7 +125,7 @@ func readcommand(fifoline string) {
 func senduserlist(upperfifouser string) {
 
 	for user, _ := range table {
-		cmd := exec.Command("/usr/local/bin/send", upperfifouser, "Online last 30min: ", user)
+		cmd := exec.Command("/usr/local/bin/send", upperfifouser, "Online last 60min: ", user)
 		_, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Fatalf("cmd.Run() failed with %s\n", err)
@@ -147,7 +151,7 @@ func adduser(user string) {
 	table[user] = users{
 		lastactivity: time.Now().Unix(),
 	}
-	cmd := exec.Command("/usr/local/bin/send", user, " Welcome to RELAY CHAT v0.9")
+	cmd := exec.Command("/usr/local/bin/send", user, " Welcome to RELAY CHAT ",version)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalf("cmd.Run() failed with %s\n", err)
@@ -159,7 +163,7 @@ func adduser(user string) {
 
 func deluser(user string) {
 	delete(table, user)
-	cmd := exec.Command("/usr/local/bin/send", user, " Goodbye from RELAY CHAT v0.9")
+	cmd := exec.Command("/usr/local/bin/send", user, " Goodbye from RELAY CHAT ",version)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalf("cmd.Run() failed with %s\n", err)
@@ -170,8 +174,8 @@ func deluser(user string) {
 
 func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
 
-	// remove users inactive for 30 minutes
-	thirtyMinutesAgo := time.Now().Add(time.Duration(-30) * time.Minute).Unix()
+	// remove users inactive for 60 minutes
+	thirtyMinutesAgo := time.Now().Add(time.Duration(-60) * time.Minute).Unix()
 	for username, userStruct := range table {
 		if userStruct.lastactivity < thirtyMinutesAgo {
 			log.Printf("Deleting inactive user '%s'", username)
@@ -179,6 +183,12 @@ func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
 		}
 	}
 
+	loopmsg := fifomsg[0:3] //this is the begignning of a user who is not logged on anymore
+
+	if loopmsg == "YOU" {
+		delete(table, upperfifouser)
+
+	}
 	for upperfifouser, _ := range table {
 		if _, ok := table[upperfifouser]; ok {
 			cmd := exec.Command("/usr/local/bin/send", upperfifouser, "> ", fifouser, fifomsg)
