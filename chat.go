@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 )
-vat version string
+
 // change this to suit your needs
 var pipeFile = "/root/chat/chat.pipe"
 
@@ -37,9 +37,6 @@ type users struct {
 var table map[string]users // map of structs of all logged on users
 
 func main() {
-	
-	version = "v0.9.5"
-	
 	table = make(map[string]users)
 
 	fmt.Println("HNET chat server started....")
@@ -58,6 +55,7 @@ func main() {
 			readcommand(strings.TrimSuffix(string(line), "\n")) //pass incoming line to messager parser
 
 		}
+		time.Sleep(400 * time.Millisecond) // wait a bit to avoid excessive CPU usage
 	}
 }
 func readcommand(fifoline string) {
@@ -125,7 +123,7 @@ func readcommand(fifoline string) {
 func senduserlist(upperfifouser string) {
 
 	for user, _ := range table {
-		cmd := exec.Command("/usr/local/bin/send", upperfifouser, "Online last 60min: ", user)
+		cmd := exec.Command("/usr/local/bin/send", upperfifouser, "Online last 120 min: ", user)
 		_, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Fatalf("cmd.Run() failed with %s\n", err)
@@ -151,7 +149,7 @@ func adduser(user string) {
 	table[user] = users{
 		lastactivity: time.Now().Unix(),
 	}
-	cmd := exec.Command("/usr/local/bin/send", user, " Welcome to RELAY CHAT ",version)
+	cmd := exec.Command("/usr/local/bin/send", user, " Welcome to RELAY CHAT v0.9.5")
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalf("cmd.Run() failed with %s\n", err)
@@ -163,7 +161,7 @@ func adduser(user string) {
 
 func deluser(user string) {
 	delete(table, user)
-	cmd := exec.Command("/usr/local/bin/send", user, " Goodbye from RELAY CHAT ",version)
+	cmd := exec.Command("/usr/local/bin/send", user, " Goodbye from RELAY CHAT v0.9.5")
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalf("cmd.Run() failed with %s\n", err)
@@ -174,8 +172,8 @@ func deluser(user string) {
 
 func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
 
-	// remove users inactive for 60 minutes
-	thirtyMinutesAgo := time.Now().Add(time.Duration(-60) * time.Minute).Unix()
+	// remove users inactive for 120  minutes
+	thirtyMinutesAgo := time.Now().Add(time.Duration(-120) * time.Minute).Unix()
 	for username, userStruct := range table {
 		if userStruct.lastactivity < thirtyMinutesAgo {
 			log.Printf("Deleting inactive user '%s'", username)
@@ -189,7 +187,6 @@ func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
 		delete(table, upperfifouser)
 
 	}
-	
 	for upperfifouser, _ := range table {
 		if _, ok := table[upperfifouser]; ok {
 			cmd := exec.Command("/usr/local/bin/send", upperfifouser, "> ", fifouser, fifomsg)
