@@ -1,7 +1,7 @@
 package main
 
 /*
-   chat v.0.9.2 Dec 5 2019
+   chat v.0.9.5 Dec 5 2019
    a HNET (BITNET) chat daemon, starts and listens for input to a FIFO pipe
    defined in pipeFile
    invoke with:
@@ -38,7 +38,7 @@ var table map[string]users // map of structs of all logged on users
 
 func main() {
 	
-	version = "v0.9.2"
+	version = "v0.9.5"
 	
 	table = make(map[string]users)
 
