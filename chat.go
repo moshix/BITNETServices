@@ -184,11 +184,12 @@ func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
 	}
 
 	loopmsg := fifomsg[0:3] //this is the begignning of a user who is not logged on anymore
-
-	if loopmsg == "YOU" {
+	//Looping messages begin with DMT, filter those
+	if loopmsg == "DMT" {
 		delete(table, upperfifouser)
 
 	}
+	
 	for upperfifouser, _ := range table {
 		if _, ok := table[upperfifouser]; ok {
 			cmd := exec.Command("/usr/local/bin/send", upperfifouser, "> ", fifouser, fifomsg)
