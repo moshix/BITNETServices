@@ -119,6 +119,9 @@ func readcommand(fifoline string) {
 		// must be a regular chat message
 
 		if _, ok := table[upperfifouser]; ok {
+			table[user] = users{
+				lastactivity: time.Now().Unix(),
+			}
 			broacastmsg(upperfifouser, fifouser, fifomsg)
 		} else {
 			send(upperfifouser, "You are not logged on currently to RELAY chat")
