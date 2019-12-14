@@ -39,27 +39,20 @@ type users struct {
 
 var table map[string]users // map of structs of all logged on users
 
-// function to prune old inactive users twice a minutes 
-
-ticker := time.NewTicker(2 * time.Minutes)
-quit := make(chan struct{})
-go func() {
-    for {
-       select {
-        case <- ticker.C:
-           thirtyMinutesAgo := time.Now().Add(time.Duration(-120) * time.Minute).Unix()
-		for username, userStruct := range table {
-			if userStruct.lastactivity < thirtyMinutesAgo {
+// function to prune old inactive users every minute 
+func purgeinactive() {
+    for range time.Tick(time.Minute * 1) {
+       	thirtyMinutesAgo := time.Now().Add(time.Duration(-120) * time.Minute).Unix()
+	for username, userStruct := range table {
+		if userStruct.lastactivity < thirtyMinutesAgo {
 			log.Printf("Deleting inactive user '%s'", username)
 			delete(table, username)
-			}
-		} 
-        case <- quit:
-            ticker.Stop()
-            return
-        }
+		}
+	}
+	    
+	    
     }
- }()
+}
 func main() {
 	table = make(map[string]users)
 
@@ -70,7 +63,9 @@ func main() {
 	} else {
 		fmt.Print("FIFO pipe successfully opened and now listening\n")
 	}
-
+	
+	go purgeinactive()   // start inactive user purger now
+	
 	// here is the pipe listening to all incoming messages
 	reader := bufio.NewReader(file)
 	for {
