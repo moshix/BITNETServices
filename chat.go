@@ -119,7 +119,7 @@ func readcommand(fifoline string) {
 		// must be a regular chat message
 
 		if _, ok := table[upperfifouser]; ok {
-			table[user] = users{
+			table[upperfifouser] = users{
 				lastactivity: time.Now().Unix(),
 			}
 			broacastmsg(upperfifouser, fifouser, fifomsg)
