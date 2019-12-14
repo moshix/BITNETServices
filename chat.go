@@ -1,7 +1,7 @@
 package main
 
 /*
-   chat v.0.9.5 Dec 5 2019
+   chat v.0.9.6 Dec 5 2019
    a HNET (BITNET) chat daemon, starts and listens for input to a FIFO pipe
    defined in pipeFile
    invoke with:
@@ -146,13 +146,13 @@ func adduser(user string) {
 	table[user] = users{
 		lastactivity: time.Now().Unix(),
 	}
-	send(user, " Welcome to RELAY CHAT v0.9.5")
+	send(user, " Welcome to RELAY CHAT v0.9.6")
 	totaluser++
 }
 
 func deluser(user string) {
 	delete(table, user)
-	send(user, " Goodbye from RELAY CHAT v0.9.5")
+	send(user, " Goodbye from RELAY CHAT v0.9.6")
 }
 
 func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
