@@ -21,12 +21,15 @@ import (
 )
 
 // change this to suit your needs
-var pipeFile = "/root/chat/chat.pipe"
+const pipeFile = "/root/chat/chat.pipe"
+
+const sendCommand = "/usr/local/bin/send"
 
 var msgcount int64  // total messages sent, used by /STATS command
 var totaluser int64 // total users logged in, used by /STATS command
 //var prevmsg1 string  // last message for loop detector
 //var prevmsg2 string // before last message
+
 type users struct {
 	useratnode   string //user@node
 	lastmessage  string //what was the last message setn by this user
@@ -58,6 +61,15 @@ func main() {
 		time.Sleep(400 * time.Millisecond) // wait a bit to avoid excessive CPU usage
 	}
 }
+
+func send(arg ...string) {
+	cmd := exec.Command(sendCommand, arg...)
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("send failed with %s\n", err)
+	}
+	msgcount++
+}
+
 func readcommand(fifoline string) {
 
 	var fifouser string
@@ -109,65 +121,35 @@ func readcommand(fifoline string) {
 		if _, ok := table[upperfifouser]; ok {
 			broacastmsg(upperfifouser, fifouser, fifomsg)
 		} else {
-			cmd := exec.Command("/usr/local/bin/send", upperfifouser, "You are not logged on currently to RELAY chat")
-			_, err := cmd.CombinedOutput()
-			if err != nil {
-				log.Fatalf("cmd.Run() failed with %s\n", err)
-			}
-			msgcount++
-
+			send(upperfifouser, "You are not logged on currently to RELAY chat")
 		}
 	}
 }
 
 func senduserlist(upperfifouser string) {
 
-	for user, _ := range table {
-		cmd := exec.Command("/usr/local/bin/send", upperfifouser, "Online last 120 min: ", user)
-		_, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Fatalf("cmd.Run() failed with %s\n", err)
-		}
-		msgcount++
-
+	for user := range table {
+		send(upperfifouser, "Online last 120 min: ", user)
 	}
 }
 
 func sendstats(user string) {
 	s := strconv.FormatInt(msgcount, 10)
 	t := strconv.FormatInt(totaluser, 10)
-	cmd := exec.Command("/usr/local/bin/send", user, " Total messages: ", s, "     Total users:", t)
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
-	}
-	msgcount++
-
+	send(user, " Total messages: ", s, "     Total users:", t)
 }
 
 func adduser(user string) {
 	table[user] = users{
 		lastactivity: time.Now().Unix(),
 	}
-	cmd := exec.Command("/usr/local/bin/send", user, " Welcome to RELAY CHAT v0.9.5")
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
-	}
-	msgcount++
+	send(user, " Welcome to RELAY CHAT v0.9.5")
 	totaluser++
-
 }
 
 func deluser(user string) {
 	delete(table, user)
-	cmd := exec.Command("/usr/local/bin/send", user, " Goodbye from RELAY CHAT v0.9.5")
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
-	}
-	msgcount++
-
+	send(user, " Goodbye from RELAY CHAT v0.9.5")
 }
 
 func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
@@ -185,17 +167,10 @@ func broacastmsg(upperfifouser string, fifouser string, fifomsg string) {
 	//Looping messages begin with DMT, filter those
 	if loopmsg == "DMT" {
 		delete(table, upperfifouser)
-
 	}
-	for upperfifouser, _ := range table {
+	for upperfifouser := range table {
 		if _, ok := table[upperfifouser]; ok {
-			cmd := exec.Command("/usr/local/bin/send", upperfifouser, "> ", fifouser, fifomsg)
-			_, err := cmd.CombinedOutput()
-			if err != nil {
-				log.Fatalf("cmd.Run() failed with %s\n", err)
-			}
-			msgcount++
-
+			send(upperfifouser, "> ", fifouser, fifomsg)
 		}
 	}
 }
