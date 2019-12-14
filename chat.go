@@ -1,7 +1,7 @@
 package main
 
 /*
-   chat v.0.9.6 Dec 5 2019
+   chat v.0.9.7 Dec 5 2019
    a HNET (BITNET) chat daemon, starts and listens for input to a FIFO pipe
    defined in pipeFile
    invoke with:
@@ -39,6 +39,27 @@ type users struct {
 
 var table map[string]users // map of structs of all logged on users
 
+// function to prune old inactive users twice a minutes 
+
+ticker := time.NewTicker(2 * time.Minutes)
+quit := make(chan struct{})
+go func() {
+    for {
+       select {
+        case <- ticker.C:
+           thirtyMinutesAgo := time.Now().Add(time.Duration(-120) * time.Minute).Unix()
+		for username, userStruct := range table {
+			if userStruct.lastactivity < thirtyMinutesAgo {
+			log.Printf("Deleting inactive user '%s'", username)
+			delete(table, username)
+			}
+		} 
+        case <- quit:
+            ticker.Stop()
+            return
+        }
+    }
+ }()
 func main() {
 	table = make(map[string]users)
 
