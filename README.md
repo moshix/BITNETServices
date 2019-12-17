@@ -35,7 +35,7 @@ FUTURE FEATURES
 ---------------
 
 /SET_TIMER to n minutes after which log me off
-/MKCHANNEL XX create  a private channel
+/CREATE XX create  a private channel
 /CHANGE to XX chanenl
 /DIRECT MESSAGE TO A PARTICULAR USER
 
