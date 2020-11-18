@@ -43,15 +43,26 @@ FUTURE FEATURES
 RELAY EXEC 
 ----------
 
-It's a re-implementation from scratch of the very famous RELAY chat written by Mr. Kell (RIP) 
+It's a re-implementation from scratch of the very famous RELAY chat written by  Jeff Kell (RIP) 
+of the University of Tennessee at Chattanooga in 1985 using the REXX programming language.
 
-Run it in a service machine called RELAY on your z/VM, VM/ESA or VM/SP machine with NJE connections and anybody can
+efore BITNET Relay was implemented, any form of communication over BITNET required identifying the remote user and host.
+
+Relay ran on a special ID using several BITNET hosts. To use it, a message was sent to a user ID called RELAY. 
+The Relay program running on that user ID would then provide multi-user chat functions, primarily in the form 
+of "channels" (chat rooms). The message could contain either a command for Relay (preceded by the 
+popular "/" slash character command prefix, still in use today), or a 
+message at the remote host (typically a mainframe computer).
+
+Run this program in a service machine called RELAY on your z/VM, VM/ESA or VM/SP machine with NJE connections and anybody can
 logon to your chat. Keep it runnign and disconnect the terminal from the VM
 
 
 
 Hope you enjoy
+Read more about RELAY CHAT and its history here: http://web.inter.nl.net/users/fred/relay/relhis.html
 
+The RELAY structure here: https://en.wikipedia.org/wiki/BITNET_Relay
 
 November 2020
 Moshix
