@@ -1,18 +1,17 @@
-# 
-2 BITNET re-implementation of RELAY CHAT: One in Go and one in REXX  
+# 2 BITNET re-implementation of RELAY CHAT: One in Go and one in REXX  
 
 This Go program operates a chat server on the BITNET NJE protocol network, of which HNET is one operating implementation as of Dec 2019. 
 
-INSTALLATION
-------------
+GO VERSION INSTALLATION
+-----------------------
 
 git clone the repo
 change the fifo path at the beginning of the program
 go build chat.go
 start
 
-OPERATION
----------
+GO VERSION OPERATION
+--------------------
 
 you need to make sure that whatever receives messages for the NJE chat server will create a string like this:
 USER@NODE:message
@@ -31,13 +30,6 @@ message  whatever you want to tell yourfriends on the channel
 
 
 
-FUTURE FEATURES
----------------
-
-- federation of relay chat servers
-- persisting users unto a file
-- MVS 3.8 port with BREXX
-- chat rooms
 
 
 RELAY EXEC 
@@ -57,7 +49,28 @@ message at the remote host (typically a mainframe computer).
 Run this program in a service machine called RELAY on your z/VM, VM/ESA or VM/SP machine with NJE connections and anybody can
 logon to your chat. Keep it runnign and disconnect the terminal from the VM
 
+INSTALLATION
+------------
 
+This program runs on z/VM, VM/ESA 2.x and VM/SP6. 
+
+Upload RELAY EXEC to a VM account named RELAY with permissions G. 
+
+configure the first few environemnt-specific variables at the top of the program. 
+
+start with "RELAY" and disconnect the terminal
+
+shut it down remotely with the password you configured in the environment-specific variables. 
+
+
+
+FUTURE FEATURES
+---------------
+
+- federation of relay chat servers
+- persisting users unto a file
+- MVS 3.8 port with BREXX
+- chat rooms
 
 Hope you enjoy
 Read more about RELAY CHAT and its history here: http://web.inter.nl.net/users/fred/relay/relhis.html
