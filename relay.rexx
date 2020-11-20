@@ -246,9 +246,6 @@ systeminfo:
 return
  
  
- 
- 
- 
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
    parse ARG userid,node
@@ -339,7 +336,7 @@ end
 
 
 CheckTimeout:
-/*  heck if user has not sent any message, automatic LOGOFF */
+/*  check if user has not sent any message, automatic LOGOFF */
    arg ctime
    cj=0 /* save logons to remove, else logon buffer doesn't match  */
    do ci=1 to words($.@)
@@ -355,6 +352,7 @@ CheckTimeout:
    do ci=1 to cj
       interpret 'call logoffuser '$remove.ci
       call log($remove.ci||'logged off due to timeout reached '||maxdormant|| ' minutes')
+      loggedonusers = loggedonusers - 1
    end
 return
  
