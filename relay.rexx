@@ -10,23 +10,35 @@
 /***************************************/
  
 /* configuraiton parameters - IMPORTANT */
-relaychatversion="2.2"  /* needed for federation compatibility check */
-timezone="CET"          /* adjust for your server IMPORTANT */
-maxdormant = 1000       /* max time user can be dormat */
-localnode ="SEVMM1"     /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="hotdogs"  /* any user who sends this password shuts down the chat server*/
+relaychatversion="2.2.1"   /* needed for federation compatibility check */
+timezone="CET"             /* adjust for your server IMPORTANT */
+maxdormant = 1000          /* max time user can be dormat */
+localnode ="houvmzvm"      /* IMPORTANT configure your RSCS node here!! */
+shutdownpswd="1sdfj234a"   /* any user who sends this password shuts down the chat server*/
+osversion="z/VM 6.4"       /* OS version for enquries and stats         */
+typehost="IBM z114"        /* what kind of machine                      */
+hostloc  ="Stockholm, SE"  /* where is this machine                   */
+osversion="z/VM 6.4"       /* OS version for enquries and stats         */
+osversion="z/VM 6.4"       /* OS version for enquries and stats         */
+sysopname="Moshix"         /* who is the sysop for this chat server     */
+sysopemail="moshix"        /* where to contact this systop            */
  
  
- 
+/* determine uptime of this machine  - WARNING OS DEPENDENCY!!!!!!    */
+Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+/* say ProdName
+say ipltime  */
 /* global vars       */
  
 loggedonusers = 0        /* online user at any given moment        */
+highestusers = 0         /* most users online at any given moment  */
 totmessages  = 0         /* total number of msgs sent */
 otime = 0                /* overtime to log off users after n minutes */
 starttime=mytime()       /* time this server started */
- 
+logline = " "            /* initialize log line      */
 /* some simple logging  for stats etc        */
-say 'RELAY chat 'relaychatversion' starting at: 'mytime()
+CALL     log('RELAY chat '||relaychatversion||' started. ')
  
  
 /* init double linked list of online users   */
@@ -56,7 +68,7 @@ call @init
               parse var text type sender . nodeuser msg
           /* break out the node and userid               */
               parse var nodeuser node '(' userid '):'
-              say 'from' userid '@' node msg
+ CALL LOG('from'||userid||' @ '||node||msg)
           call handlemsg  userid,node,msg
            end
            else do;  /* simple msg from local user  */
@@ -94,6 +106,10 @@ handlemsg:
    SELECT                             /* HANDLE MESSAGE TYPES  */
       when (umsg = "/WHO") then
            call sendwho userid,node
+      when (umsg = "/SYSTEM") then
+            call systeminfo userid,node
+      when (substr(umsg,5) = "/ROOM") then
+           call changeroom userid,node, msg /* logged on user wants to change room*/
       when (umsg = "/STATS") then
            call sendstats userid,node
       when (umsg = "/LOGOFF") then do
@@ -111,7 +127,7 @@ handlemsg:
       end
  
       when (umsg = shutdownpswd) then do
-           say "Shutdown initiated by: "userid" at node "node
+           call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
       end
  
@@ -125,23 +141,23 @@ return
 sendchatmsg:
 /* what we got is a message to be distributed to all online users */
     parse ARG userid,node,msg
-
+ 
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
-
+ 
              do ci=1 to words($.@)
                 entry=word($.@,ci)
                 if entry='' then iterate
                 parse value entry with '/'cuser'@'cnode'('otime')'
                      'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
              end
-
+ 
             totmessages = totmessages+ 1
     end
        else do
           /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
-
-            'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v2.1'
+ 
+            'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
             'TELL' userid 'AT' node 'You are currently NOT logged on.'
             'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
             totmessages = totmessages + 3
@@ -170,7 +186,7 @@ logoffuser:
    listuser = userid || "@"||node
    ppos=pos('/'listuser,$.@)
    if ppos=0 then do
-      say "User logoff rejected, not logged-on:  "listuser
+           call log("User logoff rejected, not logged-on:  "||listuser)
       return
    end
    rpos=pos(' ',$.@,ppos+1)
@@ -187,27 +203,49 @@ return
  
  logonuser:
  /* add user to linked list */
+ /* all users are logged on initially to room 0*/
     parse ARG userid,node
     listuser = userid"@"node
     if pos('/'listuser,$.@)>0 then do
-       say "List already logged-on: "listuser
+       call log("List already logged-on: "||listuser)
       'TELL' userid 'AT' node '-> You are already logged on.'
       'TELL' userid 'AT' node '-> total number of users: 'loggedonusers
     end
     else do
        loggedonusers = loggedonusers + 1
+          if loggedonusers < 0 then do
+                  loggedonusers = 0
+          end
+ 
+       if highestusers < loggedonusers then highestusers = highestusers + 1
+ 
        call @put '/'listuser'('currentTime')'
-       say "List user added: "listuser
+       call log("List user added: "||listuser)
       'TELL' userid 'AT' node '-> LOGON succeeded.  '
-           if loggedonusers < 0 then do
-                loggedonusers = 0
-           end
  
       'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
-      call announce  userid, node /* announce to all users  of new user */
+       call announce  userid, node /* announce to all users  of new user */
     end
     totmessages = totmessages+ 2
  return
+ 
+systeminfo:
+/* send /SYSTEM info about this host  */
+     parse ARG userid,node
+     listuser = userid"@"node
+    'TELL' userid 'AT' node '-> NJE node name        : 'localnode
+    'TELL' userid 'AT' node '-> Relay chat version   : 'relaychatversion
+    'TELL' userid 'AT' node '-> OS for this host     : 'osversion
+    'TELL' userid 'AT' node '-> Type of host         : 'typehost
+    'TELL' userid 'AT' node '-> Location of this host: 'hostloc
+    'TELL' userid 'AT' node '-> Time Zone of         : 'timezone
+    'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
+    'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
+ 
+     totmessages = totmessages+ 7
+return
+ 
+ 
  
  
  
@@ -216,10 +254,11 @@ sendstats:
    parse ARG userid,node
     listuser = userid"@"node
     'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
+    'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
     'TELL' userid 'AT' node '-> total number of msgs : 'totmessages
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
  
-     totmessages = totmessages+ 3
+     totmessages = totmessages+ 4
 return
  
 helpuser:
@@ -236,6 +275,7 @@ helpuser:
    'TELL' userid 'AT' node '/LOGON to logon to this chat room and start getting chat messages'
    'TELL' userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
    'TELL' userid 'AT' node '/STATS for chat statistics'
+   'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
    'TELL' userid 'AT' node '              '
    'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'
    'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
@@ -243,7 +283,7 @@ helpuser:
  
  
  
-    totmessages = totmessages + 10
+    totmessages = totmessages + 11
 return
  
 announce:
@@ -261,8 +301,43 @@ announce:
  
 return
  
- 
- 
+changeroom:
+/* user who is alreayd logged on wants to change to a different room */
+ parse ARG userid,node,msg
+
+ listuser = userid"@"node 
+ stripmsg = strip(msg)
+ wantsroom = delword(stripmsg,1,1)  /* remove /ROOM from /ROOM 3 f.e., leaves only 3*/ 
+ if ( datatype(wantsroom) <> "NUM")  | (c2d(wantsroom) < 0) | (c2d(wantsroom > 9 then do
+     'TELL' userid 'AT' node '-> You have chosen an invalid rooom number (0-9'   
+     return
+else do
+      /* check if user is logged on first*/
+      if pos('/'listuser,$.@)>0 then do
+            /*  USER IS ALREADY LOGGED ON */
+      
+                  do ci=1 to words($.@)
+                     entry=word($.@,ci)
+                     if entry='' then iterate
+                     parse value entry with '/'cuser'@'cnode'#'room'('otime')'
+                     /**** PETER how do I now change the room to wantsroom ??? */
+                           'TELL' cuser 'AT' cnode '<> '-> you are now in room 'wantsroom
+                  end
+      
+                  totmessages = totmessages+ 1
+         end
+            else do
+               /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
+      
+                  'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
+                  'TELL' userid 'AT' node 'You are currently NOT logged on.'
+                  'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
+                  totmessages = totmessages + 3
+            end
+end
+ return
+
+
 CheckTimeout:
 /*  heck if user has not sent any message, automatic LOGOFF */
    arg ctime
@@ -279,7 +354,7 @@ CheckTimeout:
    end
    do ci=1 to cj
       interpret 'call logoffuser '$remove.ci
-      say $remove.ci' logged off due to timeout'
+      call log($remove.ci||'logged off due to timeout reached '||maxdormant|| ' minutes')
    end
 return
  
@@ -375,7 +450,26 @@ sy:      say;
             say @get(k,m, dir);
          return
  
-
-
+list:
+/* this is only as examples how to use the double linked list
+    for future expanesion of this program                      */
+call sy 'initializing the list.'            ;  call @init
+call sy 'building list: blue'               ;  call @put "blue"
+call sy 'displaying list size.'             ;  say  "list size="@size()
+call sy 'forward list'                      ;  call @show
+call sy 'backward list'                     ;  call @show ,,-1
+call sy 'showing 4th item'                  ;  call @show 4,1
+call sy 'showing 5th & 6th items'           ;  call @show 5,2
+call sy 'adding item before item 4: black'  ;  call @put "black",4
+call sy 'showing list'                      ;  call @show
+call sy 'adding to tail: white'             ;  call @put "white"
+call sy 'showing list'                      ;  call @show
+call sy 'adding to head: red'               ;  call @put  "red",0
+call sy 'showing list'                      ;  call @show
+return
  
-/* the end */
+ 
+log:
+parse ARG  logline
+say mytime()' :: 'logline
+return
