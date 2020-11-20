@@ -1,4 +1,4 @@
-# 2 BITNET re-implementation of RELAY CHAT: One in Go and one in REXX  
+# 2 BITNET Implementations of RELAY CHAT: One in Go and one in REXX  
 
 This Go program operates a chat server on the BITNET NJE protocol network, of which HNET is one operating implementation as of Dec 2019. 
 
@@ -49,8 +49,8 @@ message at the remote host (typically a mainframe computer).
 Run this program in a service machine called RELAY on your z/VM, VM/ESA or VM/SP machine with NJE connections and anybody can
 logon to your chat. Keep it runnign and disconnect the terminal from the VM
 
-INSTALLATION
-------------
+REXX VERSION INSTALLATION
+-------------------------
 
 This program runs on z/VM, VM/ESA 2.x and VM/SP6. 
 
