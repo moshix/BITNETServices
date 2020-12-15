@@ -10,25 +10,35 @@
 /***************************************/
  
 /* configuraiton parameters - IMPORTANT */
-relaychatversion="2.2.1"   /* needed for federation compatibility check */
-timezone="CET"             /* adjust for your server IMPORTANT */
-maxdormant = 1000          /* max time user can be dormat */
-localnode ="houvmzvm"      /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="1sdfj234a"   /* any user who sends this password shuts down the chat server*/
-osversion="z/VM 6.4"       /* OS version for enquries and stats         */
-typehost="IBM z114"        /* what kind of machine                      */
-hostloc  ="Stockholm, SE"  /* where is this machine                   */
-osversion="z/VM 6.4"       /* OS version for enquries and stats         */
-osversion="z/VM 6.4"       /* OS version for enquries and stats         */
-sysopname="Moshix"         /* who is the sysop for this chat server     */
-sysopemail="moshix"        /* where to contact this systop            */
+relaychatversion="2.2.5" /* needed for federation compatibility check */
+timezone="CDT"           /* adjust for your server IMPORTANT */
+maxdormant =  500        /* max time user can be dormat */
+localnode ="houvmzvm"    /* IMPORTANT configure your RSCS node here!! */
+shutdownpswd="1xxxxxxxx" /* any user who sends this password shuts down the chat server*/
+osversion="z/VM 6.4"     /* OS version for enquries and stats         */
+typehost="IBM zPDT"      /* what kind of machine                      */
+hostloc  ="Chicago, IL"  /* where is this machine                   */
+osversion="z/VM 7.1"     /* OS version for enquries and stats         */
+sysopname="Moshix  "     /* who is the sysop for this chat server     */
+sysopemail="moshi        " /* where to contact this systop            */
+ 
+sl = c2d(right(diag(0), 2))
+cplevel = space(cp_id) sl
+strlen = length(cplevel)
+say "CP LEVEL: "cplevel
+ 
+parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+cpu = right( cpu+0, 3)
+say "CPU%: "cpu
+ 
  
  
 /* determine uptime of this machine  - WARNING OS DEPENDENCY!!!!!!    */
 Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
 Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
-/* say ProdName
-say ipltime  */
+say ProdName
+say ipltime
 /* global vars       */
  
 loggedonusers = 0        /* online user at any given moment        */
@@ -107,25 +117,20 @@ handlemsg:
       when (umsg = "/WHO") then
            call sendwho userid,node
       when (umsg = "/SYSTEM") then
-            call systeminfo userid,node
-      when (substr(umsg,5) = "/ROOM") then
-           call changeroom userid,node, msg /* logged on user wants to change room*/
+           call systeminfo userid,node
       when (umsg = "/STATS") then
            call sendstats userid,node
       when (umsg = "/LOGOFF") then do
            call logoffuser userid,node
            updbuff=0                 /* removed, nothing to update */
       end
- 
       when (umsg = "/LOGON") then do
            call logonuser  userid,node
            updbuff=0                    /* already up-to-date */
       end
- 
       when (umsg = "/HELP") then do
            call helpuser  userid,node
       end
- 
       when (umsg = shutdownpswd) then do
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
@@ -141,24 +146,21 @@ return
 sendchatmsg:
 /* what we got is a message to be distributed to all online users */
     parse ARG userid,node,msg
- 
+    listuser = userid || "@"||node
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
- 
              do ci=1 to words($.@)
                 entry=word($.@,ci)
                 if entry='' then iterate
                 parse value entry with '/'cuser'@'cnode'('otime')'
                      'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
              end
- 
             totmessages = totmessages+ 1
     end
        else do
           /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
- 
-            'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
             'TELL' userid 'AT' node 'You are currently NOT logged on.'
+            'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
             'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
             totmessages = totmessages + 3
        end
@@ -168,8 +170,9 @@ sendwho:
 /* who is online right now on this system? */
    userswho = 0    /* counter for seen usres */
    parse ARG userid,node
+   listuser = userid || "@"||node
    'TELL' userid 'AT' node 'List of currently logged on users:'
-      do ci=1 to words($.@)
+    do ci=1 to words($.@)
       entry=word($.@,ci)
       if entry='' then iterate
       parse value entry with '/'cuser'@'cnode'('otime')'
@@ -178,6 +181,7 @@ sendwho:
       userswho = userswho + 1
    end
   'TELL' userid 'AT' node '> Total online right now: 'userswho
+   loggedonusers = userswho
   totmessages = totmessages + 1
 return
  
@@ -195,7 +199,6 @@ logoffuser:
    $.@=overlay(' ',$.@,ppos,rlen)
    $.@=space($.@)
    loggedonusers = loggedonusers - 1
-   if loggedonusers < 0 then loggedonusers = 0  /* fix some weird arithmetic issue */
   'TELL' userid 'AT' node '-> You are logged off now.'
   'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
    totmessages = totmessages + 2
@@ -204,27 +207,27 @@ return
  
  logonuser:
  /* add user to linked list */
- /* all users are logged on initially to room 0*/
+ 
     parse ARG userid,node
     listuser = userid"@"node
     if pos('/'listuser,$.@)>0 then do
        call log("List already logged-on: "||listuser)
-      'TELL' userid 'AT' node ' > You are already logged on.'
-      'TELL' userid 'AT' node ' > total number of users: 'loggedonusers
+      'TELL' userid 'AT' node '-> You are already logged on.'
+      'TELL' userid 'AT' node '-> total number of users: 'loggedonusers
     end
     else do
+         if loggedonusers < 0 then do
+                 loggedonusers = 0
+         end
        loggedonusers = loggedonusers + 1
-          if loggedonusers < 0 then do
-                  loggedonusers = 0
-          end
  
        if highestusers < loggedonusers then highestusers = highestusers + 1
  
        call @put '/'listuser'('currentTime')'
        call log("List user added: "||listuser)
-      'TELL' userid 'AT' node ' > LOGON succeeded.  '
+      'TELL' userid 'AT' node '-> LOGON succeeded.  '
  
-      'TELL' userid 'AT' node ' > Total number of users: 'loggedonusers
+      'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
        call announce  userid, node /* announce to all users  of new user */
     end
     totmessages = totmessages+ 2
@@ -234,29 +237,43 @@ systeminfo:
 /* send /SYSTEM info about this host  */
      parse ARG userid,node
      listuser = userid"@"node
-    'TELL' userid 'AT' node ' > NJE node name        : 'localnode
-    'TELL' userid 'AT' node ' > Relay chat version   : 'relaychatversion
-    'TELL' userid 'AT' node ' > OS for this host     : 'osversion
-    'TELL' userid 'AT' node ' > Type of host         : 'typehost
-    'TELL' userid 'AT' node ' > Location of this host: 'hostloc
-    'TELL' userid 'AT' node ' > Time Zone of         : 'timezone
-    'TELL' userid 'AT' node ' > SysOp for this server: 'sysopname
-    'TELL' userid 'AT' node ' > SysOp email addr     : 'sysopemail
  
-     totmessages = totmessages+ 7
+parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+cpu = right( cpu+0, 3)
+    'TELL' userid 'AT' node '-> NJE node name        : 'localnode
+    'TELL' userid 'AT' node '-> Relay chat version   : 'relaychatversion
+    'TELL' userid 'AT' node '-> OS for this host     : 'osversion
+    'TELL' userid 'AT' node '-> Type of host         : 'typehost
+    'TELL' userid 'AT' node '-> Location of this host: 'hostloc
+    'TELL' userid 'AT' node '-> Time Zone of         : 'timezone
+    'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
+    'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
+    'TELL' userid 'AT' node '-> System Load          :'cpu'%'
+ 
+     totmessages = totmessages+ 8
 return
+ 
+ 
+ 
  
  
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
    parse ARG userid,node
-    listuser = userid"@"node
-    'TELL' userid 'AT' node ' > Total number of users: 'loggedonusers
-    'TELL' userid 'AT' node ' > Hihgest nr.  of users: 'highestusers
-    'TELL' userid 'AT' node ' > total number of msgs : 'totmessages
-    'TELL' userid 'AT' node ' > Server up since      : 'starttime' 'timezone
+parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+cpu = right( cpu+0, 3)
  
-     totmessages = totmessages+ 4
+   if loggedonusers < 0 then loggedonusers = 0 /* still goes negative somtimes */
+    listuser = userid"@"node
+    'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
+    'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
+    'TELL' userid 'AT' node '-> total number of msgs : 'totmessages
+    'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
+    'TELL' userid 'AT' node '-> System CPU laod      :'cpu'%'
+ 
+     totmessages = totmessages+ 5
 return
  
 helpuser:
@@ -266,7 +283,7 @@ helpuser:
  
  
    'TELL' userid 'AT' node 'Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP v'relaychatversion
-   'TELL' userid 'AT' node '---------------------------------------------------'
+   'TELL' userid 'AT' node '--------------------------------------------------------'
    'TELL' userid 'AT' node '              '
    'TELL' userid 'AT' node '/HELP for this help'
    'TELL' userid 'AT' node '/WHO for connected users'
@@ -275,7 +292,7 @@ helpuser:
    'TELL' userid 'AT' node '/STATS for chat statistics'
    'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
    'TELL' userid 'AT' node '              '
-   'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'
+/* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
    'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
    'TELL' userid 'AT' node ' messages with   > are service messages from chat servers'
  
@@ -293,51 +310,16 @@ announce:
      entry=word($.@,ci)
      if entry='' then iterate
      parse value entry with '/'cuser'@'cnode'('otime')'
-     'TELL' cuser 'AT' cnode ' > New user joined:    'userid' @ 'node
+     'TELL' cuser 'AT' cnode '-> New user joined:    'userid' @ 'node
   end
  
  
 return
  
-changeroom:
-/* user who is alreayd logged on wants to change to a different room */
- parse ARG userid,node,msg
-
- listuser = userid"@"node 
- stripmsg = strip(msg)
- wantsroom = delword(stripmsg,1,1)  /* remove /ROOM from /ROOM 3 f.e., leaves only 3*/ 
- if ( datatype(wantsroom) <> "NUM")  | (c2d(wantsroom) < 0) | (c2d(wantsroom > 9 then do
-     'TELL' userid 'AT' node ' > You have chosen an invalid rooom number (0-9'   
-     return
-else do
-      /* check if user is logged on first*/
-      if pos('/'listuser,$.@)>0 then do
-            /*  USER IS ALREADY LOGGED ON */
-      
-                  do ci=1 to words($.@)
-                     entry=word($.@,ci)
-                     if entry='' then iterate
-                     parse value entry with '/'cuser'@'cnode'#'room'('otime')'
-                     /**** PETER how do I now change the room to wantsroom ??? */
-                           'TELL' cuser 'AT' cnode '<> ' > you are now in room 'wantsroom
-                  end
-      
-                  totmessages = totmessages+ 1
-         end
-            else do
-               /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
-      
-                  'TELL' userid 'AT' node ' > Wecome to RELAY chat for z/VM v'relaychatversion
-                  'TELL' userid 'AT' node ' > You are currently NOT logged on.'
-                  'TELL' userid 'AT' node ' > /HELP for help, or /LOGON to logon on'
-                  totmessages = totmessages + 3
-            end
-end
- return
-
-
+ 
+ 
 CheckTimeout:
-/*  check if user has not sent any message, automatic LOGOFF */
+/* Check if user has not sent any message, automatic LOGOFF */
    arg ctime
    cj=0 /* save logons to remove, else logon buffer doesn't match  */
    do ci=1 to words($.@)
@@ -346,15 +328,15 @@ CheckTimeout:
       parse value entry with '/'cuser'@'cnode'('otime')'
   /*  say cuser cnode ctime otime ctime-otime    */
       if ctime-otime> maxdormant then do  /* timeout per configuration */
-         loggedonusers = loggedonusers -1 
          cj=cj+1
+         say 'removed user: 'cnode
          $remove.cj=cuser','cnode
       end
    end
    do ci=1 to cj
       interpret 'call logoffuser '$remove.ci
       call log($remove.ci||'logged off due to timeout reached '||maxdormant|| ' minutes')
-      loggedonusers = loggedonusers - 1
+      loggedonusers = loggedonusers -1
    end
 return
  
@@ -473,3 +455,4 @@ log:
 parse ARG  logline
 say mytime()' :: 'logline
 return
+ 
