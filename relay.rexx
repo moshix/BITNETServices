@@ -1,4 +1,4 @@
-/**RELAY EXEC CHAT PROGRAM             */
+/* RELAY EXEC CHAT PROGRAM             */
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
@@ -10,17 +10,17 @@
 /***************************************/
  
 /* configuraiton parameters - IMPORTANT */
-relaychatversion="2.2.5" /* needed for federation compatibility check */
+relaychatversion="2.2.6" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT */
 maxdormant =  500        /* max time user can be dormat */
-localnode ="houvmzvm"    /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="1xxxxxxxx" /* any user who sends this password shuts down the chat server*/
+localnode ="HOUVMZVM"    /* IMPORTANT configure your RSCS node here!! */
+shutdownpswd="122342789" /* any user who sends this password shuts down the chat server*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM zPDT"      /* what kind of machine                      */
 hostloc  ="Chicago, IL"  /* where is this machine                   */
 osversion="z/VM 7.1"     /* OS version for enquries and stats         */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="moshi        " /* where to contact this systop            */
+sysopemail="moshix@gmail" /* where to contact this systop            */
  
 sl = c2d(right(diag(0), 2))
 cplevel = space(cp_id) sl
@@ -171,12 +171,14 @@ sendwho:
    userswho = 0    /* counter for seen usres */
    parse ARG userid,node
    listuser = userid || "@"||node
-   'TELL' userid 'AT' node 'List of currently logged on users:'
+   'TELL' userid 'AT' node '> List of currently logged on users:'
+    totmessages = totmessages + 1
     do ci=1 to words($.@)
       entry=word($.@,ci)
       if entry='' then iterate
       parse value entry with '/'cuser'@'cnode'('otime')'
-      'TELL' userid 'AT' node '> ' cuser'@'cnode
+      lasttime=ctime-otime
+      'TELL' userid 'AT' node '> ' cuser'@'cnode'  - last seen in min: 'lasttime
       totmessages = totmessages + 1
       userswho = userswho + 1
    end
@@ -216,9 +218,7 @@ return
       'TELL' userid 'AT' node '-> total number of users: 'loggedonusers
     end
     else do
-         if loggedonusers < 0 then do
-                 loggedonusers = 0
-         end
+       if loggedonusers < 0 then loggedonusers = 0
        loggedonusers = loggedonusers + 1
  
        if highestusers < loggedonusers then highestusers = highestusers + 1
@@ -255,9 +255,6 @@ cpu = right( cpu+0, 3)
 return
  
  
- 
- 
- 
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
    parse ARG userid,node
@@ -266,6 +263,7 @@ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
 cpu = right( cpu+0, 3)
  
    if loggedonusers < 0 then loggedonusers = 0 /* still goes negative somtimes */
+ 
     listuser = userid"@"node
     'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
     'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
