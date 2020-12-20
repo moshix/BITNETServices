@@ -1,0 +1,101 @@
+/* DEC 21, 2020
+   COPYRIGHT 2021 MOSHIX  
+   REQUIRES https://download.sinenomine.net/rxfs/rxfs.vmarc
+   CHAT PROGRAM WITH PANELS AND SCROLLING */
+   
+/*   address command*/
+Welcome='Chat Client v0' /* Variable to use in RXFSWRIT */
+'RXFSOPEN'              /* Establish the RXFS environment */
+Width=SCR_Width
+Height=Scr_Height
+Dimension=Width*Height
+input = " "
+'SET MSG IUCV'
+row =10        /* start scrolling at row 10 */
+
+'RXFSREAD'              /* Write screen buffer to screen and read */
+/* DO FOREVER ONCE WE GOT IT DEBUGGED */
+CALL ASK
+if strip(input) == "//QUIT" then signal xit  /* user wants to quit */
+CALL ANSWER
+'dropbuf 0'
+call msgsent
+'TELL relay at sevmm1 'input
+'dropbuf 0'
+ DO FOREVER  /* DO FOREVER FOR READING IN ALL MESSAGES */
+
+
+  "WAKEUP +0 (IUCVMSG CONS"
+  'MAKEBUF'
+  'wakeup (iucvmsg CONS'
+   PARSE PULL TEXT
+   IF Rc = 5 THEN DO          /* WE HAVE A MESSAGE */
+      if pos('From', text) > 0 then  do  /* from RSCS   */
+                parse var text type sender . nodeuser msg
+               /* break out the node and userid               */
+                parse var nodeuser node '(' userid '):'
+              call showit  msg
+        end
+        else do;  /* simple msg from local user  */
+              /* format is like this:                           */
+              /* *MSG    MAINT    hello                         */
+               parse var text type userid msg
+               node = localnode
+               call showit msg
+         end
+     end
+END /* OF DO FOREVER FOR READING ALL MESSAGES */
+/* END of do forever loop with xit: exit */
+xit:
+/* when its time to quit, come here    */
+
+  'WAKEUP RESET';        /* turn messages from IUCV to ON    */
+  'SET MSG ON'
+  'DROPBUF'
+exit;
+return
+
+/*  ExtHi_Hello='REV'  example change the extended highlighting of hello */
+                        /* Add a new line to existing screen */
+/* wait for action key PA or enter etc. */
+'RXFSCLOS'              /* Not necessary but show it's allowed */
+exit
+ask:
+input='..'
+Cursor_input="Y"
+Pro_test="N"
+"RXFSWRIT ROW=02 COL=35 LENGTH=25 PROT=Y COLOR=YEL VNAME='Welcome'"
+"RXFSWRIT ROW=04 COL=05 LENGTH=30 PROT=N COLOR=WHI EXTHI=UND VNAME='input'"
+
+   'RXFSREAD'              /* Write screen buffer to screen and read */
+RETURN
+
+answer:
+Color_input='BLU'
+Prot_input='Y'
+Cursor_input="N"
+/* now show chat message just typed by user in scroll area below */
+"RXFSWRIT ROW=07 COL=02 LENGTH=5  PROT=Y COLOR=GRE TEXT='You: '"
+"RXFSWRIT ROW=07 COL=10 LENGTH=30 PROT=Y COLOR=BLU VNAME='input'"
+/*     'RXFSREAD NOWAIT'          show updated input variable */
+
+/* 'RXFSREAD'  */              /* show updated input variable */
+RETURN
+msgsent:
+Prot_input="N"          /* allows me to overtype the field */
+Cursor_input="Y"        /* inserts the cursor */
+
+"RXFSWRIT R=03 C=10 LEN=30 PROT=Y COL=WHI TEXT='Chat message sent! '"
+'RXFSREAD'              /* Send to screen and read - input var may be updated */
+return
+
+showit:
+parse ARG msg
+
+Prot_input="N"          /* allows me to overtype the field */
+Cursor_input="Y"        /* inserts the cursor */
+
+"RXFSWRIT R=row C=10 LEN=30 PROT=Y COL=YEL VNAME='msg'"
+row=row+1
+
+return
