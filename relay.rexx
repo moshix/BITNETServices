@@ -1,4 +1,4 @@
-/* RELAY EXEC CHAT PROGRAM             */
+/**RELAY EXEC CHAT PROGRAM             */
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
@@ -10,15 +10,14 @@
 /***************************************/
  
 /* configuraiton parameters - IMPORTANT */
-relaychatversion="2.2.6" /* needed for federation compatibility check */
-timezone="CDT"           /* adjust for your server IMPORTANT */
-maxdormant =  500        /* max time user can be dormat */
-localnode ="HOUVMZVM"    /* IMPORTANT configure your RSCS node here!! */
+relaychatversion="2.2.7" /* needed for federation compatibility check */
+timezone="CET"           /* adjust for your server IMPORTANT */
+maxdormant =  1800       /* max time user can be dormat */
+localnode ="SEVMM1"    /* IMPORTANT configure your RSCS node here!! */
 shutdownpswd="122342789" /* any user who sends this password shuts down the chat server*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM zPDT"      /* what kind of machine                      */
-hostloc  ="Chicago, IL"  /* where is this machine                   */
-osversion="z/VM 7.1"     /* OS version for enquries and stats         */
+hostloc  ="Stockholm,SE" /* where is this machine                   */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
 sysopemail="moshix@gmail" /* where to contact this systop            */
  
@@ -258,6 +257,9 @@ return
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
    parse ARG userid,node
+    onlinenow = countusers(userid,node)
+ 
+ 
 parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
 cpu = right( cpu+0, 3)
@@ -265,7 +267,7 @@ cpu = right( cpu+0, 3)
    if loggedonusers < 0 then loggedonusers = 0 /* still goes negative somtimes */
  
     listuser = userid"@"node
-    'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
+    'TELL' userid 'AT' node '-> Total number of users: 'onlinenow
     'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
     'TELL' userid 'AT' node '-> total number of msgs : 'totmessages
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
@@ -276,7 +278,7 @@ return
  
 helpuser:
 /* send help menu */
-  parse ARG userd,node
+  parse ARG userid,node
   listuser = userid"@"node
  
  
@@ -298,6 +300,20 @@ helpuser:
  
     totmessages = totmessages + 11
 return
+ 
+countusers:
+ parse ARG userid,node
+ listuser = userid"@"node
+  onlineusers = 0
+   do ci=1 to words($.@)
+     entry=word($.@,ci)
+     if entry='' then iterate
+     parse value entry with '/'cuser'@'cnode'('otime')'
+     lasttime=ctime-otime
+     onlineusers = onlineusers + 1
+  end
+return onlineusers
+ 
  
 announce:
 /* announce newly logged on user to all users */
