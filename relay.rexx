@@ -10,10 +10,10 @@
 /***************************************/
  
 /* configuraiton parameters - IMPORTANT */
-relaychatversion="2.2.7" /* needed for federation compatibility check */
+relaychatversion="2.2.8" /* needed for federation compatibility check */
 timezone="CET"           /* adjust for your server IMPORTANT */
 maxdormant =  1800       /* max time user can be dormat */
-localnode ="SEVMM1"    /* IMPORTANT configure your RSCS node here!! */
+localnode ="SEVMM1"      /* IMPORTANT configure your RSCS node here!! */
 shutdownpswd="122342789" /* any user who sends this password shuts down the chat server*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM zPDT"      /* what kind of machine                      */
@@ -30,7 +30,6 @@ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
 cpu = right( cpu+0, 3)
 say "CPU%: "cpu
- 
  
  
 /* determine uptime of this machine  - WARNING OS DEPENDENCY!!!!!!    */
@@ -93,7 +92,6 @@ call @init
         otherwise
      end
  end;
- 
  
 xit:
 /* when its time to quit, come here    */
@@ -208,7 +206,6 @@ return
  
  logonuser:
  /* add user to linked list */
- 
     parse ARG userid,node
     listuser = userid"@"node
     if pos('/'listuser,$.@)>0 then do
@@ -282,23 +279,21 @@ helpuser:
   listuser = userid"@"node
  
  
-   'TELL' userid 'AT' node 'Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP v'relaychatversion
-   'TELL' userid 'AT' node '--------------------------------------------------------'
-   'TELL' userid 'AT' node '              '
-   'TELL' userid 'AT' node '/HELP for this help'
-   'TELL' userid 'AT' node '/WHO for connected users'
-   'TELL' userid 'AT' node '/LOGON to logon to this chat room and start getting chat messages'
-   'TELL' userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
-   'TELL' userid 'AT' node '/STATS for chat statistics'
-   'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
-   'TELL' userid 'AT' node '              '
+  'TELL' userid 'AT' node 'Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP v'relaychatversion
+  'TELL' userid 'AT' node '--------------------------------------------------------'
+  'TELL' userid 'AT' node '              '
+  'TELL' userid 'AT' node '/HELP for this help'
+  'TELL' userid 'AT' node '/WHO for connected users'
+  'TELL' userid 'AT' node '/LOGON to logon to this chat room and start getting chat messages'
+  'TELL' userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
+  'TELL' userid 'AT' node '/STATS for chat statistics'
+  'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
+  'TELL' userid 'AT' node '              '
 /* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
-   'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
-   'TELL' userid 'AT' node ' messages with   > are service messages from chat servers'
+  'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
+  'TELL' userid 'AT' node ' messages with   > are service messages from chat servers'
  
- 
- 
-    totmessages = totmessages + 11
+  totmessages = totmessages + 11
 return
  
 countusers:
@@ -329,7 +324,6 @@ announce:
  
  
 return
- 
  
  
 CheckTimeout:
