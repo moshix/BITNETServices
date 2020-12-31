@@ -3,16 +3,16 @@
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
 /* by collaboration of Peter Jacob,    */
-/* Neale Ferguson, Moshix             */
+/* Neale Ferguson, Moshix              */
 /*                                     */
-/* copyright 2020 by moshix            */
+/* copyright 2020, 2021  by moshi      */
 /* Apache 2.0 license                  */
 /***************************************/
  
 /* configuraiton parameters - IMPORTANT */
-relaychatversion="2.2.8" /* needed for federation compatibility check */
+relaychatversion="2.3.0" /* needed for federation compatibility check */
 timezone="CET"           /* adjust for your server IMPORTANT */
-maxdormant =  1800       /* max time user can be dormat */
+maxdormant =  3000       /* max time user can be dormat */
 localnode ="SEVMM1"      /* IMPORTANT configure your RSCS node here!! */
 shutdownpswd="122342789" /* any user who sends this password shuts down the chat server*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
@@ -20,23 +20,60 @@ typehost="IBM zPDT"      /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                   */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
 sysopemail="moshix@gmail" /* where to contact this systop            */
+compatibility=2           /* 1 VM/SP 6, 2=VM/ESA and up              */
  
-sl = c2d(right(diag(0), 2))
-cplevel = space(cp_id) sl
-strlen = length(cplevel)
-say "CP LEVEL: "cplevel
+if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
+     sl = c2d(right(diag(0), 2))
+     cplevel = space(cp_id) sl
+     strlen = length(cplevel)
+     say "CP LEVEL: "cplevel
  
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+            with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)
+     say "CPU%: "cpu
+ 
+     Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+     say ProdName
+     say ipltime
+          parse value stsi(1,1,1) with 49  type   +4 ,
+                                  81  seq   +16 ,
+                                 101  model +16 .
+ 
+     parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                                  39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                                  45 lname  +8    /* partition name         */
+ 
+     parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                                  57 cp_id +16
+ 
+     parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+            with     lnum      lcpus      vcpus        ser    lname model .
+ 
+     blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+             "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
+ 
+     brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+     cfg = htopversion lcpus" CPUs" brand
+     parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
+     if rstor? <> "" then     /* We have real storage */
+       cfg = cfg " " rstor
+ 
+     cfg = type
 parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
-cpu = right( cpu+0, 3)
-say "CPU%: "cpu
  
+ cpu = right( cpu+0, 3)
  
-/* determine uptime of this machine  - WARNING OS DEPENDENCY!!!!!!    */
-Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
-Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
-say ProdName
-say ipltime
+ say 'All CPU avg: 'cpu '%     Paging: 'page
+ 
+     say 'Machine type: 'cfg'     RAM: 'rstor
+     say 'Number of CPU: in LPAR: 'lcpus
+         /* indicators cpu page cfg rstor lcpus */
+ 
+  END
 /* global vars       */
  
 loggedonusers = 0        /* online user at any given moment        */
@@ -236,7 +273,7 @@ systeminfo:
  
 parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
-cpu = right( cpu+0, 3)
+     cpu = right( cpu+0, 3)
     'TELL' userid 'AT' node '-> NJE node name        : 'localnode
     'TELL' userid 'AT' node '-> Relay chat version   : 'relaychatversion
     'TELL' userid 'AT' node '-> OS for this host     : 'osversion
@@ -247,7 +284,20 @@ cpu = right( cpu+0, 3)
     'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
     'TELL' userid 'AT' node '-> System Load          :'cpu'%'
  
-     totmessages = totmessages+ 8
+    if compatibility > 1 then do
+       call machine
+       parse var mcpu mpage mcf mrstor mlcpus
+      'TELL' userid 'AT' node '-> Pages/Sec            : 'page
+      'TELL' userid 'AT' node '-> IBM Machine Type     : 'cfg
+      'TELL' userid 'AT' node '-> Memory in LPAR or VM : 'rstor
+      'TELL' userid 'AT' node '-> Number of CPUs       : 'lcpus
+    end
+     if compatibility > 1 then do
+     totmessages = totmessages + 12
+     end
+    else do
+     totmessages = totmessages + 8
+    end
 return
  
  
@@ -464,3 +514,53 @@ parse ARG  logline
 say mytime()' :: 'logline
 return
  
+machine: procedure;
+ 
+     sl = c2d(right(diag(0), 2))
+     cplevel = space(cp_id) sl
+     strlen = length(cplevel)
+ 
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+            with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)
+ 
+     Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+          parse value stsi(1,1,1) with 49  type   +4 ,
+                                  81  seq   +16 ,
+                                 101  model +16 .
+ 
+     parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                                  39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                                  45 lname  +8    /* partition name         */
+ 
+     parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                                  57 cp_id +16
+ 
+     parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+            with     lnum      lcpus      vcpus        ser    lname model .
+ 
+     blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+             "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
+ 
+     brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+     cfg = htopversion lcpus" CPUs" brand
+     parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
+     if rstor? <> "" then     /* We have real storage */
+       cfg = cfg " " rstor
+ 
+     cfg = type
+parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+ 
+ cpu = right( cpu+0, 3)
+/*
+ say 'All CPU avg: 'cpu '%     Paging: 'page
+ 
+     say 'Machine type: 'cfg'     RAM: 'rstor
+     say 'Number of CPU: in LPAR: 'lcpus*/
+         /* indicators cpu page cfg rstor lcpus */
+ 
+ 
+return
