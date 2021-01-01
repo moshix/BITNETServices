@@ -51,14 +51,14 @@ logon to your chat. Keep it runnign and disconnect the terminal from the VM
 
 Commands supported by RELAY EXEC:
 
-/HELP
-/WHO
-/STATS
-/SYSTEM
-/DM
-/SHUTDOWN
-/ROOM
-/SHOUT
+1. /HELP
+2. /WHO
+3. /STATS
+4. /SYSTEM
+5. /DM       (direct message to a user)
+6. /SHUTDOWN (for sysopt only and requires password
+7. /ROOM.    (go into room X)
+8. /SHOUT    (send a message to all logged on users, for sysop only)
 
 
 REXX VERSION INSTALLATION
@@ -75,7 +75,7 @@ This program runs on z/VM, VM/ESA 2.x and VM/SP6.
 4. Give your RELAY virtual machine the necessary class to enable it to issue this command: 
    defaults set tell msgcmd msgnoh 
    
-5 Make sure your RSCS CONFIG has class B and the option MSGNOH enabled
+5. Make sure your RSCS CONFIG has class B and the option MSGNOH enabled
 
 6. start with "RELAY" and disconnect the terminal
 
