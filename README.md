@@ -100,6 +100,7 @@ Read more about RELAY CHAT and its history here: http://web.inter.nl.net/users/f
 The RELAY structure here: https://en.wikipedia.org/wiki/BITNET_Relay
 
 
-November 2020
+ORIGINAL RELEASE: November 2020
+UPDATED: January 1, 2021
 Moshix
 
