@@ -38,7 +38,7 @@ RELAY EXEC
 It's a re-implementation from scratch of the very famous RELAY chat written by  Jeff Kell (RIP) 
 of the University of Tennessee at Chattanooga in 1985 using the REXX programming language.
 
-efore BITNET Relay was implemented, any form of communication over BITNET required identifying the remote user and host.
+Before BITNET Relay was implemented, any form of communication over BITNET required identifying the remote user and host.
 
 Relay ran on a special ID using several BITNET hosts. To use it, a message was sent to a user ID called RELAY. 
 The Relay program running on that user ID would then provide multi-user chat functions, primarily in the form 
@@ -49,16 +49,38 @@ message at the remote host (typically a mainframe computer).
 Run this program in a service machine called RELAY on your z/VM, VM/ESA or VM/SP machine with NJE connections and anybody can
 logon to your chat. Keep it runnign and disconnect the terminal from the VM
 
+Commands supported by RELAY EXEC:
+
+/HELP
+/WHO
+/STATS
+/SYSTEM
+/DM
+/SHUTDOWN
+/ROOM
+/SHOUT
+
+
 REXX VERSION INSTALLATION
 -------------------------
 
 This program runs on z/VM, VM/ESA 2.x and VM/SP6. 
 
-Upload RELAY EXEC to a VM account named RELAY with permissions G. 
+1. Upload RELAY EXEC to a VM account named RELAY with permissions G. 
 
-configure the first few environemnt-specific variables at the top of the program. 
+2. configure the first few environemnt-specific variables at the top of the program. Most important are NJE node name, time zone and sysop name
 
-start with "RELAY" and disconnect the terminal
+3. for VM/ESA and up configure the compatibility variable to 2 .For VM/SP6, use compatibility=1
+
+4. Give your RELAY virtual machine the necessary class to enable it to issue this command: 
+   defaults set tell msgcmd msgnoh 
+   
+5 Make sure your RSCS CONFIG has class B and the option MSGNOH enabled
+
+6. start with "RELAY" and disconnect the terminal
+
+
+
 
 shut it down remotely with the password you configured in the environment-specific variables. 
 
