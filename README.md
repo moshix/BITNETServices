@@ -56,7 +56,7 @@ Commands supported by RELAY EXEC:
 3. /STATS
 4. /SYSTEM
 5. /DM       (direct message to a user)
-6. /SHUTDOWN (for sysopt only and requires password
+6. /SHUTDOWN (for sysopt only and requires password)
 7. /ROOM.    (go into room X)
 8. /SHOUT    (send a message to all logged on users, for sysop only)
 
@@ -80,9 +80,9 @@ This program runs on z/VM, VM/ESA 2.x and VM/SP6.
 6. start with "RELAY" and disconnect the terminal
 
 
+--
 
-
-shut it down remotely with the password you configured in the environment-specific variables. 
+Shut it down remotely with the password you configured in the environment-specific variables. 
 
 
 
