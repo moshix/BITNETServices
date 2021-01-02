@@ -13,6 +13,7 @@ start
 GO VERSION OPERATION
 --------------------
 
+Minimum Go version is 1.12. <br>
 you need to make sure that whatever receives messages for the NJE chat server will create a string like this:
 USER@NODE:message
 
@@ -64,7 +65,7 @@ Commands supported by RELAY EXEC:
 REXX VERSION INSTALLATION
 -------------------------
 
-This program runs on z/VM, VM/ESA 2.x and VM/SP6. 
+This program runs on z/VM, VM/ESA 2.x and VM/SP6. No version earlier than VM/SP rel6 is supported currently.  
 
 1. Upload RELAY EXEC to a VM account named RELAY with permissions G. 
 
@@ -80,7 +81,7 @@ This program runs on z/VM, VM/ESA 2.x and VM/SP6.
 6. start with "RELAY" and disconnect the terminal
 
 
---
+<br><br>
 
 Shut it down remotely with the password you configured in the environment-specific variables. 
 
@@ -99,8 +100,8 @@ Read more about RELAY CHAT and its history here: http://web.inter.nl.net/users/f
 
 The RELAY structure here: https://en.wikipedia.org/wiki/BITNET_Relay
 
-
-ORIGINAL RELEASE: November 2020
-UPDATED: January 1, 2021
+<br><br>
+ORIGINAL RELEASE: November 2020<br>
+UPDATED: January 1, 2021<br>
 Moshix
 
