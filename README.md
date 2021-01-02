@@ -95,8 +95,13 @@ FUTURE FEATURES
 - MVS 3.8 port with BREXX
 - chat rooms
 
-Hope you enjoy
+Hope you enjoy! <br><br><br><br>
+
+RELAY CHAT History
+------------------
+
 Read more about RELAY CHAT and its history here: http://web.inter.nl.net/users/fred/relay/relhis.html
+<br><br>
 
 The original RELAY description can be found here: https://en.wikipedia.org/wiki/BITNET_Relay
 
