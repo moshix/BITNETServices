@@ -1,4 +1,4 @@
-/**RELAY EXEC CHAT PROGRAM             */
+/** ELAY EXEC CHAT PROGRAM             */
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
@@ -10,18 +10,22 @@
 /***************************************/
  
 /* configuraiton parameters - IMPORTANT */
-relaychatversion="2.3.0" /* needed for federation compatibility check */
+relaychatversion="2.4.0" /* needed for federation compatibility check */
 timezone="CET"           /* adjust for your server IMPORTANT */
 maxdormant =  3000       /* max time user can be dormat */
 localnode ="SEVMM1"      /* IMPORTANT configure your RSCS node here!! */
 shutdownpswd="122342789" /* any user who sends this password shuts down the chat server*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM zPDT"      /* what kind of machine                      */
-hostloc  ="Stockholm,SE" /* where is this machine                   */
+typehost="IBM z114"      /* what kind of machine                      */
+hostloc  ="Stockholm,SE" /* where is this machine                     */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="moshix@gmail" /* where to contact this systop            */
-compatibility=2           /* 1 VM/SP 6, 2=VM/ESA and up              */
+sysopemail="moshix@gmail" /* where to contact this systop             */
+compatibility=2           /* 1 VM/SP 6, 2=VM/ESA and up               */
+sysopuser='MAINT'         /* sysop user who can force users out       */
+sysopnode=translate(localnode) /* sysop node automatically set        */
  
+ 
+/*---------------CODE SECTION BELOW ----------------------------------*/
 if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
      sl = c2d(right(diag(0), 2))
      cplevel = space(cp_id) sl
@@ -76,6 +80,7 @@ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
   END
 /* global vars       */
  
+/* initialize opertional variables below */
 loggedonusers = 0        /* online user at any given moment        */
 highestusers = 0         /* most users online at any given moment  */
 totmessages  = 0         /* total number of msgs sent */
@@ -88,6 +93,8 @@ CALL     log('RELAY chat '||relaychatversion||' started. ')
  
 /* init double linked list of online users   */
 call @init
+/*-------------------------------------------*/
+ 
  
  
 /* Invoke WAKEUP first so it will be ready to receive msgs */
@@ -146,6 +153,10 @@ handlemsg:
     node=strip(node)
     CurrentTime=Extime()
    umsg = translate(msg)  /* make upper case */
+   umsg=strip(umsg)
+   commandumsg=SUBSTR(umsg,2,5)
+/* say "short command: "commandumsg   */
+ 
    updbuff=1
    SELECT                             /* HANDLE MESSAGE TYPES  */
       when (umsg = "/WHO") then
@@ -169,6 +180,11 @@ handlemsg:
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
       end
+      when (commandumsg ='FORCE') then do
+           say 'input is: 'umsg
+           call force userid,node,msg
+      end
+ 
  
       otherwise
            call sendchatmsg userid,node,msg
@@ -176,6 +192,41 @@ handlemsg:
    if updBuff=1 then call refreshTime currentTime,userid,node
    call CheckTimeout currentTime
 return
+ 
+force:
+/* sysop forces a user out  */
+  parse ARG userid,node,msg
+  forceuser = SUBSTR(msg,11,7)  /* extract user after /force command */
+  forceuser = strip(forceuser)
+/* say "user to be forced, as i understood it: "forceuser    */
+  if (userid = sysopuser & node = sysopnode) then do /* ok user is authorized */
+     listuser = forceuser || "@"||node
+ 
+      ppos=pos('/'listuser,$.@)
+        if ppos=0 then do
+                call log("User logoff rejected, not logged-on:  "||listuser)
+           return
+        end
+        rpos=pos(' ',$.@,ppos+1)
+        if rpos=0 then rpos=length($.@)+1
+        rlen=rpos-ppos
+        $.@=overlay(' ',$.@,ppos,rlen)
+        $.@=space($.@)
+        CALL LOG('Forced: '||forceuser||' @ '||node)
+        loggedonusers = loggedonusers - 1
+       'TELL' userid 'AT' node '-> This user has been forced off: 'forceuser
+       'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
+        totmessages = totmessages + 2
+ 
+  end   /* of (userid=sysopuser) test */
+  else do
+    CALL LOG('This user:  '||userid||' @ '||node||' tried to force off user: '||forceuser)
+    'TELL' userid 'AT' node '-> Not authorized to force off user: 'forceuser
+     totmessages = totmessages + 1
+  end
+return
+ 
+ 
  
 sendchatmsg:
 /* what we got is a message to be distributed to all online users */
@@ -329,21 +380,22 @@ helpuser:
   listuser = userid"@"node
  
  
-  'TELL' userid 'AT' node 'Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP v'relaychatversion
-  'TELL' userid 'AT' node '--------------------------------------------------------'
-  'TELL' userid 'AT' node '              '
-  'TELL' userid 'AT' node '/HELP for this help'
-  'TELL' userid 'AT' node '/WHO for connected users'
-  'TELL' userid 'AT' node '/LOGON to logon to this chat room and start getting chat messages'
-  'TELL' userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
-  'TELL' userid 'AT' node '/STATS for chat statistics'
-  'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
-  'TELL' userid 'AT' node '              '
+'TELL' userid 'AT' node 'Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP v'relaychatversion
+'TELL' userid 'AT' node '--------------------------------------------------------'
+'TELL' userid 'AT' node '              '
+'TELL' userid 'AT' node '/HELP   for this help'
+'TELL' userid 'AT' node '/WHO    for connected users'
+'TELL' userid 'AT' node '/LOGON  to logon to this chat room and start getting chat messages'
+'TELL' userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
+'TELL' userid 'AT' node '/STATS  for chat statistics'
+'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
+'TELL' userid 'AT' node '/FORCE  to force a user off (SYSOP only)'
+'TELL' userid 'AT' node '              '
 /* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
-  'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
-  'TELL' userid 'AT' node ' messages with   > are service messages from chat servers'
+'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
+'TELL' userid 'AT' node ' messages with   > are service messages from chat servers'
  
-  totmessages = totmessages + 11
+  totmessages = totmessages + 13
 return
  
 countusers:
@@ -555,12 +607,6 @@ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
  
  cpu = right( cpu+0, 3)
-/*
- say 'All CPU avg: 'cpu '%     Paging: 'page
- 
-     say 'Machine type: 'cfg'     RAM: 'rstor
-     say 'Number of CPU: in LPAR: 'lcpus*/
-         /* indicators cpu page cfg rstor lcpus */
  
  
 return
