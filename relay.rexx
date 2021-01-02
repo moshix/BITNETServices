@@ -2,97 +2,77 @@
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
-/* with help from Peter Jacob, and     */
-/* Neale Ferguson                      */
+/* by collaboration of Peter Jacob,    */
+/* Neale Ferguson, Moshix              */
 /*                                     */
 /* copyright 2020, 2021  by moshix     */
 /* Apache 2.0 license                  */
 /***************************************/
+trace 1
+/*  CHANGE HISTORY                                                   */
+/*  V0.1-1.0:  testing WAKEUP mechanism                              */
+/*  v1.0-1.9:  double linked list for in memory processing,bug fixing*/
+/*  v2.0    :  Configurble parameters, remove hardwired data         */
+/*  v2.1    :  Add LPAR and machine measurement for stats            */
+/*  v2.2    :  Add /SYSTEM command                                   */
+/*  v2.3    :  Make VM/SPrel6 compatible via compatibility=1 parm    */
+/*  v2.4    :  Add /FORCE option to force off users (sysop only)     */
+/*  v2.5    :  Loop detecetor, incoming msg counter                  */
+/*  v2.6    :  Add federation v1                                     */
  
-/* configuraiton parameters - IMPORTANT */
-relaychatversion="2.4.0" /* needed for federation compatibility check */
-timezone="CET"           /* adjust for your server IMPORTANT */
-maxdormant =  3000       /* max time user can be dormat */
-localnode ="SEVMM1"      /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="122342789" /* any user who sends this password shuts down the chat server*/
+ 
+/* configuraiton parameters - IMPORTANT                               */
+relaychatversion="2.5.0" /* needed for federation compatibility check */
+timezone="CET"           /* adjust for your server IMPORTANT          */
+maxdormant =  3000       /* max time user can be dormat               */
+localnode ="HOUVMZVM"    /* IMPORTANT configure your RSCS node here!! */
+shutdownpswd="122222229" /* any user who sends this password shuts down the chat server*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM z114"      /* what kind of machine                      */
-hostloc  ="Stockholm,SE" /* where is this machine                     */
+typehost="IBM zPDT"      /* what kind of machine                      */
+hostloc  ="Chicago,IL"   /* where is this machine                     */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="moshix@gmail" /* where to contact this systop             */
+sysopemail="mmmmmx@gmail" /* where to contact this systop             */
 compatibility=2           /* 1 VM/SP 6, 2=VM/ESA and up               */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
+raterwatermark=30         /* max msgs per second set for this server  */
  
  
-/*---------------CODE SECTION BELOW ----------------------------------*/
-if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
-     sl = c2d(right(diag(0), 2))
-     cplevel = space(cp_id) sl
-     strlen = length(cplevel)
-     say "CP LEVEL: "cplevel
+/* global variables                                                  */
  
-     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
-            with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
-     cpu = right( cpu+0, 3)
-     say "CPU%: "cpu
  
-     Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
-     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
-     say ProdName
-     say ipltime
-          parse value stsi(1,1,1) with 49  type   +4 ,
-                                  81  seq   +16 ,
-                                 101  model +16 .
- 
-     parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
-                                  39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
-                                  45 lname  +8    /* partition name         */
- 
-     parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
-                                  57 cp_id +16
- 
-     parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
-            with     lnum      lcpus      vcpus        ser    lname model .
- 
-     blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
-             "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
- 
-     brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
- 
-     cfg = htopversion lcpus" CPUs" brand
-     parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
-     if rstor? <> "" then     /* We have real storage */
-       cfg = cfg " " rstor
- 
-     cfg = type
-parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
-       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
- 
- cpu = right( cpu+0, 3)
- 
- say 'All CPU avg: 'cpu '%     Paging: 'page
- 
-     say 'Machine type: 'cfg'     RAM: 'rstor
-     say 'Number of CPU: in LPAR: 'lcpus
-         /* indicators cpu page cfg rstor lcpus */
- 
-  END
-/* global vars       */
- 
-/* initialize opertional variables below */
+returnNJEmsg="HCPMSG045E" /* messages returning for users not logged on */
+returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
 loggedonusers = 0        /* online user at any given moment        */
 highestusers = 0         /* most users online at any given moment  */
-totmessages  = 0         /* total number of msgs sent */
+totmessages  = 0         /* total number of msgs sent              */
 otime = 0                /* overtime to log off users after n minutes */
-starttime=mytime()       /* time this server started */
-logline = " "            /* initialize log line      */
+starttime=mytime()       /*  for /SYSTEM                           */
+starttimeSEC=ExTime()    /*  for msg rate  calculation             */
+logline = " "            /* initialize log line                     */
+receivedmsgs=0           /* number of messages received for stats and loop*/
+ 
+ 
+ 
+/*---------------CODE SECTION STARTS BELOW --------------------------*/
+ 
+if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
+ 
+ say 'All CPU avg: 'cpu '%     Paging: 'paging()
+ 
+     say 'Machine type: 'configuration()'     RAM: 'rstorage()
+     say 'Number of CPU: in LPAR: 'numcpus()
+ END
+ 
+ 
 /* some simple logging  for stats etc        */
-CALL     log('RELAY chat '||relaychatversion||' started. ')
+      CALL log('RELAY chat '||relaychatversion||' started. ')
  
  
 /* init double linked list of online users   */
 call @init
+ CALL log('List has been initialized..')
+ CALL log('List size: '||@size())
 /*-------------------------------------------*/
  
  
@@ -120,15 +100,19 @@ call @init
               parse var text type sender . nodeuser msg
           /* break out the node and userid               */
               parse var nodeuser node '(' userid '):'
- CALL LOG('from'||userid||' @ '||node||msg)
+          CALL LOG('from'||userid||' @ '||node||msg)
+          receivedmsgs= receivedmsgs + 1
+          /* below line checks if high rate watermark is exceeded */
+          /* and if so.... exits!                                 */
+          call highrate(receivedmsgs,starttimeSEC,raterwatermark)
           call handlemsg  userid,node,msg
-           end
-           else do;  /* simple msg from local user  */
+          end
+          else do;  /* simple msg from local user  */
         /* format is like this:                           */
         /* *MSG    MAINT    hello                         */
               parse var text type userid msg
                    node = localnode
-                  call handlemsg  userid,node,msg
+               call handlemsg  userid,node,msg
            end
         end
         when Rc = 6 then
@@ -136,6 +120,9 @@ call @init
         otherwise
      end
  end;
+ 
+ 
+ 
  
 xit:
 /* when its time to quit, come here    */
@@ -147,15 +134,21 @@ xit:
  
  
 handlemsg:
-/* handle all incomign messages and send to proper method */
+/* handle all incoming messages and send to proper method */
    parse ARG userid,node,msg
     userid=strip(userid)
     node=strip(node)
     CurrentTime=Extime()
    umsg = translate(msg)  /* make upper case */
    umsg=strip(umsg)
+ 
+    /* below few lines: loop detector                  */
+    loopmsg=SUBSTR(umsg,1,11) /* extract RSCS error msg */
+    if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2)  then do
+      call log('Loop detector triggered for user:  '||userid||'@'||node)
+      return
+    end
    commandumsg=SUBSTR(umsg,2,5)
-/* say "short command: "commandumsg   */
  
    updbuff=1
    SELECT                             /* HANDLE MESSAGE TYPES  */
@@ -180,8 +173,7 @@ handlemsg:
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
       end
-      when (commandumsg ='FORCE') then do
-           say 'input is: 'umsg
+      when (commandumsg = 'FORCE') then do
            call force userid,node,msg
       end
  
@@ -189,7 +181,7 @@ handlemsg:
       otherwise
            call sendchatmsg userid,node,msg
         end
-   if updBuff=1 then call refreshTime currentTime,userid,node
+   if updBuff=1 then call refreshTime currentTime,userid,node /* for each msg ! */
    call CheckTimeout currentTime
 return
  
@@ -286,6 +278,7 @@ logoffuser:
    $.@=overlay(' ',$.@,ppos,rlen)
    $.@=space($.@)
    loggedonusers = loggedonusers - 1
+   CALL log('List size: '||@size())
   'TELL' userid 'AT' node '-> You are logged off now.'
   'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
    totmessages = totmessages + 2
@@ -309,6 +302,7 @@ return
  
        call @put '/'listuser'('currentTime')'
        call log("List user added: "||listuser)
+       CALL log('List size: '||@size())
       'TELL' userid 'AT' node '-> LOGON succeeded.  '
  
       'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
@@ -322,7 +316,7 @@ systeminfo:
      parse ARG userid,node
      listuser = userid"@"node
  
-parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
      cpu = right( cpu+0, 3)
     'TELL' userid 'AT' node '-> NJE node name        : 'localnode
@@ -334,10 +328,12 @@ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
     'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
     'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
     'TELL' userid 'AT' node '-> System Load          :'cpu'%'
- 
     if compatibility > 1 then do
-       call machine
-       parse var mcpu mpage mcf mrstor mlcpus
+       page=paging()
+       rstor=rstorage()
+       cfg=configuration()
+       lcpus=numcpus()
+   /*  parse var mcpu mpage mcf mrstor mlcpus  */
       'TELL' userid 'AT' node '-> Pages/Sec            : 'page
       'TELL' userid 'AT' node '-> IBM Machine Type     : 'cfg
       'TELL' userid 'AT' node '-> Memory in LPAR or VM : 'rstor
@@ -354,24 +350,28 @@ return
  
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
-   parse ARG userid,node
+    parse ARG userid,node
     onlinenow = countusers(userid,node)
  
- 
-parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
-cpu = right( cpu+0, 3)
+     cpu = right( cpu+0, 3)
+    actualtime=Extime()
+    elapsedsec=(actualtime-starttimeSEC)
+    elapsedhr = (elapsedsec / 60)/60
+    msgsrate = receivedmsgs / elapsedhr
  
    if loggedonusers < 0 then loggedonusers = 0 /* still goes negative somtimes */
  
     listuser = userid"@"node
     'TELL' userid 'AT' node '-> Total number of users: 'onlinenow
     'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
-    'TELL' userid 'AT' node '-> total number of msgs : 'totmessages
+    'TELL' userid 'AT' node '-> Total number of msgs : 'totmessages
+    'TELL' userid 'AT' node '-> Messages rate / hour : 'msgsrate
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
     'TELL' userid 'AT' node '-> System CPU laod      :'cpu'%'
  
-     totmessages = totmessages+ 5
+     totmessages = totmessages+ 6
 return
  
 helpuser:
@@ -423,7 +423,6 @@ announce:
      parse value entry with '/'cuser'@'cnode'('otime')'
      'TELL' cuser 'AT' cnode '-> New user joined:    'userid' @ 'node
   end
- 
  
 return
  
@@ -545,68 +544,115 @@ sy:      say;
 list:
 /* this is only as examples how to use the double linked list
     for future expanesion of this program                      */
-call sy 'initializing the list.'            ;  call @init
-call sy 'building list: blue'               ;  call @put "blue"
-call sy 'displaying list size.'             ;  say  "list size="@size()
-call sy 'forward list'                      ;  call @show
-call sy 'backward list'                     ;  call @show ,,-1
-call sy 'showing 4th item'                  ;  call @show 4,1
-call sy 'showing 5th & 6th items'           ;  call @show 5,2
-call sy 'adding item before item 4: black'  ;  call @put "black",4
-call sy 'showing list'                      ;  call @show
-call sy 'adding to tail: white'             ;  call @put "white"
-call sy 'showing list'                      ;  call @show
-call sy 'adding to head: red'               ;  call @put  "red",0
-call sy 'showing list'                      ;  call @show
+   call sy 'initializing the list.'            ;  call @init
+   call sy 'building list: blue'               ;  call @put "blue"
+   call sy 'displaying list size.'             ;  say  "list size="@size()
+   call sy 'forward list'                      ;  call @show
+   call sy 'backward list'                     ;  call @show ,,-1
+   call sy 'showing 4th item'                  ;  call @show 4,1
+   call sy 'showing 5th & 6th items'           ;  call @show 5,2
+   call sy 'adding item before item 4: black'  ;  call @put "black",4
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to tail: white'             ;  call @put "white"
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to head: red'               ;  call @put  "red",0
+   call sy 'showing list'                      ;  call @show
 return
  
  
 log:
-parse ARG  logline
-say mytime()' :: 'logline
+   parse ARG  logline
+   say mytime()' :: 'logline
 return
  
-machine: procedure;
  
-     sl = c2d(right(diag(0), 2))
-     cplevel = space(cp_id) sl
-     strlen = length(cplevel)
+cpubusy:
+ cplevel = space(cp_id) sl
+ strlen = length(cplevel)
  
-     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
-            with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
-     cpu = right( cpu+0, 3)
- 
-     Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
-     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
-          parse value stsi(1,1,1) with 49  type   +4 ,
-                                  81  seq   +16 ,
-                                 101  model +16 .
- 
-     parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
-                                  39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
-                                  45 lname  +8    /* partition name         */
- 
-     parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
-                                  57 cp_id +16
- 
-     parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
-            with     lnum      lcpus      vcpus        ser    lname model .
- 
-     blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
-             "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
- 
-     brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
- 
-     cfg = htopversion lcpus" CPUs" brand
-     parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
-     if rstor? <> "" then     /* We have real storage */
-       cfg = cfg " " rstor
- 
-     cfg = type
-parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
-       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
- 
+ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
  cpu = right( cpu+0, 3)
+return cpu
+ 
+paging:
+ sl = c2d(right(diag(0), 2))
+ cplevel = space(cp_id) sl
+ strlen = length(cplevel)
+ 
+ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+return page
+ 
+rstorage:
+ parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
+return rstor
+ 
+configuration:
+Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
  
  
+  Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+  Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+  parse value stsi(1,1,1) with 49  type   +4 ,
+                               81  seq   +16 ,
+                              101  model +16 .
+ 
+  parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                               39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                               45 lname  +8    /* partition name         */
+ 
+  parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                               57 cp_id +16
+ 
+  parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+         with     lnum      lcpus      vcpus        ser    lname model .
+ 
+  blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+          "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
+ 
+  brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+ 
+return type
+ 
+numcpus:
+  parse value stsi(1,1,1) with 49  type   +4 ,
+                               81  seq   +16 ,
+                              101  model +16 .
+ 
+  parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                               39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                               45 lname  +8    /* partition name         */
+ 
+  parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                               57 cp_id +16
+ 
+  parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+         with     lnum      lcpus      vcpus        ser    lname model .
+ 
+  blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+          "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s 1090 zPDT 3096 z14"
+ 
+  brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+ 
+return lcpus
+ 
+highrate:
+/* this function detects high msg rate for loop detection purposes
+   or for system load abatement purposes                          */
+ 
+  parse ARG receivedmsg,starttime,watermark
+  currentime=Extime()
+  elapsedtime=currentime-starttime
+  rate = receivedmsg/elapsedtime
+  if rate > watermark then do
+     call log ('Rate high watermark exceeded... exiting now')
+     signal xit;
+   end
+  else do
+   return 0
+   end
 return
