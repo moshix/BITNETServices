@@ -98,7 +98,7 @@ FUTURE FEATURES
 Hope you enjoy
 Read more about RELAY CHAT and its history here: http://web.inter.nl.net/users/fred/relay/relhis.html
 
-The RELAY structure here: https://en.wikipedia.org/wiki/BITNET_Relay
+The original RELAY description can be found here: https://en.wikipedia.org/wiki/BITNET_Relay
 
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
