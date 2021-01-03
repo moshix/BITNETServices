@@ -17,16 +17,17 @@ trace 1
 /*  v2.2    :  Add /SYSTEM command                                   */
 /*  v2.3    :  Make VM/SPrel6 compatible via compatibility=1 parm    */
 /*  v2.4    :  Add /FORCE option to force off users (sysop only)     */
-/*  v2.5    :  Loop detecetor, incoming msg counter                  */
-/*  v2.6    :  Add federation v1                                     */
+/*  v2.5    :  Loop detetector incoming msg counter v1.0             */
+/*  v2.6    :  Add federation v1.0, loop detector v2.0               */
+/*  v2.7    :  loop detector v2.0                                    */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.5.0" /* needed for federation compatibility check */
+relaychatversion="2.7.0" /* needed for federation compatibility check */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 maxdormant =  3000       /* max time user can be dormat               */
 localnode ="HOUVMZVM"    /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="122222229" /* any user who sends this password shuts down the chat server*/
+shutdownpswd="122222229" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM zPDT"      /* what kind of machine                      */
 hostloc  ="Chicago,IL"   /* where is this machine                     */
@@ -35,7 +36,16 @@ sysopemail="mmmmmx@gmail" /* where to contact this systop             */
 compatibility=2           /* 1 VM/SP 6, 2=VM/ESA and up               */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=30         /* max msgs per second set for this server  */
+raterwatermark=12         /* max msgs per second set for this server  */
+ 
+ 
+ 
+/* Federation settings below                                          */
+federation = 1           /*0=federation off,receives/no sending, 1=on */
+federated.0 ="HOUVMESA"  /* RELAY on these nodes will get all msgs!   */
+federated.1 ="HOUVMSP6"
+federatednum = 2         /* how many entries in the list?             */
+ 
  
  
 /* global variables                                                  */
@@ -49,8 +59,16 @@ totmessages  = 0         /* total number of msgs sent              */
 otime = 0                /* overtime to log off users after n minutes */
 starttime=mytime()       /*  for /SYSTEM                           */
 starttimeSEC=ExTime()    /*  for msg rate  calculation             */
-logline = " "            /* initialize log line                     */
+logline = " "            /* initialize log line                    */
 receivedmsgs=0           /* number of messages received for stats and loop*/
+premsg.0=6               /* needed for loop detector to compare    */
+premsg.1=""
+premsg.2=""
+premsg.3=""
+premsg.4=""
+premsg.5=""
+premsg.6=""
+msgrotator=1             /* this will rotate the 7 prev msgs       */
  
  
  
@@ -88,6 +106,14 @@ call @init
 /* process it when it does.  If the "operator" types on    */
 /* the console (rc=6) then leave the exec.                 */
  
+/* logon to all federal relay chat servers in the list     */
+ 
+ 
+  IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
+     do I =0 to federatednum by 1
+       'TELL RELAY at 'federated.i '/LOGON'
+     end
+  END
   Do forever;
      'wakeup (iucvmsg QUIET'   /* wait for a message         */
      parse pull text          /* get what was send          */
@@ -104,7 +130,8 @@ call @init
           receivedmsgs= receivedmsgs + 1
           /* below line checks if high rate watermark is exceeded */
           /* and if so.... exits!                                 */
-          call highrate(receivedmsgs,starttimeSEC,raterwatermark)
+          call highrate (receivedmsgs)
+          call detector (msg)
           call handlemsg  userid,node,msg
           end
           else do;  /* simple msg from local user  */
@@ -226,6 +253,13 @@ sendchatmsg:
     listuser = userid || "@"||node
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
+            /* federation next 4 lines */
+           IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
+            do i = 0 to federatednum by 1
+               'TELL RELAY at 'federated.i '<> 'userid'@'node':'msg
+                totmessages = totmessages+ 1
+            end
+          END /* OF THE IF FEDERATION CONDITION..                   */
              do ci=1 to words($.@)
                 entry=word($.@,ci)
                 if entry='' then iterate
@@ -233,14 +267,15 @@ sendchatmsg:
                      'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
              end
             totmessages = totmessages+ 1
+ 
     end
-       else do
-          /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
-            'TELL' userid 'AT' node 'You are currently NOT logged on.'
-            'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
-            'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
-            totmessages = totmessages + 3
-       end
+      else do
+        /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
+        'TELL' userid 'AT' node 'You are currently NOT logged on.'
+        'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
+        'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
+         totmessages = totmessages + 3
+      end
 return
  
 sendwho:
@@ -643,16 +678,33 @@ return lcpus
 highrate:
 /* this function detects high msg rate for loop detection purposes
    or for system load abatement purposes                          */
- 
-  parse ARG receivedmsg,starttime,watermark
+  RATE = 0
+  parse ARG receivedmsg
   currentime=Extime()
-  elapsedtime=currentime-starttime
+  SAY "starttimeSEC: "starttimeSEC
+  say "raterwatermark: "raterwatermark
+  elapsedtime=currentime-starttimeSEC
+  if elapsedtime = 0 then elapsedtime = 3 /* some machines too fast */
+  say "elapsedtime: "elapsedtime
   rate = receivedmsg/elapsedtime
-  if rate > watermark then do
+  say "rate= "rate
+  if rate > raterwatermark then do
      call log ('Rate high watermark exceeded... exiting now')
      signal xit;
    end
   else do
    return 0
    end
+return
+ 
+ 
+detector:
+parse ARG msg /* last message in */
+if msg = prevmsg.1 then do
+     /* we have a looop!! */
+     call log ('LOOP DETECTOR TRIGGERED!!! EXITING  ')
+     signal xit;
+   end
+prevmsg.1=msg
+say "loop detector active now"
 return
