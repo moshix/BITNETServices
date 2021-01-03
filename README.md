@@ -16,19 +16,19 @@ GO VERSION OPERATION
 
 Minimum Go version is 1.12. <br>
 you need to make sure that whatever receives messages for the NJE chat server will create a string like this:
-USER@NODE:message
+USER@NODE:message<br>
 
-where USER is the sending user, NODE is the sending node, and message is the payload. 
+where USER is the sending user, NODE is the sending node, and message is the payload. <br>
 
-that string nees to be written to a FIFO pipe, which chat.go reads and listens to. 
+that string nees to be written to a FIFO pipe, which chat.go reads and listens to.<br> 
 
-The commands for clients are:
+The commands for clients are:<br><br>
 
-/LOGON to add yourself to the distribution list for messages
-/LOGOFF to remove yourself from distributions of messages
-/WHO    who is logged on currently?
-/STATS   some chat server stats
-message  whatever you want to tell yourfriends on the channel
+/LOGON to add yourself to the distribution list for messages<br>
+/LOGOFF to remove yourself from distributions of messages<br>
+/WHO    who is logged on currently?<br>
+/STATS   some chat server stats<br>
+message  whatever you want to tell yourfriends on the channel<br>
 
 
 <br><br><br>
