@@ -63,7 +63,7 @@ Commands supported by RELAY EXEC:
 5. /DM       (direct message to a user)
 6. /SHUTDOWN (for sysopt only and requires password)
 7. /ROOM.    (go into room X)
-8. /SHOUT    (send a message to all logged on users, for sysop only)
+
 
 
 REXX VERSION INSTALLATION
@@ -94,12 +94,12 @@ Shut it down remotely with the password you configured in the environment-specif
 FUTURE FEATURES
 ---------------
 <br><br>
-- federation of relay chat servers                  [DONE]<br>
+- Federation of relay chat servers                  [DONE]<br>
 - Loop detection                                    [DONE]<br>
-- msg throttling                                    [DONE]<br>
-- persisting users unto a file for crash recovery<br>
+- Message throttling                                    [DONE]<br>
+- Persisting users unto a file for crash recovery<br>
 - MVS 3.8 port with BREXX<br>
-- chat rooms<br>
+- Chat rooms<br>
 <br><br>
 
 
