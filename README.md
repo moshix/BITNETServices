@@ -1,6 +1,7 @@
-# 2 BITNET Implementations of RELAY CHAT: One in Go and one in REXX  
+# Two Different BITNET Implementations of RELAY CHAT: One in Go and one in REXX for z/VM  
 
-This Go program operates a chat server on the BITNET NJE protocol network, of which HNET is one operating implementation as of Dec 2019. 
+This Go program operates a chat server on the BITNET NJE protocol network, of which HNET is one operating implementation as of Dec 2019. More about HNET here: http://moshix.dynu.net
+<br><br>
 
 GO VERSION INSTALLATION
 -----------------------
@@ -30,11 +31,14 @@ The commands for clients are:
 message  whatever you want to tell yourfriends on the channel
 
 
+<br><br><br>
 
 
+REXX VERSION: RELAY EXEC 
+------------------------
 
-RELAY EXEC 
-----------
+This is the actively maintained version of RELAY CHAT. 
+
 
 It's a re-implementation from scratch of the very famous RELAY chat written by  Jeff Kell (RIP) 
 of the University of Tennessee at Chattanooga in 1985 using the REXX programming language.
