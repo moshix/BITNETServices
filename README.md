@@ -89,12 +89,14 @@ Shut it down remotely with the password you configured in the environment-specif
 
 FUTURE FEATURES
 ---------------
-
-- federation of relay chat servers
-- persisting users unto a file
+<pri>
+- federation of relay chat servers                  [DONE]
+- Loop detection                                    [DONE]
+- msg throttling                                    [DONE]
+- persisting users unto a file for crash recovery
 - MVS 3.8 port with BREXX
 - chat rooms
-
+</pri>
 Hope you enjoy! <br><br><br><br>
 
 RELAY CHAT History
@@ -107,6 +109,6 @@ The original RELAY description can be found here: https://en.wikipedia.org/wiki/
 
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: January 1, 2021<br>
+UPDATED: January 3, 2021<br>
 Moshix
 
