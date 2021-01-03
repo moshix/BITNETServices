@@ -89,15 +89,15 @@ Shut it down remotely with the password you configured in the environment-specif
 
 FUTURE FEATURES
 ---------------
-<pri>
-- federation of relay chat servers                  [DONE]
-- Loop detection                                    [DONE]
-- msg throttling                                    [DONE]
-- persisting users unto a file for crash recovery
-- MVS 3.8 port with BREXX
-- chat rooms
-</pri>
-Hope you enjoy! <br><br><br><br>
+<br><br>
+- federation of relay chat servers                  [DONE]<br>
+- Loop detection                                    [DONE]<br>
+- msg throttling                                    [DONE]<br>
+- persisting users unto a file for crash recovery<br>
+- MVS 3.8 port with BREXX<br>
+- chat rooms<br>
+<br><br>
+
 
 RELAY CHAT History
 ------------------
