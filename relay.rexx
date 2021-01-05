@@ -20,13 +20,14 @@ trace 1
 /*  v2.5    :  Loop detetector incoming msg counter v1.0             */
 /*  v2.6    :  Add federation v1.0, loop detector v2.0               */
 /*  v2.7    :  loop detector v2.0                                    */
+/*  v2.7.1  :  autodetect who am i                                   */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.7.0" /* needed for federation compatibility check */
+relaychatversion="2.7.1" /* needed for federation compatibility check */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 maxdormant =  3000       /* max time user can be dormat               */
-localnode ="HOUVMZVM"    /* IMPORTANT configure your RSCS node here!! */
+localnode=""             /* localnode is now autodetected as 2.7.1    */
 shutdownpswd="122222229" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM zPDT"      /* what kind of machine                      */
@@ -39,9 +40,8 @@ sysopnode=translate(localnode) /* sysop node automatically set        */
 raterwatermark=12         /* max msgs per second set for this server  */
  
  
- 
 /* Federation settings below                                          */
-federation = 1           /*0=federation off,receives/no sending, 1=on */
+federation = 0           /*0=federation off,receives/no sending, 1=on */
 federated.0 ="HOUVMESA"  /* RELAY on these nodes will get all msgs!   */
 federated.1 ="HOUVMSP6"
 federatednum = 2         /* how many entries in the list?             */
@@ -71,8 +71,14 @@ premsg.6=""
 msgrotator=1             /* this will rotate the 7 prev msgs       */
  
  
- 
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
+whoamiuser=""             /* for autoconfigure                        */
+whoaminode=""
+whomistack=""
+call whoami               /* who the fahma am I??                     */
+say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
+ 
+localnode=whoaminode   /*set localnode */
  
 if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
  
@@ -707,4 +713,11 @@ if msg = prevmsg.1 then do
    end
 prevmsg.1=msg
 say "loop detector active now"
+return
+ 
+whoami:
+ 
+"id (stack"
+pull whoamiuser . whoaminode . whoamistack
+whoamistack=LEFT(whoamistack,5)
 return
