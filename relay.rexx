@@ -21,11 +21,12 @@ trace 1
 /*  v2.6    :  Add federation v1.0, loop detector v2.0               */
 /*  v2.7    :  loop detector v2.0                                    */
 /*  v2.7.1  :  autodetect who am i                                   */
+/*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.7.1" /* needed for federation compatibility check */
-timezone="CET"           /* adjust for your server IMPORTANT          */
+relaychatversion="2.7.2" /* needed for federation compatibility check */
+timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =  3000       /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
 shutdownpswd="122222229" /* any user with this passwd shuts down rver*/
@@ -37,7 +38,7 @@ sysopemail="mmmmmx@gmail" /* where to contact this systop             */
 compatibility=2           /* 1 VM/SP 6, 2=VM/ESA and up               */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=12         /* max msgs per second set for this server  */
+raterwatermark=1000       /* max msgs per minute set for this server  */
  
  
 /* Federation settings below                                          */
@@ -78,17 +79,17 @@ whomistack=""
 call whoami               /* who the fahma am I??                     */
 say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
  
-localnode=whoaminode   /*set localnode */
+localnode=whoaminode   /* set localnode */
  
-if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
+if compatibility > 1 then do /* this is not VM/SP 6, ie min requirement VM level*/
  
  say 'All CPU avg: 'cpu '%     Paging: 'paging()
  
      say 'Machine type: 'configuration()'     RAM: 'rstorage()
      say 'Number of CPU: in LPAR: 'numcpus()
  END
- 
- 
+     say '                        '
+     say '****** LOG BELOW ** ****'
 /* some simple logging  for stats etc        */
       CALL log('RELAY chat '||relaychatversion||' started. ')
  
@@ -295,8 +296,9 @@ sendwho:
       entry=word($.@,ci)
       if entry='' then iterate
       parse value entry with '/'cuser'@'cnode'('otime')'
-      lasttime=ctime-otime
-      'TELL' userid 'AT' node '> ' cuser'@'cnode'  - last seen in min: 'lasttime
+      currenttime=Extime()
+      lasttime=currenttime-otime
+      'TELL' userid 'AT' node '> ' cuser'@'cnode'  - last seen: 'lasttime' seconds ago'
       totmessages = totmessages + 1
       userswho = userswho + 1
    end
@@ -399,20 +401,21 @@ sendstats:
      cpu = right( cpu+0, 3)
     actualtime=Extime()
     elapsedsec=(actualtime-starttimeSEC)
-    elapsedhr = (elapsedsec / 60)/60
-    msgsrate = receivedmsgs / elapsedhr
+    if elapsedsec = 0 then elapsedsec = 1 /* avoid division by zero on Jan 1 at 00:00 */
  
-   if loggedonusers < 0 then loggedonusers = 0 /* still goes negative somtimes */
- 
+    msgsrate = (receivedmsgs + totmessages) / elapsedsec
+    msgsratef= FORMAT(msgsrate,4,2) /* rounding */
+    msgsratef = STRIP(msgsratef)
     listuser = userid"@"node
-    'TELL' userid 'AT' node '-> Total number of users: 'onlinenow
+    'TELL' userid 'AT' node '-> Total number of users: '@size()
     'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
     'TELL' userid 'AT' node '-> Total number of msgs : 'totmessages
-    'TELL' userid 'AT' node '-> Messages rate / hour : 'msgsrate
+    'TELL' userid 'AT' node '-> Messages rate /minute: 'msgsratef
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
-    'TELL' userid 'AT' node '-> System CPU laod      :'cpu'%'
+    'TELL' userid 'AT' node '-> System CPU laod      : 'STRIP(cpu)'%'
+    'TELL' userid 'AT' node '-> RELAY CHAT version   : v'relaychatversion
  
-     totmessages = totmessages+ 6
+     totmessages = totmessages+ 7
 return
  
 helpuser:
@@ -696,7 +699,7 @@ highrate:
   say "rate= "rate
   if rate > raterwatermark then do
      call log ('Rate high watermark exceeded... exiting now')
-     signal xit;
+  /* signal xit;*/
    end
   else do
    return 0
