@@ -22,23 +22,25 @@ trace 1
 /*  v2.7    :  loop detector v2.0                                    */
 /*  v2.7.1  :  autodetect who am i                                   */
 /*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
+/*  v2.7.3  :  loop detector disabled for now until i figure it out  */
+/*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.7.2" /* needed for federation compatibility check */
+relaychatversion="2.7.4" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =  3000       /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
 shutdownpswd="122222229" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM zPDT"      /* what kind of machine                      */
-hostloc  ="Chicago,IL"   /* where is this machine                     */
+typehost="IBM z114"      /* what kind of machine                      */
+hostloc  ="Stockhom,SE"  /* where is this machine                     */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
 sysopemail="mmmmmx@gmail" /* where to contact this systop             */
-compatibility=2           /* 1 VM/SP 6, 2=VM/ESA and up               */
+compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=1000       /* max msgs per minute set for this server  */
+raterwatermark=2000       /* max msgs per minute set for this server  */
  
  
 /* Federation settings below                                          */
@@ -81,7 +83,7 @@ say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
  
 localnode=whoaminode   /* set localnode */
  
-if compatibility > 1 then do /* this is not VM/SP 6, ie min requirement VM level*/
+if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level*/
  
  say 'All CPU avg: 'cpu '%     Paging: 'paging()
  
@@ -133,7 +135,7 @@ call @init
               parse var text type sender . nodeuser msg
           /* break out the node and userid               */
               parse var nodeuser node '(' userid '):'
-          CALL LOG('from'||userid||' @ '||node||msg)
+          CALL LOG('from '||userid||' @ '||node||' '||msg)
           receivedmsgs= receivedmsgs + 1
           /* below line checks if high rate watermark is exceeded */
           /* and if so.... exits!                                 */
@@ -173,8 +175,8 @@ handlemsg:
     userid=strip(userid)
     node=strip(node)
     CurrentTime=Extime()
-   umsg = translate(msg)  /* make upper case */
-   umsg=strip(umsg)
+    umsg = translate(msg)  /* make upper case */
+    umsg=strip(umsg)
  
     /* below few lines: loop detector                  */
     loopmsg=SUBSTR(umsg,1,11) /* extract RSCS error msg */
@@ -291,8 +293,8 @@ sendwho:
    parse ARG userid,node
    listuser = userid || "@"||node
    'TELL' userid 'AT' node '> List of currently logged on users:'
-    totmessages = totmessages + 1
-    do ci=1 to words($.@)
+   totmessages = totmessages + 1
+   do ci=1 to words($.@)
       entry=word($.@,ci)
       if entry='' then iterate
       parse value entry with '/'cuser'@'cnode'('otime')'
@@ -371,7 +373,7 @@ systeminfo:
     'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
     'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
     'TELL' userid 'AT' node '-> System Load          :'cpu'%'
-    if compatibility > 1 then do
+    if compatibility > 2 then do
        page=paging()
        rstor=rstorage()
        cfg=configuration()
@@ -382,11 +384,11 @@ systeminfo:
       'TELL' userid 'AT' node '-> Memory in LPAR or VM : 'rstor
       'TELL' userid 'AT' node '-> Number of CPUs       : 'lcpus
     end
-     if compatibility > 1 then do
-     totmessages = totmessages + 12
+     if compatibility > 2 then do
+     totmessages = totmessages + 13
      end
     else do
-     totmessages = totmessages + 8
+     totmessages = totmessages + 9
     end
 return
  
@@ -445,14 +447,14 @@ return
 countusers:
  parse ARG userid,node
  listuser = userid"@"node
-  onlineusers = 0
-   do ci=1 to words($.@)
+ onlineusers = 0
+ do ci=1 to words($.@)
      entry=word($.@,ci)
      if entry='' then iterate
      parse value entry with '/'cuser'@'cnode'('otime')'
      lasttime=ctime-otime
      onlineusers = onlineusers + 1
-  end
+ end
 return onlineusers
  
  
@@ -605,12 +607,14 @@ return
  
  
 log:
+/* log a line to relay machine and/or log */
    parse ARG  logline
    say mytime()' :: 'logline
 return
  
  
 cpubusy:
+/* extract CPU buy information for stats etc. */
  cplevel = space(cp_id) sl
  strlen = length(cplevel)
  
@@ -620,6 +624,7 @@ cpubusy:
 return cpu
  
 paging:
+/* extra currenct OS paging activity */
  sl = c2d(right(diag(0), 2))
  cplevel = space(cp_id) sl
  strlen = length(cplevel)
@@ -633,6 +638,8 @@ rstorage:
 return rstor
  
 configuration:
+/* extract machine type etc. */
+ if compatibility > 2 then do
 Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
      Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
  
@@ -658,7 +665,7 @@ Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
  
   brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
  
- 
+end
 return type
  
 numcpus:
@@ -690,15 +697,11 @@ highrate:
   RATE = 0
   parse ARG receivedmsg
   currentime=Extime()
-  SAY "starttimeSEC: "starttimeSEC
-  say "raterwatermark: "raterwatermark
   elapsedtime=currentime-starttimeSEC
   if elapsedtime = 0 then elapsedtime = 3 /* some machines too fast */
-  say "elapsedtime: "elapsedtime
   rate = receivedmsg/elapsedtime
-  say "rate= "rate
   if rate > raterwatermark then do
-     call log ('Rate high watermark exceeded... exiting now')
+     call log ('Rate high watermark exceeded, rate: '||rate)
   /* signal xit;*/
    end
   else do
@@ -711,11 +714,10 @@ detector:
 parse ARG msg /* last message in */
 if msg = prevmsg.1 then do
      /* we have a looop!! */
-     call log ('LOOP DETECTOR TRIGGERED!!! EXITING  ')
-     signal xit;
+ /*  call log ('LOOP DETECTOR TRIGGERED!!! EXITING  ')  */
+  /* signal xit;   */
    end
 prevmsg.1=msg
-say "loop detector active now"
 return
  
 whoami:
