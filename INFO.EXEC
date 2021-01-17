@@ -1,0 +1,275 @@
+/***************************************/
+/* INFO  EXEC CHAT PROGRAM             */
+/*                                     */
+/* A MVS information server for NJE    */
+/*                                     */
+/* copyright 2021 by moshix            */
+/* Apache 2.0 license                  */
+/***************************************/
+/*  CHANGE HISTORY                                                   */
+/*  V0.1:  Create basic structure                                    */
+/*  V0.2:  Adding IPLDATE command                                    */
+/*  V0.3:  Adding list all address spaces command                    */
+/*  V0.4:  Add end of transmission NJE999I for interactive panels    */
+
+/*global config parms */
+infoversion="0.4"
+localnode="HOUCICS"
+
+/* global variable */
+receivedmsgs=0
+sentmss=0
+inhibitEOT=0
+totmessages=0
+
+SIGNAL on SYNTAX  /* allow graceful termination in case of errors    */
+
+
+/*---------------CODE SECTION STARTS BELOW --------------------------*/
+whoamiuser="INFO"
+  CALL WTO "INFO EXEC  v"||infoversion||"  on: "||localnode||" has started"
+  NJEUID="INFO"                /* register with NJE38 */
+
+/* register with NJE38 EXIT now */
+
+ CALL __NJEINIT                /* SETUP ENVIRONMENT */
+ RC = __NJEREGISTER(NJEUID)    /* REGISTER USERID */
+ if RC =0 | rc=24 then _crly=1 /* set NJECRLY is registered         */
+ else do                       /* when register  failed, terminate  */
+    CALL WTO "USER REGISTRATION FAILED WITH RC("RC")"
+    exit 8
+ end
+ /* ok, we succeeded in registering INFO  to NJE38 */
+ CALL WTO "INF001I INFO/MVS  HAS REGISTERED WITH NJE38"
+
+/* --------------------------------------------------------------------
+ * NJE Message Handler
+ *     runs until stopped by operator command /P in console
+ * --------------------------------------------------------------------
+ */
+  do forever
+     event = __njereceive()
+      sentmsg=0
+     select
+       when event = #msg then do
+          receivedmsgs= receivedmsgs + 1
+          call handlemsg strip(_data)
+       end
+       when event = #stop then ,
+          call endSTC "INFO     STC TERMINATED BY OPERATOR",0
+       when event = #error then ,
+          call endstc "INFO     STC TERMINATED BY ERROR("_RC")",event
+     end
+     if sentmsg>0 then call EndofSend sentmsg
+  end
+/* --------------------------------------------------------------------
+ * Shut Down STC
+ *      when its time to quit, come here
+ * --------------------------------------------------------------------
+ */
+endSTC:
+  parse arg msg,exc
+  CALL __NJEDEREGISTER(NJEUID)
+  call wto msg
+exit exc
+
+syntax:
+  if  _crly=1 then CALL __NJEDEREGISTER(NJEUID)
+exit 16
+
+eot:
+/* this sends an NJE999I so interactive panels know of end of transmiss */
+       CALL TELLNJE userid 'AT' node 'NJE999I'
+        totmessages = totmessages + 1
+return
+/* --------------------------------------------------------------------
+ * Handle all incoming Messages
+ * --------------------------------------------------------------------
+ */
+ handlemsg:
+ /* handle all incoming messages and send to proper method */
+ /* _data must be parsed for user, node, message           */
+     PARSE ARG . ' ' NODE '(' USERID '):' TEXT
+ /* "From userid: /... comes in when message was sent by same system*/
+     if userid='' then do
+        PARSE ARG . USERID':' TEXT
+        node = localnode
+       CALL WTO "INF400I MSG RECEIVED FROM: "||USERID||" @ "||NODE
+     end
+     TEXT = STRIP(TEXT)
+     UMSG = TRANSLATE(TEXT)
+     node= STRIP(node)
+
+    SELECT                       /* HANDLE MESSAGE TYPES  */
+       when (umsg = "/WHO") then
+            call sendwho userid,node
+       when (umsg = "/IPLDATE") THEN
+            call ipldate  userid,node
+       when (umsg = "/STATS") then
+            call sendstats userid,node
+       when (umsg = "/HELP") then do
+            call helpuser  userid,node
+       end
+       when (umsg = "/INFO") then do
+            call sendfull  userid,node
+       end
+
+      otherwise
+           call sendfull  userid,node,msg
+        end
+return
+
+/* --------------------------------------------------------------------
+ * tellNJE replaces the VM TELL command and uses NJE38 Message instead
+ *   e.g. CALL TELLNJE userid 'AT' node '/WHO for connected users'
+ * --------------------------------------------------------------------
+ */
+tellNJE:
+  parse arg userid' 'isat' 'node' 'njemsg
+  'NJE38 M 'node userid njemsg
+  sentmsg=sentmsg+1
+return rc
+
+endofSend:
+/*'NJE38 M 'node userid arg(1)' Relay lines sent'  */
+return 0
+
+helpuser:
+parse ARG userid,node
+   CALL TELLNJE userid 'AT' node 'INFO/MVS v'infoversion' on node: 'localnode
+   CALL TELLNJE userid 'AT' node '========================================='
+   CALL TELLNJE userid 'AT' node '                                         '
+   CALL TELLNJE userid 'AT' node 'Commands available:                      '
+   CALL TELLNJE userid 'AT' node '                                         '
+   CALL TELLNJE userid 'AT' node '/WHO      : show online TSO users        '
+   CALL TELLNJE userid 'AT' node '/HELP     : show this help               '
+   CALL TELLNJE userid 'AT' node '/STATS    : show machine vital stats     '
+   CALL TELLNJE userid 'AT' node '/IPLDATE  : show time and date of this IPL'
+   CALL TELLNJE userid 'AT' node '                                          '
+   CALL TELLNJE userid 'AT' node '/INFO     : show all available info       '
+   totmessages=totmessages+10
+     call eot
+return
+
+sendwho:
+parse ARG userid,node
+O = 0
+ CVT=PTR(16)
+ ASVT=PTR(CVT+556)+512                  /* GET ASVT                   */
+ ASVTMAXU=PTR(ASVT+4)                   /* GET MAX ASVT ENTRIES       */
+ DO A = 0 TO ASVTMAXU - 1
+   ASCB=STG(ASVT+16+A*4,4)              /* GET PTR TO ASCB (SKIP
+                                           MASTER)                    */
+   IF BITAND(ASCB,'80000000'X) = '00000000'X THEN /* IF IN USE        */
+     DO
+       ASCB=C2D(ASCB)                   /* GET ASCB ADDRESS           */
+       CSCB=PTR(ASCB+56)                /* GET CSCB ADDRESS           */
+       CHTRKID=STG(CSCB+28,1)           /* CHECK ADDR SPACE TYPE      */
+       IF CHTRKID='01'X THEN            /* IF TSO USER                */
+         DO
+           ASCBJBNS=PTR(ASCB+176)       /* GET ASCBJBNS               */
+           ASCBSRBT=PTR(ASCB+200)       /* GET ASCBEATT               */
+           O = O + 1
+           onl=RIGHT(O,2,'0') ASCBSRBT,
+               STG(ASCBJBNS,8)          /* WE IS SOME HAPPY CAMPER!   */
+             CALL TELLNJE userid 'AT' node '> Online now:  'onl
+             totmessages=totmessages+1
+         END
+     END
+ END
+ if inhibitEOT = 0 then  do
+     call eot
+ end
+return
+
+sendstats:
+parse ARG userid,node
+CALL TELLNJE userid 'AT' node '> Number of requests since INFO/MVS start: 'receivedmsgs
+CALL TELLNJE userid 'AT' node '> Number of messages ent                 : 'totmessages
+mname=mvsname()
+CALL TELLNJE userid 'AT' node '> MVS System Name                        : 'mname
+totmessages=totmessages+3
+call cpus  userid,node
+ if inhibitEOT = 0 then  do
+ call eot
+ end
+return 0
+
+ipldate:
+parse ARG userid,node
+    tickfactor=1.024                /* RMCT time ticks a bit slower    */
+    rmcttod=PEEKA(rmct()+124)       /* pick start time                 */
+   $iplsec=RMCTTOD%1000*tickfactor /* Convert into secs and mult. fact.*/
+    $ipldays=$iplsec%86400          /* days MVS is running             */
+    $iplrem=$iplsec//86400%1        /* remaining seconds               */
+    days1900=Rxdate('b')-$ipldays   /* calculate days since 1.1.1900   */
+    $iplsec=time('s')-$iplrem
+    do while $iplsec<0
+       $iplsec=$iplsec+86400
+       days1900=days1900-1
+    end
+    $ipldate=Rxdate(,days1900,'B')  /* convert it back normal date     */
+    $iplwday=Rxdate('WEEKDAY',days1900,'B')   /* convert it normal date*/
+    $iplsec=sec2time($iplsec)
+    $iplrem=sec2time($iplrem)
+    $Time=time('l')
+     CALL TELLNJE userid 'AT' node '> Current time   :  '$TIME
+     CALL TELLNJE userid 'AT' node '> IPL on '$iplwday $ipldate' at '$iplsec
+     CALL TELLNJE userid 'AT' node '> MVS up for '$ipldays' days '$iplrem' hours'
+     totmessages=totmessages+3
+ if inhibitEOT = 0 then  do
+     call eot
+ end
+ return
+
+sendfull:
+parse ARG userid,node
+inhibitEOT=1
+     CALL TELLNJE userid 'AT' node 'INFO/MVS REPORT FOR: 'localnode
+     CALL TELLNJE userid 'AT' node '****************************'
+     CALL TELLNJE userid 'AT' node '                               '
+    call sendwho userid,node
+     CALL TELLNJE userid 'AT' node '--------------------------------------------'
+    call ipldate userid,node
+     CALL TELLNJE userid 'AT' node '--------------------------------------------'
+    call sendstats userid,node
+     CALL TELLNJE userid 'AT' node '**** END OF REPORT ******************************'
+     totmessages=totmessages+6
+ inhibitEOT=0   /* turn off NJE999I inhibitor */
+ call eot
+return 0
+
+ /* MVS Name */
+ MVSName:
+ CVT=storage(10,4)
+ CVT=bitand(CVT,'7FFFFFFF'x)
+ SMCA=storage(d2x(c2d(CVT)+x2d('C4')),4)
+ SMCA=bitand(SMCA,'7FFFFFFF'x)
+ SMCASID=storage(d2x(c2d(SMCA)+16),4)
+ return SMCASID
+
+ /* Number of CPUs */
+ cpus:
+ parse ARG userid,node
+ CSD=storage(d2x(c2d(CVT)+x2d('294')),4)
+ CSD=bitand(CSD,'7FFFFFFF'x)
+ nr_cpus=c2d(storage(d2x(c2d(CSD)+10),2))
+  CALL TELLNJE userid 'AT' node '> Number of CPUs                         : 'nr_cpus
+  CALL TELLNJE userid 'AT' node '> Machine Type                           : IBM'cpu()
+ return
+
+ /* addressing functions */
+ cvt:  return _adr(16)
+ rmct: return _adr(cvt()+604)
+ _adr: return c2d(storage(d2x(arg(1)),4))  /* return pointer (decimal) */
+ PTR:  RETURN C2D(STORAGE(D2X(ARG(1)),4))     /* RETURN A POINTER     */
+ STG:  RETURN STORAGE(D2X(ARG(1)),ARG(2))     /* RETURN STORAGE       */
+ tcb:  return PEEKA(540)
+ ascb: return PEEKA(548)
+ Tiot: return PEEKA(tcb()+12)
+ jscb: return PEEKA(tcb()+180)
+ asxb: return PEEKA(ascb()+108)
+ acee: return PEEKA(asxb()+200)
+ ecvt: return PEEKA(cvt()+328)
+ smca: return PEEKA(cvt()+196)
+ cpu:  return d2x(c2d(storage(d2x(cvt()-6),2)))
