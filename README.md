@@ -88,7 +88,8 @@ This program runs on z/VM, VM/ESA 2.x and VM/SP6. No version earlier than VM/SP 
 
 <br><br>
 
-Shut it down remotely with the password you configured in the environment-specific variables. 
+</h>Shut it down remotely with the password you configured in the environment-specific variables. 
+
 <br><br>
 RELAY CHAT on MVS 3.8
 =====================
