@@ -1,0 +1,604 @@
+/* RELAY EXEC CHAT PROGRAM             */
+/*                                     */
+/* An NJE (bitnet/HNET) chat server    */
+/* for z/VM, VM/ESA and VM/SP, MVS 3.8 */
+/* by collaboration of Peter Jacob,    */
+/* Mike Grossman, Moshix               */
+/*                                     */
+/* copyright 2020, 2021  by moshix     */
+/* Apache 2.0 license                  */
+/***************************************/
+/*  CHANGE HISTORY                                                   */
+/*  V0.1-1.0:  testing WAKEUP mechanism                              */
+/*  v1.0-1.9:  double linked list for in memory processing,bug fixing*/
+/*  v2.0    :  Configurble parameters, remove hardwired data         */
+/*  v2.1    :  Add LPAR and machine measurement for stats            */
+/*  v2.2    :  Add /SYSTEM command                                   */
+/*  v2.3    :  Make VM/SPrel6 compatible via compatibility=1 parm    */
+/*  v2.4    :  Add /FORCE option to force off users (sysop only)     */
+/*  v2.5    :  Loop detetector incoming msg counter v1.0             */
+/*  v2.6    :  Add federation v1.0, loop detector v2.0               */
+/*  v2.7    :  loop detector v2.0                                    */
+/*  v2.7.1  :  autodetect who am i                                   */
+/*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
+/*  v2.7.3  :  loop detector disabled for now until i figure it out  */
+/*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
+/*  v2.7.5  :  port to BREXX/MVS 3.8                                 */
+/*  v2.7.6  :  removed federation, whoami, highrate,                 */
+
+
+SIGNAL on SYNTAX  /* allow graceful termination in case of errors    */
+
+/* configuraiton parameters - IMPORTANT                               */
+
+relaychatversion="2.7.6" /* needed for federation compatibility check */
+timezone="CDT"           /* adjust for your server IMPORTANT          */
+maxdormant =3000         /* max time user can be dormat               */
+localnode="HOUCICS"      /* localnode is now autodetected as 2.7.1    */
+shutdownpswd="132322229" /* any user with this passwd shuts down rver*/
+osversion="MVS 3.8 tk4-8"/* OS version for enquries and stats         */
+typehost="Hyperion"      /* what kind of machine                      */
+hostloc  ="Seattle,WA "  /* where is this machine                     */
+sysopname="Moshix  "     /* who is the sysop for this chat server     */
+sysopemail="000001@gmail" /* where to contact this systop             */
+compatibility=1           /* 1 VM/SP or MVS3.8, 2=VM/ESA,3=z/VM       */
+sysopuser='RELAY'         /* sysop user who can force users out       */
+sysopnode=translate(localnode) /* sysop node automatically set        */
+
+
+/* global variables                                                  */
+
+
+returnNJEmsg="HCPMSG045E" /* messages returning for users not logged on */
+returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
+loggedonusers = 0        /* online user at any given moment        */
+highestusers = 0         /* most users online at any given moment  */
+totmessages  = 0         /* total number of msgs sent              */
+otime = 0                /* overtime to log off users after n minutes */
+starttime=mytime()       /*  for /SYSTEM                           */
+starttimeSEC=ExTime()    /*  for msg rate  calculation             */
+logline = " "            /* initialize log line                    */
+
+
+/*---------------CODE SECTION STARTS BELOW --------------------------*/
+whoamiuser="RELAY"
+  CALL WTO "RELAY CHAT v"||relaychatversion||"  on: "||localnode||" has started"
+
+  CALL log('RELAY chat '||relaychatversion||' started. ')
+
+  NJEUID="RELAY"                /* register with NJE38 */
+
+/* register with NJE38 EXIT now */
+
+ CALL __NJEINIT                /* SETUP ENVIRONMENT */
+ RC = __NJEREGISTER(NJEUID)    /* REGISTER USERID */
+ IF RC =0 | rc=24 then _crly=1 /* set NJECRLY is registered         */
+ else do                       /* when register  failed, terminate  */
+    CALL WTO "USER REGISTRATION FAILED WITH RC("RC")"
+    exit 8
+ END
+ /* ok, we succeeded in registering RELAY to NJE38 */
+ CALL WTO "REL001I RELAY EXEC HAS REGISTERED WITH NJE38"
+
+/* init double linked list of online users   */
+ call @init
+ CALL log('List has been initialized..')
+ CALL log('List size: '||@size())
+/*-------------------------------------------*/
+
+  receivedmsgs=0
+/* --------------------------------------------------------------------
+ * NJE Message Handler
+ *     runs until stopped by operator command /P in console
+ * --------------------------------------------------------------------
+ */
+ say 'DEBUG: Starting __njereceive loop...'
+ trace i
+  do forever
+     event = __njereceive()
+      sentmsg=0
+     select
+       when event = #msg then do
+          receivedmsgs= receivedmsgs + 1
+          call handlemsg strip(_data)
+       end
+       when event = #stop then ,
+          call endSTC "NJERELAY STC TERMINATED BY OPERATOR",0
+       when event = #error then ,
+          call endstc "NJERELAY STC TERMINATED BY ERROR("_RC")",event
+     end
+     if sentmsg>0 then call EndofSend sentmsg
+  end
+/* --------------------------------------------------------------------
+ * Shut Down STC
+ *      when its time to quit, come here
+ * --------------------------------------------------------------------
+ */
+endSTC:
+  parse arg msg,exc
+  CALL __NJEDEREGISTER(NJEUID)
+  call wto msg
+exit exc
+/* --------------------------------------------------------------------
+ * REXX abnormal termination occurred, terminate gracefully
+ * --------------------------------------------------------------------
+ */
+syntax:
+  if  _crly=1 then CALL __NJEDEREGISTER(NJEUID)
+exit 16
+/* --------------------------------------------------------------------
+ * Old VM coding, not supported in MVS
+ * --------------------------------------------------------------------
+ */
+/* ####### not supported in MVX
+  'WAKEUP RESET';        /* turn messages from IUCV to ON    */
+  'SET MSG ON'
+  'DROPBUF'
+ * #######  */
+  exit
+
+/* --------------------------------------------------------------------
+ * Handle all incoming Messages
+ * --------------------------------------------------------------------
+ */
+handlemsg:
+/* handle all incoming messages and send to proper method */
+/* _data must be parsed for user, node, message           */
+    PARSE ARG . ' ' NODE '(' USERID '):' TEXT
+/* "From userid: /... comes in when message was sent by same system*/
+    if userid='' then do
+       PARSE ARG . USERID':' TEXT
+       node = localnode
+      CALL WTO "REL400I MSG RECEIVED FROM: "||USERID||" @ "||NODE
+    end
+    TEXT = STRIP(TEXT)
+    UMSG = TRANSLATE(TEXT)
+    node= STRIP(node)
+    CurrentTime=Extime()
+
+   updbuff=1
+   SELECT                             /* HANDLE MESSAGE TYPES  */
+      when (umsg = "/WHO") then
+           call sendwho userid,node
+      when (umsg = "/SYSTEM") then
+           call systeminfo userid,node
+      when (umsg = "/STATS") then
+           call sendstats userid,node
+      when (umsg = "/LOGOFF") then do
+           call logoffuser userid,node
+           updbuff=0                 /* removed, nothing to update */
+      end
+      when (umsg = "/LOGON") then do
+           call logonuser  userid,node
+           updbuff=0                    /* already up-to-date */
+      end
+      when (umsg = "/HELP") then do
+           call helpuser  userid,node
+      end
+      when (umsg = shutdownpswd) then do
+           call    log("Shutdown initiated by: "||userid||" at node "||node)
+           call endstc("Shutdown initiated by: "||userid||" at node "||node,0)
+      end
+      when (commandumsg = 'FORCE') then do
+           call force userid,node,msg
+      end
+
+
+      otherwise
+           call sendchatmsg userid,node,msg
+        end
+   if updBuff=1 then call refreshTime currentTime,userid,node /* for each msg ! */
+   call CheckTimeout currentTime
+return
+/* --------------------------------------------------------------------
+ * tellNJE replaces the VM TELL command and uses NJE38 Message instead
+ *   e.g. CALL TELLNJE userid 'AT' node '/WHO for connected users'
+ * --------------------------------------------------------------------
+ */
+tellNJE:
+  parse arg userid' 'isat' 'node' 'njemsg
+  'NJE38 M 'node userid njemsg
+  sentmsg=sentmsg+1
+return rc
+/* --------------------------------------------------------------------
+ * tellNJE replaces the VM TELL command and uses NJE38 Message instead
+ *   e.g. CALL TELLNJE userid 'AT' node '/WHO for connected users'
+ * --------------------------------------------------------------------
+ */
+endofSend:
+/*'NJE38 M 'node userid arg(1)' Relay lines sent'  */
+return 0
+/* --------------------------------------------------------------------
+ * SYSOP forces a user out
+ * --------------------------------------------------------------------
+ */
+force:
+/* sysop forces a user out  */
+  parse ARG userid,node,msg
+  forceuser = SUBSTR(msg,11,7)  /* extract user after /force command */
+  forceuser = strip(forceuser)
+/* say "user to be forced, as i understood it: "forceuser    */
+  if (userid = sysopuser & node = sysopnode) then do /* ok user is authorized */
+     listuser = forceuser || "@"||node
+
+      ppos=pos('/'listuser,$.@)
+        if ppos=0 then do
+           call log("User logoff rejected, not logged-on:  "||listuser)
+           return
+        end
+        rpos=pos(' ',$.@,ppos+1)
+        if rpos=0 then rpos=length($.@)+1
+        rlen=rpos-ppos
+        $.@=overlay(' ',$.@,ppos,rlen)
+        $.@=space($.@)
+        CALL LOG('Forced: '||forceuser||' @ '||node)
+        loggedonusers = loggedonusers - 1
+       CALL TELLNJE userid 'AT' node '-> This user has been forced off: 'forceuser
+       CALL TELLNJE userid 'AT' node '-> New total number of users: 'loggedonusers
+        totmessages = totmessages + 2
+
+  end   /* of (userid=sysopuser) test */
+  else do
+    CALL LOG('This user:  '||userid||' @ '||node||' tried to force off user: '||forceuser)
+    CALL TELLNJE userid 'AT' node '-> Not authorized to force off user: 'forceuser
+     totmessages = totmessages + 1
+  end
+return
+
+
+
+sendchatmsg:
+/* what we got is a message to be distributed to all online users */
+    parse ARG userid,node,msg
+    listuser = userid || "@"||node
+    if pos('/'listuser,$.@)>0 then do
+      /*  USER IS ALREADY LOGGED ON */
+            /* federation next 4 lines */
+           IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
+            do i = 0 to federatednum by 1
+               'TELL RELAY at 'federated.i '<> 'userid'@'node':'msg
+                totmessages = totmessages+ 1
+            end
+          END /* OF THE IF FEDERATION CONDITION..                   */
+             do ci=1 to words($.@)
+                entry=word($.@,ci)
+                if entry='' then iterate
+                parse value entry with '/'cuser'@'cnode'('otime')'
+                     CALL TELLNJE cuser 'AT' cnode '<> 'userid'@'node':'msg
+             end
+            totmessages = totmessages+ 1
+
+    end
+      else do
+        /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
+        CALL TELLNJE userid 'AT' node 'You are currently NOT logged on.'
+        CALL TELLNJE userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
+        CALL TELLNJE userid 'AT' node '/HELP for help, or /LOGON to logon on'
+         totmessages = totmessages + 3
+      end
+return
+
+sendwho:
+/* who is online right now on this system? */
+   userswho = 0    /* counter for seen usres */
+   parse ARG userid,node
+   listuser = userid || "@"||node
+   CALL TELLNJE userid 'AT' node '> List of currently logged on users:'
+   totmessages = totmessages + 1
+   do ci=1 to words($.@)
+      entry=word($.@,ci)
+      if entry='' then iterate
+      parse value entry with '/'cuser'@'cnode'('otime')'
+      currenttime=Extime()
+      lasttime=currenttime-otime
+      call TELLNJE ,
+           userid 'AT' node '> ' cuser'@'cnode'  - last seen: 'lasttime' seconds ago'
+      totmessages = totmessages + 1
+      userswho = userswho + 1
+   end
+   CALL TELLNJE userid 'AT' node '> Total online right now: 'userswho
+   loggedonusers = userswho
+  totmessages = totmessages + 1
+return
+
+logoffuser:
+   parse ARG userid,node
+   listuser = userid || "@"||node
+   ppos=pos('/'listuser,$.@)
+   if ppos=0 then do
+      call log("User logoff rejected, not logged-on:  "||listuser)
+      return
+   end
+   rpos=pos(' ',$.@,ppos+1)
+   if rpos=0 then rpos=length($.@)+1
+   rlen=rpos-ppos
+   $.@=overlay(' ',$.@,ppos,rlen)
+   $.@=space($.@)
+   loggedonusers = loggedonusers - 1
+   CALL log('List size: '||@size())
+  CALL TELLNJE userid 'AT' node '-> You are logged off now.'
+  CALL TELLNJE userid 'AT' node '-> New total number of users: 'loggedonusers
+   totmessages = totmessages + 2
+return
+
+
+ logonuser:
+ /* add user to linked list */
+    parse ARG userid,node
+    listuser = userid"@"node
+    if pos('/'listuser,$.@)>0 then do
+       call log("List already logged-on: "||listuser)
+      CALL TELLNJE userid 'AT' node '-> You are already logged on.'
+      CALL TELLNJE userid 'AT' node '-> total number of users: 'loggedonusers
+    end
+    else do
+       if loggedonusers < 0 then loggedonusers = 0
+       loggedonusers = loggedonusers + 1
+
+       if highestusers < loggedonusers then highestusers = highestusers + 1
+
+       call @put '/'listuser'('currentTime')'
+       call log("List user added: "||listuser)
+       CALL log('List size: '||@size())
+      CALL TELLNJE userid 'AT' node '-> LOGON succeeded. '
+
+      CALL TELLNJE userid 'AT' node '-> Total number of users: 'loggedonusers
+       call announce  userid, node /* announce to all users  of new user */
+    end
+    totmessages = totmessages+ 2
+ return
+
+systeminfo:
+/* send /SYSTEM info about this host  */
+     parse ARG userid,node
+     listuser = userid"@"node
+
+    CALL TELLNJE userid 'AT' node '-> NJE node name        : 'localnode
+    CALL TELLNJE userid 'AT' node '-> Relay chat version   : 'relaychatversion
+    CALL TELLNJE userid 'AT' node '-> OS for this host     : 'osversion
+    CALL TELLNJE userid 'AT' node '-> Type of host         : 'typehost
+    CALL TELLNJE userid 'AT' node '-> Location of this host: 'hostloc
+    CALL TELLNJE userid 'AT' node '-> Time Zone of         : 'timezone
+    CALL TELLNJE userid 'AT' node '-> SysOp for this server: 'sysopname
+    CALL TELLNJE userid 'AT' node '-> SysOp email addr     : 'sysopemail
+    if compatibility > 2 then do
+       page=paging()
+       rstor=rstorage()
+       cfg=configuration()
+       lcpus=numcpus()
+   /*  parse var mcpu mpage mcf mrstor mlcpus  */
+      CALL TELLNJE userid 'AT' node '-> Pages/Sec      : 'page
+      CALL TELLNJE userid 'AT' node '-> IBM Machine Type : 'cfg
+      CALL TELLNJE userid 'AT' node '-> Memory in LPAR or VM : 'rstor
+      CALL TELLNJE userid 'AT' node '-> Number of CPUs : 'lcpus
+    end
+     if compatibility > 2 then do
+     totmessages = totmessages + 12
+     end
+    else do
+     totmessages = totmessages + 8
+    end
+return
+
+
+sendstats:
+/* send usage statistics to whoever asks, even if not logged on */
+    parse ARG userid,node
+    onlinenow = countusers(userid,node)
+
+ /*  parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)    */
+    actualtime=Extime()
+    elapsedsec=(actualtime-starttimeSEC)
+    if elapsedsec = 0 then elapsedsec = 1 /* avoid division by zero on Jan 1 at 00:00 */
+
+    msgsrate = (receivedmsgs + totmessages) / elapsedsec
+    msgsratef= FORMAT(msgsrate,4,2) /* rounding */
+    msgsratef = STRIP(msgsratef)
+    listuser = userid"@"node
+    CALL TELLNJE userid 'AT' node '-> Total number of users  : '@size()
+    CALL TELLNJE userid 'AT' node '-> Hihgest nr. of users   : 'highestusers
+    CALL TELLNJE userid 'AT' node '-> Total number of msgs   : 'totmessages
+    CALL TELLNJE userid 'AT' node '-> Messages rate /minute  : 'msgsratef
+    CALL TELLNJE userid 'AT' node '-> Server up since        : 'starttime' 'timezone
+/*  CALL TELLNJE userid 'AT' node '-> System CPU laod : 'STRIP(cpu)'%' */
+    CALL TELLNJE userid 'AT' node '-> RELAY CHAT version     : v'relaychatversion
+
+     totmessages = totmessages+ 6 /* reduced due to no CPU busy in MVS */
+return
+
+helpuser:
+/* send help menu */
+  parse ARG userid,node
+  listuser = userid"@"node
+
+
+call tellNJE ,
+ userid 'AT' node 'Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP MVS v'relaychatversion
+CALL TELLNJE userid 'AT' node '--------------------------------------------------------'
+CALL TELLNJE userid 'AT' node '        '
+CALL TELLNJE userid 'AT' node '/HELP for this help'
+CALL TELLNJE userid 'AT' node '/WHO for connected users'
+call tellNJE ,
+     userid 'AT' node '/LOGON  to logon to this chat room and start getting chat messages'
+CALL TELLNJE userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
+CALL TELLNJE userid 'AT' node '/STATS for chat statistics'
+CALL TELLNJE userid 'AT' node '/SYSTEM for info aobut this host'
+CALL TELLNJE userid 'AT' node '/FORCE to force a user off (SYSOP only)'
+CALL TELLNJE userid 'AT' node '        '
+/* CALL TELLNJE userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
+CALL TELLNJE userid 'AT' node ' messages with <-> are incoming chat messages...'
+CALL TELLNJE userid 'AT' node ' messages with > are service messages from chat servers'
+
+  totmessages = totmessages + 13
+return
+
+countusers:
+ parse ARG userid,node
+ listuser = userid"@"node
+ onlineusers = 0
+ do ci=1 to words($.@)
+     entry=word($.@,ci)
+     if entry='' then iterate
+     parse value entry with '/'cuser'@'cnode'('otime')'
+     lasttime=ctime-otime
+     onlineusers = onlineusers + 1
+ end
+return onlineusers
+
+
+announce:
+/* announce newly logged on user to all users */
+  parse ARG userid,node
+
+  cj=0 /* save logons to remove, else logon buffer doesn't match  */
+  do ci=1 to words($.@)
+     entry=word($.@,ci)
+     if entry='' then iterate
+     parse value entry with '/'cuser'@'cnode'('otime')'
+     CALL TELLNJE cuser 'AT' cnode '-> New user joined: 'userid' @ 'node
+  end
+
+return
+
+
+CheckTimeout:
+/* Check if user has not sent any message, automatic LOGOFF */
+   arg ctime
+   cj=0 /* save logons to remove, else logon buffer doesn't match  */
+   do ci=1 to words($.@)
+      entry=word($.@,ci)
+      if entry='' then iterate
+      parse value entry with '/'cuser'@'cnode'('otime')'
+  /*  say cuser cnode ctime otime ctime-otime    */
+      if ctime-otime> maxdormant then do  /* timeout per configuration */
+         cj=cj+1
+         say 'removed user: 'cnode
+         $remove.cj=cuser','cnode
+      end
+   end
+   do ci=1 to cj
+      interpret 'call logoffuser '$remove.ci
+      call log($remove.ci||'logged off due to timeout reached '||maxdormant|| ' minutes')
+      loggedonusers = loggedonusers -1
+   end
+return
+
+
+
+refreshTime:
+/* Refresh last transaction time */
+ /*trace i    */
+   arg ctime,userid,node
+   listuser=userid'@'node
+   ppos=pos('/'listuser,$.@)
+   if ppos=0 then return              /* user not logged on */
+   ppos=pos('(',$.@,ppos+1)           /* find timestamp */
+   if ppos=0 then return              /* not found, let it be */
+   rpos=pos(')',$.@,ppos+1)+1         /* find end of timestamp  */
+   if rpos=0 then return              /* ) not found, let it be */
+   rlen=rpos-ppos
+   $.@=overlay('('ctime')',$.@,ppos,rlen)
+return
+
+
+exTime:
+/* Calculate Seconds in this year */
+  dd=(date('d')-1)*86400
+  parse value time() with hh':'mm':'ss
+  tt=hh*3600+mm*60+ss
+return right(dd+tt,8,'0')
+
+
+mytime: procedure
+ timenow = left(time(),5)
+ hr = left(timenow,2)
+ min = right(timenow,2)
+ if hr > 12 then timenow         = (hr - 12)'.'min' pm'
+   else if hr = 12 then timenow  = hr'.'min' pm'
+                    else timenow = hr'.'min' am'
+ if left(timenow,1) = '0' then timenow = substr(timenow,2)
+ dow     = left(date('weekday'),3)
+ day     = right(date('sorted'),2)
+ if left(day,1) = '0' then day = substr(day,2)
+ month   = left(date('month'),3)
+ year    = left(date('sorted'),4)
+return timenow',' dow day month year
+
+
+p:      return word(arg(1), 1)    /*pick the first word out of many items*/
+sy:      say;
+         say left('', 30) "   " arg(1) '   ';
+         return
+@init:   $.@=;
+        @adjust: $.@=space($.@);
+        $.#=words($.@);
+        return
+@hasopt: arg o;
+        return pos(o, opt)\==0
+@size:  return $.#
+
+/*                                        */
+@del:   procedure expose $.;
+        arg k,m;
+        call @parms 'km'
+         _=subword($.@, k, k-1)   subword($.@, k+m)
+         $.@=_;
+         call @adjust;
+        return
+
+@get:    procedure expose $.;     arg k,m,dir,_
+         call @parms 'kmd'
+         do j=k  for m  by dir  while  j>0  &  j<=$.#
+             _=_ subword($.@, j, 1)
+        end   /*j*/
+         return strip(_)
+
+@parms:  arg opt      /*define a variable based on an option.*/
+         if @hasopt('k')  then k=min($.#+1, max(1, p(k 1)))
+         if @hasopt('m')  then m=p(m 1)
+         if @hasopt('d')  then dir=p(dir 1);
+         return
+
+@put:    procedure expose $.;
+            parse arg x,k;
+            k=p(k $.#+1);
+            call @parms 'k'
+            $.@=subword($.@, 1, max(0, k-1))   x   subword($.@, k);
+            call @adjust
+         return
+
+@show:   procedure expose $.;
+            parse arg k,m,dir;
+            if dir==-1  &  k==''   then k=$.#
+            m=p(m $.#);
+            call @parms 'kmd';
+            say @get(k,m, dir);
+         return
+
+list:
+/* this is only as examples how to use the double linked list
+    for future expanesion of this program                      */
+   call sy 'initializing the list.'            ;  call @init
+   call sy 'building list: blue'               ;  call @put "blue"
+   call sy 'displaying list size.'             ;  say  "list size="@size()
+   call sy 'forward list'                      ;  call @show
+   call sy 'backward list'                     ;  call @show ,,-1
+   call sy 'showing 4th item'                  ;  call @show 4,1
+   call sy 'showing 5th & 6th items'           ;  call @show 5,2
+   call sy 'adding item before item 4: black'  ;  call @put "black",4
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to tail: white'             ;  call @put "white"
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to head: red'               ;  call @put  "red",0
+   call sy 'showing list'                      ;  call @show
+return
+
+
+log:
+/* log a line to relay machine and/or log */
+   parse ARG  logline
+   say mytime()' :: 'logline
+return
+
