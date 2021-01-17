@@ -85,11 +85,16 @@ This program runs on z/VM, VM/ESA 2.x and VM/SP6. No version earlier than VM/SP 
 6. start with "RELAY" and disconnect the terminal
 
 
+
 <br><br>
 
 Shut it down remotely with the password you configured in the environment-specific variables. 
-
-
+<br><br>
+RELAY CHAT on MVS 3.8
+=====================
+<br>
+An MVS 3.8 version of RELAY CHAT is also availble in this repo. 
+<br><br><br><br>
 
 FUTURE FEATURES
 ---------------
@@ -113,6 +118,6 @@ The original RELAY description can be found here: https://en.wikipedia.org/wiki/
 
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: January 10, 2021<br>
+UPDATED: January 17, 2021<br>
 Moshix
 
