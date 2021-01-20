@@ -8,7 +8,8 @@
 /* copyright 2020, 2021  by moshix     */
 /* Apache 2.0 license                  */
 /***************************************/
-trace 1
+/* issue this from RELAY user on first start:                        */
+/* defaults set tell msgcmd msgnoh                                   */
 /*  CHANGE HISTORY                                                   */
 /*  V0.1-1.0:  testing WAKEUP mechanism                              */
 /*  v1.0-1.9:  double linked list for in memory processing,bug fixing*/
@@ -410,11 +411,11 @@ sendstats:
     msgsratef = STRIP(msgsratef)
     listuser = userid"@"node
     'TELL' userid 'AT' node '-> Total number of users: '@size()
-    'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
+    'TELL' userid 'AT' node '-> Highest nr.  of users: 'highestusers
     'TELL' userid 'AT' node '-> Total number of msgs : 'totmessages
     'TELL' userid 'AT' node '-> Messages rate /minute: 'msgsratef
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
-    'TELL' userid 'AT' node '-> System CPU laod      : 'STRIP(cpu)'%'
+    'TELL' userid 'AT' node '-> System CPU load      : 'STRIP(cpu)'%'
     'TELL' userid 'AT' node '-> RELAY CHAT version   : v'relaychatversion
  
      totmessages = totmessages+ 7
