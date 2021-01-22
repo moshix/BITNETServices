@@ -8,11 +8,11 @@
 /* copyright 2020, 2021  by moshix     */
 /* Apache 2.0 license                  */
 /***************************************/
-/* issue this from RELAY user on first start:                        */
-/* defaults set tell msgcmd msgnoh                                   */
+/* execute this from RELAY VM before starting RELAY CHAT:            */
+/* defaults set tell msgcmd msgnoh to remove host(user) in output    */
 /*  CHANGE HISTORY                                                   */
-/*  V0.1-1.0:  testing WAKEUP mechanism                              */
-/*  v1.0-1.9:  double linked list for in memory processing,bug fixing*/
+/*  V0.1-0.9:  testing WAKEUP mechanism                              */
+/*  v1.0    :  double linked list for in memory processing,bug fixing*/
 /*  v2.0    :  Configurble parameters, remove hardwired data         */
 /*  v2.1    :  Add LPAR and machine measurement for stats            */
 /*  v2.2    :  Add /SYSTEM command                                   */
@@ -25,19 +25,21 @@
 /*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
 /*  v2.7.3  :  loop detector disabled for now until i figure it out  */
 /*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
+/*  v2.7.6  :  minor coemstic stuff                                  */
+/*  v2.8.0  :  Federation #2 houvmzvm                                */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.7.4" /* needed for federation compatibility check */
+relaychatversion="2.8.0" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =  3000       /* max time user can be dormat               */
+maxdormant =200          /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="122222229" /* any user with this passwd shuts down rver*/
-osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM z114"      /* what kind of machine                      */
-hostloc  ="Stockhom,SE"  /* where is this machine                     */
+shutdownpswd="12zsz3229" /* any user with this passwd shuts down rver*/
+osversion="z/VM 7.1"     /* OS version for enquries and stats         */
+typehost="IBM zPDT"      /* what kind of machine                      */
+hostloc  ="Chicago,IL "  /* where is this machine                     */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="mmmmmx@gmail" /* where to contact this systop             */
+sysopemail="sdksj@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -45,9 +47,9 @@ raterwatermark=2000       /* max msgs per minute set for this server  */
  
  
 /* Federation settings below                                          */
-federation = 0           /*0=federation off,receives/no sending, 1=on */
-federated.0 ="HOUVMESA"  /* RELAY on these nodes will get all msgs!   */
-federated.1 ="HOUVMSP6"
+federation = 1           /*0=federation off,receives/no sending, 1=on */
+federated.0 ="SEVMM1"  /* RELAY on these nodes will get all msgs!   */
+federated.1 ="houvmesa"
 federatednum = 2         /* how many entries in the list?             */
  
  
@@ -73,7 +75,10 @@ premsg.4=""
 premsg.5=""
 premsg.6=""
 msgrotator=1             /* this will rotate the 7 prev msgs       */
- 
+err1="currently NOT"
+err2="to logon on"
+err3="Weclome to RELAY chat"
+err4="logged off now"
  
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
 whoamiuser=""             /* for autoconfigure                        */
@@ -119,30 +124,33 @@ call @init
 /* logon to all federal relay chat servers in the list     */
  
  
-  IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
-     do I =0 to federatednum by 1
-       'TELL RELAY at 'federated.i '/LOGON'
+     IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
+        call federInit
      end
-  END
+ 
   Do forever;
      'wakeup (iucvmsg QUIET'   /* wait for a message         */
      parse pull text          /* get what was send          */
+    CurrentTime=Extime()
      select
         when Rc = 5 then do;  /* we have a message          */
         /* parse it                                       */
            if pos('From', text) > 0 then  do  /* from RSCS   */
-        /* format is like this:                           */
-        /* *MSG    RSCS     From ZVM71X1(OPERATOR): hello */
               parse var text type sender . nodeuser msg
-          /* break out the node and userid               */
               parse var nodeuser node '(' userid '):'
-          CALL LOG('from '||userid||' @ '||node||' '||msg)
-          receivedmsgs= receivedmsgs + 1
-          /* below line checks if high rate watermark is exceeded */
-          /* and if so.... exits!                                 */
-          call highrate (receivedmsgs)
-          call detector (msg)
-          call handlemsg  userid,node,msg
+              CALL LOG('from '||userid||' @ '||node||' '||msg)
+              receivedmsgs= receivedmsgs + 1
+              /* below line checks if high rate watermark is exceeded */
+              /* and if so.... exits!                                 */
+              call highrate (receivedmsgs)
+              call detector (msg)
+              uppuserid=TRANSLATE(userid)
+  /* below line eliminates service messages from other relay nodes and eliminates loops */
+  if pos(err1,msg) > 0 | pos(err2,msg) > 0 | pos(err3,msg) > 0 | pos(err4,msg) > 0 then do
+              end
+              else do
+                call handlemsg  userid,node,msg
+              end
           end
           else do;  /* simple msg from local user  */
         /* format is like this:                           */
@@ -156,7 +164,7 @@ call @init
           signal xit
         otherwise
      end
- end;
+ end;   /* of do forever loop  */
  
  
  
@@ -167,7 +175,8 @@ xit:
   'WAKEUP RESET';        /* turn messages from IUCV to ON    */
   'SET MSG ON'
   'DROPBUF'
-  exit;
+   if federated = 1 then call federclose  /* log off from federated servers before exiting */
+exit;
  
  
 handlemsg:
@@ -266,7 +275,7 @@ sendchatmsg:
             /* federation next 4 lines */
            IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
             do i = 0 to federatednum by 1
-               'TELL RELAY at 'federated.i '<> 'userid'@'node':'msg
+               'TELL RELAY at 'federated.i '<> 'userid'@'node':  'msg
                 totmessages = totmessages+ 1
             end
           END /* OF THE IF FEDERATION CONDITION..                   */
@@ -282,7 +291,7 @@ sendchatmsg:
       else do
         /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
         'TELL' userid 'AT' node 'You are currently NOT logged on.'
-        'TELL' userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
+        'TELL' userid 'AT' node 'Welcome to RELAY chat for z/VM v'relaychatversion
         'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
          totmessages = totmessages + 3
       end
@@ -482,8 +491,8 @@ CheckTimeout:
       entry=word($.@,ci)
       if entry='' then iterate
       parse value entry with '/'cuser'@'cnode'('otime')'
-  /*  say cuser cnode ctime otime ctime-otime    */
-      if ctime-otime> maxdormant then do  /* timeout per configuration */
+/*    say cuser cnode ctime otime ctime-otime*/
+      if ctime-otime > maxdormant then do  /* timeout per configuration */
          cj=cj+1
          say 'removed user: 'cnode
          $remove.cj=cuser','cnode
@@ -727,3 +736,36 @@ whoami:
 pull whoamiuser . whoaminode . whoamistack
 whoamistack=LEFT(whoamistack,5)
 return
+ 
+federINit:
+        'MAKEBUF'
+     do I =0 to federatednum by 1
+       'TELL RELAY at 'federated.i '/LOGOFF'
+       'wakeup (iucvmsg QUIET'   /* wait for a message         */
+        parse pull text          /* get what was send          */
+        parse var text type sender . nodeuser msg
+        parse var nodeuser node '(' userid '):'
+       'TELL RELAY at 'federated.i '/LOGON'
+       'wakeup (iucvmsg QUIET'   /* wait for a message         */
+        parse pull text          /* get what was send          */
+        parse var text type sender . nodeuser msg
+        parse var nodeuser node '(' userid '):'
+ 
+       if pos('succeeded',msg)> 0  then do /* ok we got logged on to remote relay*/
+           CurrentTime=Extime()
+           call logonuser  userid,node/* LOGON FOREIGN RELAY node */
+        end
+     end
+       'DROPBUF'
+ 
+return
+ 
+federclose:
+        'MAKEBUF'
+     do I =0 to federatednum by 1
+       'TELL RELAY at 'federated.i '/LOGOFF'
+        call logooffuser  "RELAY",node /* logff       RELAY node */
+     end
+       'DROPBUF'
+return
+ 
