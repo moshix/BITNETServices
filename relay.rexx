@@ -20,7 +20,7 @@
 /*  v2.4    :  Add /FORCE option to force off users (sysop only)     */
 /*  v2.5    :  Loop detetector incoming msg counter v1.0             */
 /*  v2.6    :  Add federation v1.0, loop detector v2.0               */
-/*  v2.7    :  loop detector v2.0                                    */
+/*  v2.7    :  loop detector v3.0                                    */
 /*  v2.7.1  :  autodetect who am i                                   */
 /*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
 /*  v2.7.3  :  loop detector disabled for now until i figure it out  */
@@ -28,28 +28,30 @@
 /*  v2.7.6  :  minor coemstic stuff                                  */
 /*  v2.8.0  :  Federation #2                                         */
 /*  v2.8.1  :  Federation loop detector and sanity checks            */
+/*  v2.8.2  :  LOGOFF user count fix                                 */
+/*  v2.8.3  :  message sender doesn't see her own message anymore    */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.8.1" /* needed for federation compatibility check */
+relaychatversion="2.8.3" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =1600         /* max time user can be dormat               */
+maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="12z332229" /* any user with this passwd shuts down rver*/
-osversion="z/VM 7.1"     /* OS version for enquries and stats         */
-typehost="IBM zPDT"      /* what kind of machine                      */
-hostloc  ="Chicago,IL "  /* where is this machine                     */
+shutdownpswd="12z33a229" /* any user with this passwd shuts down rver*/
+osversion="z/VM 6.4"     /* OS version for enquries and stats         */
+typehost="IBM z114"      /* what kind of machine                      */
+hostloc  ="Stockholm,SE" /* where is this machine                     */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="      @gmail" /* where to contact this systop             */
+sysopemail="           " /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=2000       /* max msgs per minute set for this server  */
+raterwatermark=12000      /* max msgs per minute set for this server  */
  
  
 /* Federation settings below                                          */
-federation = 1           /*0=federation off,receives/no sending, 1=on */
-federated.0 ="SEVMM1"  /* RELAY on these nodes will get all msgs!   */
+federation = 0           /*0=federation off,receives/no sending, 1=on */
+federated.0 ="HOUVMZVM"/* RELAY on these nodes will get all msgs!   */
 federatednum = 1         /* how many entries in the list?             */
  
  
@@ -122,7 +124,6 @@ call @init
 /* the console (rc=6) then leave the exec.                 */
  
 /* logon to all federal relay chat servers in the list     */
- 
  
      IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
         call federInit
@@ -275,7 +276,12 @@ sendchatmsg:
                 entry=word($.@,ci)
                 if entry='' then iterate
                 parse value entry with '/'cuser'@'cnode'('otime')'
-                     'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
+                     if cuser = userid & cnode = node then do
+                       'TELL' cuser 'AT' cnode '-->' /* dont' send msg to orignl sender */
+                      end
+                      else do
+                        'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
+                      end
              end
             totmessages = totmessages+ 1
             prevmsg.1=msg /* for loop detector */
@@ -324,7 +330,8 @@ logoffuser:
    rlen=rpos-ppos
    $.@=overlay(' ',$.@,ppos,rlen)
    $.@=space($.@)
-   loggedonusers = loggedonusers - 1
+   loggedonusers = @size()
+   if loggedonusers = 1 then loggedonusers = 0
    CALL log('List size: '||@size())
   'TELL' userid 'AT' node '-> You are logged off now.'
   'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
@@ -339,11 +346,10 @@ return
     if pos('/'listuser,$.@)>0 then do
        call log("List already logged-on: "||listuser)
       'TELL' userid 'AT' node '-> You are already logged on.'
-      'TELL' userid 'AT' node '-> total number of users: 'loggedonusers
+      'TELL' userid 'AT' node '-> total number of users: '@size()
     end
     else do
-       if loggedonusers < 0 then loggedonusers = 0
-       loggedonusers = loggedonusers + 1
+       loggedonusers = @size()
  
        if highestusers < loggedonusers then highestusers = highestusers + 1
  
@@ -352,7 +358,7 @@ return
        CALL log('List size: '||@size())
       'TELL' userid 'AT' node '-> LOGON succeeded.  '
  
-      'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
+      'TELL' userid 'AT' node '-> Total number of users: '@size()
        call announce  userid, node /* announce to all users  of new user */
     end
     totmessages = totmessages+ 2
@@ -440,10 +446,11 @@ helpuser:
 'TELL' userid 'AT' node '/FORCE  to force a user off (SYSOP only)'
 'TELL' userid 'AT' node '              '
 /* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
-'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
-'TELL' userid 'AT' node ' messages with   > are service messages from chat servers'
+'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
+'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
+'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
  
-  totmessages = totmessages + 13
+  totmessages = totmessages + 14
 return
  
 countusers:
@@ -704,7 +711,7 @@ highrate:
   rate = receivedmsg/elapsedtime
   if rate > raterwatermark then do
      call log ('Rate high watermark exceeded, rate: '||rate)
-  /* signal xit;*/
+     signal xit;
    end
   else do
    return 0
