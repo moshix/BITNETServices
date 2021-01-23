@@ -26,20 +26,21 @@
 /*  v2.7.3  :  loop detector disabled for now until i figure it out  */
 /*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
 /*  v2.7.6  :  minor coemstic stuff                                  */
-/*  v2.8.0  :  Federation #2 houvmzvm                                */
+/*  v2.8.0  :  Federation #2                                         */
+/*  v2.8.1  :  Federation loop detector and sanity checks            */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.8.0" /* needed for federation compatibility check */
+relaychatversion="2.8.1" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =200          /* max time user can be dormat               */
+maxdormant =1600         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="12zsz3229" /* any user with this passwd shuts down rver*/
+shutdownpswd="12z332229" /* any user with this passwd shuts down rver*/
 osversion="z/VM 7.1"     /* OS version for enquries and stats         */
 typehost="IBM zPDT"      /* what kind of machine                      */
 hostloc  ="Chicago,IL "  /* where is this machine                     */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="sdksj@gmail" /* where to contact this systop             */
+sysopemail="      @gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -49,8 +50,7 @@ raterwatermark=2000       /* max msgs per minute set for this server  */
 /* Federation settings below                                          */
 federation = 1           /*0=federation off,receives/no sending, 1=on */
 federated.0 ="SEVMM1"  /* RELAY on these nodes will get all msgs!   */
-federated.1 ="houvmesa"
-federatednum = 2         /* how many entries in the list?             */
+federatednum = 1         /* how many entries in the list?             */
  
  
  
@@ -143,13 +143,12 @@ call @init
               /* below line checks if high rate watermark is exceeded */
               /* and if so.... exits!                                 */
               call highrate (receivedmsgs)
-              call detector (msg)
               uppuserid=TRANSLATE(userid)
   /* below line eliminates service messages from other relay nodes and eliminates loops */
   if pos(err1,msg) > 0 | pos(err2,msg) > 0 | pos(err3,msg) > 0 | pos(err4,msg) > 0 then do
               end
               else do
-                call handlemsg  userid,node,msg
+                if detector(msg) > 0 then call handlemsg  userid,node,msg
               end
           end
           else do;  /* simple msg from local user  */
@@ -175,7 +174,7 @@ xit:
   'WAKEUP RESET';        /* turn messages from IUCV to ON    */
   'SET MSG ON'
   'DROPBUF'
-   if federated = 1 then call federclose  /* log off from federated servers before exiting */
+   if federation = 1 then call federclose
 exit;
  
  
@@ -272,13 +271,6 @@ sendchatmsg:
     listuser = userid || "@"||node
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
-            /* federation next 4 lines */
-           IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
-            do i = 0 to federatednum by 1
-               'TELL RELAY at 'federated.i '<> 'userid'@'node':  'msg
-                totmessages = totmessages+ 1
-            end
-          END /* OF THE IF FEDERATION CONDITION..                   */
              do ci=1 to words($.@)
                 entry=word($.@,ci)
                 if entry='' then iterate
@@ -286,13 +278,13 @@ sendchatmsg:
                      'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
              end
             totmessages = totmessages+ 1
- 
+            prevmsg.1=msg /* for loop detector */
     end
       else do
         /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
-        'TELL' userid 'AT' node 'You are currently NOT logged on.'
-        'TELL' userid 'AT' node 'Welcome to RELAY chat for z/VM v'relaychatversion
-        'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
+if userid \= "RELAY" THEN 'TELL' userid 'AT' node 'You are currently NOT logged on.'
+IF USERID \= "RELAY" THEN 'TELL' userid 'AT' node 'Welcome to RELAY chat for z/VM v'relaychatversion
+IF USERID \= "RELAY" THEN 'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
          totmessages = totmessages + 3
       end
 return
@@ -722,13 +714,18 @@ return
  
 detector:
 parse ARG msg /* last message in */
-if msg = prevmsg.1 then do
-     /* we have a looop!! */
- /*  call log ('LOOP DETECTOR TRIGGERED!!! EXITING  ')  */
-  /* signal xit;   */
-   end
+ 
+Middle=center(prevmsg.1,20)
+Middle=strip(middle)                      /* in case message <50 we will
+have leading/trailing blanks, drop them */
+Opos=pos(middle,msg)  /* middle part in new message */
+If opos>0 then do
+     prevmsg.1=msg
+     say "message looping deteced"
+     return -1
+ end
 prevmsg.1=msg
-return
+return 1
  
 whoami:
  
@@ -738,6 +735,7 @@ whoamistack=LEFT(whoamistack,5)
 return
  
 federINit:
+ 
         'MAKEBUF'
      do I =0 to federatednum by 1
        'TELL RELAY at 'federated.i '/LOGOFF'
@@ -753,7 +751,7 @@ federINit:
  
        if pos('succeeded',msg)> 0  then do /* ok we got logged on to remote relay*/
            CurrentTime=Extime()
-           call logonuser  userid,node/* LOGON FOREIGN RELAY node */
+           call logonuser  userid,node   /* LOGON FOREIGN RELAY node */
         end
      end
        'DROPBUF'
@@ -761,6 +759,7 @@ federINit:
 return
  
 federclose:
+ 
         'MAKEBUF'
      do I =0 to federatednum by 1
        'TELL RELAY at 'federated.i '/LOGOFF'
