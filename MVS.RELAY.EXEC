@@ -25,13 +25,14 @@
 /*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
 /*  v2.7.5  :  port to BREXX/MVS 3.8                                 */
 /*  v2.7.6  :  removed federation, whoami, highrate,                 */
+/*  v2.7.7  :  add /ROOM option                                      */
 
 
 SIGNAL on SYNTAX  /* allow graceful termination in case of errors    */
 
 /* configuraiton parameters - IMPORTANT                               */
 
-relaychatversion="2.7.6" /* needed for federation compatibility check */
+relaychatversion="2.7.7" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =3000         /* max time user can be dormat               */
 localnode="HOUCICS"      /* localnode is now autodetected as 2.7.1    */
@@ -44,6 +45,8 @@ sysopemail="000001@gmail" /* where to contact this systop             */
 compatibility=1           /* 1 VM/SP or MVS3.8, 2=VM/ESA,3=z/VM       */
 sysopuser='RELAY'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
+send2ALL=0                /* 0 send chat msgs to users in same room   */
+                          /* 1 send chat msgs to all logged-in users  */
 
 
 /* global variables                                                  */
@@ -72,7 +75,7 @@ whoamiuser="RELAY"
 
  CALL __NJEINIT                /* SETUP ENVIRONMENT */
  RC = __NJEREGISTER(NJEUID)    /* REGISTER USERID */
- IF RC =0 | rc=24 then _crly=1 /* set NJECRLY is registered         */
+ IF RC =0 then _crly=1         /* set NJECRLY is registered         */
  else do                       /* when register  failed, terminate  */
     CALL WTO "USER REGISTRATION FAILED WITH RC("RC")"
     exit 8
@@ -92,11 +95,8 @@ whoamiuser="RELAY"
  *     runs until stopped by operator command /P in console
  * --------------------------------------------------------------------
  */
- say 'DEBUG: Starting __njereceive loop...'
- trace i
   do forever
-     event = __njereceive()
-      sentmsg=0
+     event = __njereceive(5000)
      select
        when event = #msg then do
           receivedmsgs= receivedmsgs + 1
@@ -106,9 +106,12 @@ whoamiuser="RELAY"
           call endSTC "NJERELAY STC TERMINATED BY OPERATOR",0
        when event = #error then ,
           call endstc "NJERELAY STC TERMINATED BY ERROR("_RC")",event
+       when event = #timeout then do
+         /* Time out occurred, you can add housekeeping here */
+       end
      end
-     if sentmsg>0 then call EndofSend sentmsg
   end
+
 /* --------------------------------------------------------------------
  * Shut Down STC
  *      when its time to quit, come here
@@ -117,7 +120,6 @@ whoamiuser="RELAY"
 endSTC:
   parse arg msg,exc
   CALL __NJEDEREGISTER(NJEUID)
-  call wto msg
 exit exc
 /* --------------------------------------------------------------------
  * REXX abnormal termination occurred, terminate gracefully
@@ -126,6 +128,7 @@ exit exc
 syntax:
   if  _crly=1 then CALL __NJEDEREGISTER(NJEUID)
 exit 16
+
 /* --------------------------------------------------------------------
  * Old VM coding, not supported in MVS
  * --------------------------------------------------------------------
@@ -170,7 +173,17 @@ handlemsg:
       end
       when (umsg = "/LOGON") then do
            call logonuser  userid,node
+           call enterRoom  userid,node,'GENERAL'
            updbuff=0                    /* already up-to-date */
+      end
+      when (pos("/ROOMS",umsg)>0) then do
+           call ShowRooms
+      end
+      when (pos("/ROOM",umsg)>0) then do
+           call EnterRoom  userid,node,umsg
+      end
+      when umsg='/ECHO' then do
+           CALL TELLNJE userid 'AT' node 'USER: 'userid' Node: 'node
       end
       when (umsg = "/HELP") then do
            call helpuser  userid,node
@@ -185,7 +198,7 @@ handlemsg:
 
 
       otherwise
-           call sendchatmsg userid,node,msg
+           call sendchatmsg userid,node,text
         end
    if updBuff=1 then call refreshTime currentTime,userid,node /* for each msg ! */
    call CheckTimeout currentTime
@@ -196,18 +209,9 @@ return
  * --------------------------------------------------------------------
  */
 tellNJE:
-  parse arg userid' 'isat' 'node' 'njemsg
-  'NJE38 M 'node userid njemsg
-  sentmsg=sentmsg+1
+  parse arg $userid' 'isat' '$node' 'njemsg
+ 'NJE38 M '$node $userid njemsg
 return rc
-/* --------------------------------------------------------------------
- * tellNJE replaces the VM TELL command and uses NJE38 Message instead
- *   e.g. CALL TELLNJE userid 'AT' node '/WHO for connected users'
- * --------------------------------------------------------------------
- */
-endofSend:
-/*'NJE38 M 'node userid arg(1)' Relay lines sent'  */
-return 0
 /* --------------------------------------------------------------------
  * SYSOP forces a user out
  * --------------------------------------------------------------------
@@ -236,7 +240,6 @@ force:
        CALL TELLNJE userid 'AT' node '-> This user has been forced off: 'forceuser
        CALL TELLNJE userid 'AT' node '-> New total number of users: 'loggedonusers
         totmessages = totmessages + 2
-
   end   /* of (userid=sysopuser) test */
   else do
     CALL LOG('This user:  '||userid||' @ '||node||' tried to force off user: '||forceuser)
@@ -246,36 +249,60 @@ force:
 return
 
 
-
+/* -----------------------------------------------------------------
+ * SENDCHAT Message to all Logged-in users or
+ *                  Members of the same room
+ * -----------------------------------------------------------------
+ */
 sendchatmsg:
 /* what we got is a message to be distributed to all online users */
     parse ARG userid,node,msg
     listuser = userid || "@"||node
-    if pos('/'listuser,$.@)>0 then do
-      /*  USER IS ALREADY LOGGED ON */
-            /* federation next 4 lines */
-           IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
-            do i = 0 to federatednum by 1
-               'TELL RELAY at 'federated.i '<> 'userid'@'node':'msg
-                totmessages = totmessages+ 1
-            end
-          END /* OF THE IF FEDERATION CONDITION..                   */
-             do ci=1 to words($.@)
-                entry=word($.@,ci)
-                if entry='' then iterate
-                parse value entry with '/'cuser'@'cnode'('otime')'
-                     CALL TELLNJE cuser 'AT' cnode '<> 'userid'@'node':'msg
-             end
-            totmessages = totmessages+ 1
-
-    end
-      else do
-        /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
+    if pos('/'listuser,$.@)=0 then do
+     /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
         CALL TELLNJE userid 'AT' node 'You are currently NOT logged on.'
         CALL TELLNJE userid 'AT' node 'Wecome to RELAY chat for z/VM v'relaychatversion
         CALL TELLNJE userid 'AT' node '/HELP for help, or /LOGON to logon on'
-         totmessages = totmessages + 3
-      end
+        totmessages = totmessages + 3
+        return
+    end
+    /*  USER IS ALREADY LOGGED ON */
+    /* federation next 4 lines */
+    IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
+       do i = 0 to federatednum by 1
+         'TELL RELAY at 'federated.i '<> 'userid'@'node':'msg
+          totmessages = totmessages+ 1
+       end
+    END /* OF THE IF FEDERATION CONDITION..                   */
+/* -----------------------------------------------------------------
+ * this coding sends the message to all logged-in users
+ * -----------------------------------------------------------------
+ */
+    if send2ALL=1 then do
+       do ci=1 to words($.@)
+          entry=word($.@,ci)
+          if entry='' then iterate
+          parse value entry with '/'cuser'@'cnode'('otime')'
+          CALL TELLNJE cuser 'AT' cnode '<> 'userid'@'node':'msg
+          totmessages = totmessages+ 1
+       end
+       return
+    end
+/* -----------------------------------------------------------------
+ * this coding sends the message to all logged-in room mates
+ *  send2ALL is 0
+ * -----------------------------------------------------------------
+ */
+    myRoom=$Room.userid
+    do ci=1 to words($Room.myRoom)
+       entry=word($Room.myRoom,ci)
+       if entry='' then iterate
+       if entry=userid'@'node then iterate /* don't send msgs to yourself */
+       CALL TELLNJE userid 'AT' node 'Message sent to: 'entry
+       parse value entry with cuser'@'cnode
+       CALL TELLNJE cuser 'AT' cnode '<> 'userid'@'node':'msg
+       totmessages = totmessages+ 1
+     end
 return
 
 sendwho:
@@ -315,9 +342,10 @@ logoffuser:
    $.@=overlay(' ',$.@,ppos,rlen)
    $.@=space($.@)
    loggedonusers = loggedonusers - 1
+   call exitRoom userid,node
    CALL log('List size: '||@size())
-  CALL TELLNJE userid 'AT' node '-> You are logged off now.'
-  CALL TELLNJE userid 'AT' node '-> New total number of users: 'loggedonusers
+   CALL TELLNJE userid 'AT' node '-> You are logged off now.'
+   CALL TELLNJE userid 'AT' node '-> New total number of users: 'loggedonusers
    totmessages = totmessages + 2
 return
 
@@ -347,6 +375,69 @@ return
     end
     totmessages = totmessages+ 2
  return
+/* -----------------------------------------------------------------
+ * Enter Chat Room. Messages will be sent only to users of the
+ *       same chat room.
+ * -----------------------------------------------------------------
+ */
+enterRoom:
+  parse upper arg _user,_node,_room
+  if word(_room,1)='/ROOM' then _room=word(_room,2)
+  rml=length(_room)
+  if rml<3 | rml>10 then  ,
+     CALL TELLNJE userid 'AT' _node 'Room must not be below 3 or exceed 10 characters :'_room
+  else do
+     if symbol('allrooms')<>'VAR' then allrooms=''
+     else if pos('/'_room,allrooms)=0 then allrooms=allrooms' /'_room
+     call exitRoom _user,_node
+     $Room._user=_room
+     if symbol('$Room._room')=='VAR' then $Room._room=$Room._room' '_user'@'_node
+        else $Room._room=_user'@'_node
+     CALL TELLNJE userid 'AT' _node 'You have entered room: '_room
+  end
+  totmessages = totmessages + 1
+return 0
+/* -----------------------------------------------------------------
+ * Show available Rooms and assigned users
+ * -----------------------------------------------------------------
+ */
+ShowRooms:
+  if symbol('allrooms')<>'VAR' | words(allrooms)=0 then do
+     CALL TELLNJE userid 'AT' _node 'There are no rooms open yet'
+     totmessages = totmessages + 1
+     return
+   end
+   do ri=1 to words(allrooms)
+      troom=substr(word(allrooms,ri),2)
+      if symbol('$Room.troom')<>'VAR' then iterate
+      tusers=$Room.troom
+      CALL TELLNJE userid 'AT' _node 'ROOM   : 'troom' has 'words(tusers)' user(s)'
+      CALL TELLNJE userid 'AT' _node ' Users : 'tusers
+      totmessages = totmessages+2
+  end
+return 0
+/* -----------------------------------------------------------------
+ * Exit curret CHAT Room, new one will be assigned by enterRoom
+ * -----------------------------------------------------------------
+ */
+exitRoom:
+  parse arg _user,_node
+  myRoom=$Room._user
+  $Room._user=''   /* clear current room entry */
+  troom=''
+  if symbol('$Room._room')<>'VAR' then return
+  do ci=1 to words($Room.myRoom)
+     if word($Room.myRoom,ci)=_user'@'node then do
+        CALL TELLNJE userid 'AT' node '-> You left room 'myRoom
+        iterate
+     end
+     troom=troom' 'word($Room.myRoom,ci)
+  end
+  $Room.myRoom=troom
+return
+
+
+
 
 systeminfo:
 /* send /SYSTEM info about this host  */
