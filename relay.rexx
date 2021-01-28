@@ -30,10 +30,12 @@
 /*  v2.8.1  :  Federation loop detector and sanity checks            */
 /*  v2.8.2  :  LOGOFF user count fix                                 */
 /*  v2.8.3  :  message sender doesn't see her own message anymore    */
+/*  v2.8.4  :  Some tests before starting RELAY CHAT                 */
+/*  v2.8.5  :  Fix expired users still lingering in linked list      */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.8.3" /* needed for federation compatibility check */
+relaychatversion="2.8.5" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
@@ -42,7 +44,7 @@ osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"      /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
 sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="           " /* where to contact this systop             */
+sysopemail="moshix@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -99,7 +101,8 @@ if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level
      say 'Number of CPU: in LPAR: 'numcpus()
  END
      say '                        '
-     say '****** LOG BELOW ** ****'
+     say '****** LOG BELOW *******'
+ 
 /* some simple logging  for stats etc        */
       CALL log('RELAY chat '||relaychatversion||' started. ')
  
@@ -108,8 +111,28 @@ if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level
 call @init
  CALL log('List has been initialized..')
  CALL log('List size: '||@size())
+if @size() /= 0 then do
+   CALL log('Linked list init has failed! Abort ')
+   signal xit;
+end
+ 
+/*
+if emptybuff() < 0 then do
+   CALL log('General error in draining buffer.  Abort!')
+   signal xit;
+end   */
+ 
+ 
 /*-------------------------------------------*/
  
+ 
+/* now run a quick self test to see if NJE is working (RSCS up?) before continuing
+if selftest() < 0 then do
+ CALL log('NJE Self Test failed. RSCS not running or previous messages in buffer...')
+end
+else do
+ CALL log('NJE Self Test passed...')
+end                                                                          */
  
  
 /* Invoke WAKEUP first so it will be ready to receive msgs */
@@ -269,6 +292,10 @@ return
 sendchatmsg:
 /* what we got is a message to be distributed to all online users */
     parse ARG userid,node,msg
+ 
+   CurrentTime=Extime()
+   call CheckTimeout currentTime
+ 
     listuser = userid || "@"||node
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
@@ -299,6 +326,10 @@ sendwho:
 /* who is online right now on this system? */
    userswho = 0    /* counter for seen usres */
    parse ARG userid,node
+ 
+   CurrentTime=Extime()
+   call CheckTimeout currentTime
+ 
    listuser = userid || "@"||node
    'TELL' userid 'AT' node '> List of currently logged on users:'
    totmessages = totmessages + 1
@@ -368,6 +399,10 @@ systeminfo:
 /* send /SYSTEM info about this host  */
      parse ARG userid,node
      listuser = userid"@"node
+ 
+ 
+   CurrentTime=Extime()
+   call CheckTimeout currentTime
  
      parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
@@ -616,6 +651,7 @@ return
  
  
 log:
+/* general logger function */
 /* log a line to relay machine and/or log */
    parse ARG  logline
    say mytime()' :: 'logline
@@ -623,6 +659,7 @@ return
  
  
 cpubusy:
+/* how busy are the CPU(s) on this LPAR */
 /* extract CPU buy information for stats etc. */
  cplevel = space(cp_id) sl
  strlen = length(cplevel)
@@ -633,6 +670,7 @@ cpubusy:
 return cpu
  
 paging:
+/* how many pages per second is this LPAR doing? */
 /* extra currenct OS paging activity */
  sl = c2d(right(diag(0), 2))
  cplevel = space(cp_id) sl
@@ -647,6 +685,7 @@ rstorage:
 return rstor
  
 configuration:
+/* return machine configuration */
 /* extract machine type etc. */
  if compatibility > 2 then do
 Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
@@ -678,6 +717,7 @@ end
 return type
  
 numcpus:
+/* return number of CPUs in this LPAR */
   parse value stsi(1,1,1) with 49  type   +4 ,
                                81  seq   +16 ,
                               101  model +16 .
@@ -701,6 +741,7 @@ numcpus:
 return lcpus
  
 highrate:
+/* when too many incoming messages per second exit server to avoid CPU overloading */
 /* this function detects high msg rate for loop detection purposes
    or for system load abatement purposes                          */
   RATE = 0
@@ -720,6 +761,7 @@ return
  
  
 detector:
+/* detect if a message is looping by extracting middle of an incoming message-> comparing*/
 parse ARG msg /* last message in */
  
 Middle=center(prevmsg.1,20)
@@ -742,7 +784,7 @@ whoamistack=LEFT(whoamistack,5)
 return
  
 federINit:
- 
+/* Registered with all defined RELAY CHAT servers upon startup */
         'MAKEBUF'
      do I =0 to federatednum by 1
        'TELL RELAY at 'federated.i '/LOGOFF'
@@ -766,7 +808,7 @@ federINit:
 return
  
 federclose:
- 
+/* close all federated connections before exiting */
         'MAKEBUF'
      do I =0 to federatednum by 1
        'TELL RELAY at 'federated.i '/LOGOFF'
@@ -774,4 +816,32 @@ federclose:
      end
        'DROPBUF'
 return
+ 
+selftest:
+/* Send myself an NJE message before starting up to see if all good */
+        'DROPBUF'
+       'TELL RELAY at 'localnode' TEST100'
+       'wakeup (iucvmsg QUIET'   /* wait for a message         */
+        parse pull text          /* get what was send          */
+        parse var text type sender . nodeuser msg
+        parse var nodeuser node '(' userid '):'
+       'DROPBUF'
+   if msg = "TEST100" then do
+      return 0
+   end
+  else do
+        return -1
+  end
+ 
+emptybuff:
+/* empty NJE buffer before starting RELAY CHAT */
+ 
+ 
+        'MAKEBUF'
+       'wakeup (iucvmsg QUIET'   /* wait for a message         */
+        parse pull text          /* get what was send          */
+        parse var text type sender . nodeuser msg
+        parse var nodeuser node '(' userid '):'
+       'DROPBUF'
+return 0
  
