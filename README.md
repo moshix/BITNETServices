@@ -27,6 +27,8 @@ The commands for clients are:<br><br>
 /LOGON to add yourself to the distribution list for messages<br>
 /LOGOFF to remove yourself from distributions of messages<br>
 /WHO    who is logged on currently?<br>
+/ROOM
+/ROOMS
 /STATS   some chat server stats<br>
 message  whatever you want to tell yourfriends on the channel<br>
 
@@ -119,6 +121,6 @@ The original RELAY description can be found here: https://en.wikipedia.org/wiki/
 
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: January 17, 2021<br>
+UPDATED: January 29, 2021<br>
 Moshix
 
