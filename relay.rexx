@@ -32,23 +32,24 @@
 /*  v2.8.3  :  message sender doesn't see her own message anymore    */
 /*  v2.8.4  :  Some tests before starting RELAY CHAT                 */
 /*  v2.8.5  :  Fix expired users still lingering in linked list      */
+/*  v2.9.0  :  Rooms!! Up to 10 char long room name by PeterJ        */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.8.5" /* needed for federation compatibility check */
+relaychatversion="2.9.0" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="12223a229" /* any user with this passwd shuts down rver*/
-osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM z114"      /* what kind of machine                      */
-hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="Moadff  "     /* who is the sysop for this chat server     */
-sysopemail="sdfsf@gmail" /* where to contact this systop             */
-compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
-sysopuser='MAINT'         /* sysop user who can force users out       */
+shutdownpswd="12adfadf3a229" /* any user with this passwd shuts down rver*/
+osversion="z/VM 7.1"     /* OS version for enquries and stats         */
+typehost="IBM zEC12"     /* what kind of machine                      */
+hostloc  ="Chicago,IL  " /* where is this machine                     */
+sysopname="AlphaBeta "   /* who is the sysop for this chat server     */
+sysopemail="alpha@gmail" /* where to contact this systop             */
+compatibility=3          /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
+sysopuser='MAINT'        /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=12000      /* max msgs per minute set for this server  */
+raterwatermark=18000     /* max msgs per minute set for this server  */
  
  
 /* Federation settings below                                          */
@@ -83,6 +84,11 @@ err1="currently NOT"
 err2="to logon on"
 err3="Weclome to RELAY chat"
 err4="logged off now"
+ 
+send2ALL=0                /* 0 send chat msgs to users in same room   */
+                          /* 1 send chat msgs to all logged-in users  */
+ 
+ 
  
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
 whoamiuser=""             /* for autoconfigure                        */
@@ -121,6 +127,7 @@ if emptybuff() < 0 then do
    CALL log('General error in draining buffer.  Abort!')
    signal xit;
 end   */
+ 
  
 /*-------------------------------------------*/
  
@@ -188,6 +195,9 @@ end                                                                          */
      end
  end;   /* of do forever loop  */
  
+ 
+ 
+ 
 xit:
 /* when its time to quit, come here    */
  
@@ -229,7 +239,17 @@ handlemsg:
       end
       when (umsg = "/LOGON") then do
            call logonuser  userid,node
+           call enterRoom userid,node,'GENERAL'   /* enter default GENERAL room */
            updbuff=0                    /* already up-to-date */
+      end
+      when (pos("/ROOMS",umsg)>0) then do
+           call ShowRooms
+      end
+      when (pos("/ROOM",umsg)>0) then do
+           call EnterRoom  userid,node,umsg
+      end
+      when umsg='/ECHO' then do
+               'TELL' userid 'AT' node 'USER: 'userid' Node: 'node
       end
       when (umsg = "/HELP") then do
            call helpuser  userid,node
@@ -303,7 +323,7 @@ sendchatmsg:
                        'TELL' cuser 'AT' cnode '-->' /* dont' send msg to orignl sender */
                       end
                       else do
-                        'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
+      if send2ALL=1 then  'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
                       end
              end
             totmessages = totmessages+ 1
@@ -316,6 +336,22 @@ IF USERID \= "RELAY" THEN 'TELL' userid 'AT' node 'Welcome to RELAY chat for z/V
 IF USERID \= "RELAY" THEN 'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
          totmessages = totmessages + 3
       end
+/* -----------------------------------------------------------------
+ * this coding sends the message to all logged-in room mates
+ *  send2ALL is 0
+ * -----------------------------------------------------------------
+ */
+    myRoom=$Room.userid
+    do ci=1 to words($Room.myRoom)
+       entry=word($Room.myRoom,ci)
+       if entry='' then iterate
+       if entry=userid'@'node then iterate /* don't send msgs to yourself */
+           'TELL ' userid 'AT' node 'Message sent to: 'entry
+       parse value entry with cuser'@'cnode
+           'TELL ' cuser 'AT' cnode '<> 'userid'@'node':'msg
+       totmessages = totmessages+ 1
+     end
+ 
 return
  
 sendwho:
@@ -475,13 +511,15 @@ helpuser:
 'TELL' userid 'AT' node '/STATS  for chat statistics'
 'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
 'TELL' userid 'AT' node '/FORCE  to force a user off (SYSOP only)'
+'TELL' userid 'AT' node '/ROOM NAME (max 10  char) to change to room NAME'
+'TELL' userid 'AT' node '/ROOMS  to see all rooms with users'
 'TELL' userid 'AT' node '              '
 /* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
  
-  totmessages = totmessages + 14
+  totmessages = totmessages + 16
 return
  
 countusers:
@@ -496,6 +534,56 @@ countusers:
      onlineusers = onlineusers + 1
  end
 return onlineusers
+ 
+enterRoom:
+  parse upper arg _user,_node,_room
+  if word(_room,1)='/ROOM' then _room=word(_room,2)
+  rml=length(_room)
+  if rml<3 | rml>10 then  ,
+         'TELL 'userid 'AT' _node 'Room must not be below 3 or exceed 10 characters :'_room
+  else do
+     if symbol('allrooms')<>'VAR' then allrooms=''
+     else if pos('/'_room,allrooms)=0 then allrooms=allrooms' /'_room
+     call exitRoom _user,_node
+     $Room._user=_room
+     if symbol('$Room._room')=='VAR' then $Room._room=$Room._room' '_user'@'_node
+        else $Room._room=_user'@'_node
+         'TELL 'userid 'AT' _node 'You have entered room: '_room
+  end
+  totmessages = totmessages + 1
+return 0
+ 
+ShowRooms:
+  if symbol('allrooms')<>'VAR' | words(allrooms)=0 then do
+         'TELL 'userid 'AT' _node 'There are no rooms open yet'
+     totmessages = totmessages + 1
+     return
+   end
+   do ri=1 to words(allrooms)
+      troom=substr(word(allrooms,ri),2)
+      if symbol('$Room.troom')<>'VAR' then iterate
+      tusers=$Room.troom
+          'TELL 'userid 'AT' _node ' ROOM   : 'troom' has 'words(tusers)' user(s)'
+          'TELL 'userid 'AT' _node ' Users : 'tusers
+      totmessages = totmessages+2
+  end
+return 0
+ 
+exitRoom:
+  parse arg _user,_node
+  myRoom=$Room._user
+  $Room._user=''   /* clear current room entry */
+  troom=''
+  if symbol('$Room._room')<>'VAR' then return
+  do ci=1 to words($Room.myRoom)
+     if word($Room.myRoom,ci)=_user'@'node then do
+            'TELL 'userid 'AT' node '-> You left room 'myRoom
+        iterate
+     end
+     troom=troom' 'word($Room.myRoom,ci)
+  end
+  $Room.myRoom=troom
+return
  
  
 announce:
