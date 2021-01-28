@@ -39,12 +39,12 @@ relaychatversion="2.8.5" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="12z33a229" /* any user with this passwd shuts down rver*/
+shutdownpswd="12223a229" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"      /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="moshix@gmail" /* where to contact this systop             */
+sysopname="Moadff  "     /* who is the sysop for this chat server     */
+sysopemail="sdfsf@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -122,7 +122,6 @@ if emptybuff() < 0 then do
    signal xit;
 end   */
  
- 
 /*-------------------------------------------*/
  
  
@@ -188,9 +187,6 @@ end                                                                          */
         otherwise
      end
  end;   /* of do forever loop  */
- 
- 
- 
  
 xit:
 /* when its time to quit, come here    */
