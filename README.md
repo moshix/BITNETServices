@@ -105,7 +105,7 @@ FUTURE FEATURES
 - Message throttling                                    [DONE]<br>
 - Persisting users unto a file for crash recovery<br>
 - MVS 3.8 port with BREXX[DONE]<br>
-- Chat rooms<br>
+- Chat rooms [DONE]<br>
 <br><br>
 
 
