@@ -50,7 +50,8 @@ compatibility=3          /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'        /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
 raterwatermark=18000     /* max msgs per minute set for this server  */
- 
+send2ALL=0                /* 0 send chat msgs to users in same room   */
+                          /* 1 send chat msgs to all logged-in users  */ 
  
 /* Federation settings below                                          */
 federation = 0           /*0=federation off,receives/no sending, 1=on */
@@ -84,10 +85,7 @@ err1="currently NOT"
 err2="to logon on"
 err3="Weclome to RELAY chat"
 err4="logged off now"
- 
-send2ALL=0                /* 0 send chat msgs to users in same room   */
-                          /* 1 send chat msgs to all logged-in users  */
- 
+  
  
  
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
