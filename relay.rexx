@@ -40,18 +40,17 @@ relaychatversion="2.9.0" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="12adfadf3a229" /* any user with this passwd shuts down rver*/
-osversion="z/VM 7.1"     /* OS version for enquries and stats         */
-typehost="IBM zEC12"     /* what kind of machine                      */
-hostloc  ="Chicago,IL  " /* where is this machine                     */
-sysopname="AlphaBeta "   /* who is the sysop for this chat server     */
-sysopemail="alpha@gmail" /* where to contact this systop             */
-compatibility=3          /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
-sysopuser='MAINT'        /* sysop user who can force users out       */
+shutdownpswd="122341a29" /* any user with this passwd shuts down rver*/
+osversion="z/VM 6.4"     /* OS version for enquries and stats         */
+typehost="IBM z114"     /* what kind of machine                      */
+hostloc  ="Stockholm,SE" /* where is this machine                     */
+sysopname="Moshix  "     /* who is the sysop for this chat server     */
+sysopemail="moshix@gmail" /* where to contact this systop             */
+compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
+sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=18000     /* max msgs per minute set for this server  */
-send2ALL=0                /* 0 send chat msgs to users in same room   */
-                          /* 1 send chat msgs to all logged-in users  */ 
+raterwatermark=18000      /* max msgs per minute set for this server  */
+ 
  
 /* Federation settings below                                          */
 federation = 0           /*0=federation off,receives/no sending, 1=on */
@@ -65,6 +64,7 @@ federatednum = 1         /* how many entries in the list?             */
  
 returnNJEmsg="HCPMSG045E" /* messages returning for users not logged on */
 returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
+returnNJEmsg3="HCPMFS057I"/* looping error message flushed         */
 loggedonusers = 0        /* online user at any given moment        */
 highestusers = 0         /* most users online at any given moment  */
 totmessages  = 0         /* total number of msgs sent              */
@@ -85,7 +85,10 @@ err1="currently NOT"
 err2="to logon on"
 err3="Weclome to RELAY chat"
 err4="logged off now"
-  
+ 
+send2ALL=0                /* 0 send chat msgs to users in same room   */
+                          /* 1 send chat msgs to all logged-in users  */
+ 
  
  
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
@@ -217,7 +220,7 @@ handlemsg:
  
     /* below few lines: loop detector                  */
     loopmsg=SUBSTR(umsg,1,11) /* extract RSCS error msg */
-    if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2)  then do
+ if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2 | loopmsg = returnNJEmsg3) then do
       call log('Loop detector triggered for user:  '||userid||'@'||node)
       return
     end
@@ -420,9 +423,14 @@ return
       'TELL' userid 'AT' node '-> LOGON succeeded.  '
  
       'TELL' userid 'AT' node '-> Total number of users: '@size()
+      'TELL' userid 'AT' node '*************************************************'
+      'TELL' userid 'AT' node '-> New /ROOM Cobol (example) command'
+      'TELL' userid 'AT' node '-> New /ROOMS command to list all rooms with users'
+      'TELL' userid 'AT' node '*************************************************'
+      'TELL' userid 'AT' node '                          '
        call announce  userid, node /* announce to all users  of new user */
     end
-    totmessages = totmessages+ 2
+    totmessages = totmessages+ 7
  return
  
 systeminfo:
@@ -553,7 +561,7 @@ return 0
  
 ShowRooms:
   if symbol('allrooms')<>'VAR' | words(allrooms)=0 then do
-         'TELL 'userid 'AT' _node 'There are no rooms open yet'
+         'TELL 'userid ' AT 'node '> All users are in GENERAL room right now...'
      totmessages = totmessages + 1
      return
    end
@@ -561,9 +569,9 @@ ShowRooms:
       troom=substr(word(allrooms,ri),2)
       if symbol('$Room.troom')<>'VAR' then iterate
       tusers=$Room.troom
-          'TELL 'userid 'AT' _node ' ROOM   : 'troom' has 'words(tusers)' user(s)'
-          'TELL 'userid 'AT' _node ' Users : 'tusers
-      totmessages = totmessages+2
+          'TELL 'userid 'AT' _node '>ROOM   : 'troom' has 'words(tusers)' user(s)'
+          'TELL 'userid 'AT' _node '>Users : 'tusers
+          totmessages = totmessages+2
   end
 return 0
  
