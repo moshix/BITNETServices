@@ -33,24 +33,26 @@
 /*  v2.8.4  :  Some tests before starting RELAY CHAT                 */
 /*  v2.8.5  :  Fix expired users still lingering in linked list      */
 /*  v2.9.0  :  Rooms!! Up to 10 char long room name by PeterJ        */
+/*  v2.9.1  :  fancy shmancy HELP graphic                            */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.9.0" /* needed for federation compatibility check */
+relaychatversion="2.9.1" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="122341a29" /* any user with this passwd shuts down rver*/
+shutdownpswd="12zz341a29" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"     /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="moshix@gmail" /* where to contact this systop             */
+sysopname="aksj.  "     /* who is the sysop for this chat server     */
+sysopemail="sdfkj@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
 raterwatermark=18000      /* max msgs per minute set for this server  */
- 
+send2ALL=0                /* 0 send chat msgs to users in same room   */
+                          /* 1 send chat msgs to all logged-in users  */ 
  
 /* Federation settings below                                          */
 federation = 0           /*0=federation off,receives/no sending, 1=on */
@@ -86,8 +88,7 @@ err2="to logon on"
 err3="Weclome to RELAY chat"
 err4="logged off now"
  
-send2ALL=0                /* 0 send chat msgs to users in same room   */
-                          /* 1 send chat msgs to all logged-in users  */
+
  
  
  
@@ -507,10 +508,14 @@ helpuser:
   listuser = userid"@"node
  
  
-'TELL' userid 'AT' node 'Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP v'relaychatversion
-'TELL' userid 'AT' node '--------------------------------------------------------'
-'TELL' userid 'AT' node '              '
-'TELL' userid 'AT' node '/HELP   for this help'
+'TELL' userid 'AT' node '   ____  ____  __      __   _  _     ___  _   _    __   ____      '
+'TELL' userid 'AT' node '  (  _ \( ___)(  )    /__\ ( \/ )   / __)( )_( )  /__\ (_  _)     '
+'TELL' userid 'AT' node '   )   / )__)  )(__  /(__)\ \  /   ( (__  ) _ (  /(__)\  )(       '
+'TELL' userid 'AT' node '  (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)      '
+'TELL' userid 'AT' node '                                                                  '
+'TELL' userid 'AT' node '   Welcome to RELAY CHAT for z/VM, VM/ESA, VM/SP V'relaychatversion
+'TELL' userid 'AT' node '                                                                  '
+'TELL' userid 'AT' node '/HELP   for this chat version'
 'TELL' userid 'AT' node '/WHO    for connected users'
 'TELL' userid 'AT' node '/LOGON  to logon to this chat room and start getting chat messages'
 'TELL' userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
@@ -525,7 +530,7 @@ helpuser:
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
  
-  totmessages = totmessages + 16
+  totmessages = totmessages + 19
 return
  
 countusers:
