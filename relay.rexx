@@ -34,6 +34,7 @@
 /*  v2.8.5  :  Fix expired users still lingering in linked list      */
 /*  v2.9.0  :  Rooms!! Up to 10 char long room name by PeterJ        */
 /*  v2.9.1  :  fancy shmancy HELP graphic                            */
+/*. v2.9.2. :  remove federation due to users triggering loops.      */
  
  
 /* configuraiton parameters - IMPORTANT                               */
@@ -56,8 +57,7 @@ send2ALL=0                /* 0 send chat msgs to users in same room   */
  
 /* Federation settings below                                          */
 federation = 0           /*0=federation off,receives/no sending, 1=on */
-federated.0 ="HOUVMZVM"/* RELAY on these nodes will get all msgs!   */
-federatednum = 1         /* how many entries in the list?             */
+
  
  
  
@@ -154,11 +154,9 @@ end                                                                          */
 /* process it when it does.  If the "operator" types on    */
 /* the console (rc=6) then leave the exec.                 */
  
-/* logon to all federal relay chat servers in the list     */
+
  
-     IF FEDERATION = 1 THEN DO  /* IS FEDERATION TURNED ON??  */
-        call federInit
-     end
+
  
   Do forever;
      'wakeup (iucvmsg QUIET'   /* wait for a message         */
@@ -176,12 +174,9 @@ end                                                                          */
               /* and if so.... exits!                                 */
               call highrate (receivedmsgs)
               uppuserid=TRANSLATE(userid)
-  /* below line eliminates service messages from other relay nodes and eliminates loops */
-  if pos(err1,msg) > 0 | pos(err2,msg) > 0 | pos(err3,msg) > 0 | pos(err4,msg) > 0 then do
-              end
-              else do
-                if detector(msg) > 0 then call handlemsg  userid,node,msg
-              end
+ 
+              if detector(msg) > 0 then call handlemsg  userid,node,msg
+    
           end
           else do;  /* simple msg from local user  */
         /* format is like this:                           */
@@ -206,7 +201,6 @@ xit:
   'WAKEUP RESET';        /* turn messages from IUCV to ON    */
   'SET MSG ON'
   'DROPBUF'
-   if federation = 1 then call federclose
 exit;
  
  
@@ -876,40 +870,6 @@ whoami:
 "id (stack"
 pull whoamiuser . whoaminode . whoamistack
 whoamistack=LEFT(whoamistack,5)
-return
- 
-federINit:
-/* Registered with all defined RELAY CHAT servers upon startup */
-        'MAKEBUF'
-     do I =0 to federatednum by 1
-       'TELL RELAY at 'federated.i '/LOGOFF'
-       'wakeup (iucvmsg QUIET'   /* wait for a message         */
-        parse pull text          /* get what was send          */
-        parse var text type sender . nodeuser msg
-        parse var nodeuser node '(' userid '):'
-       'TELL RELAY at 'federated.i '/LOGON'
-       'wakeup (iucvmsg QUIET'   /* wait for a message         */
-        parse pull text          /* get what was send          */
-        parse var text type sender . nodeuser msg
-        parse var nodeuser node '(' userid '):'
- 
-       if pos('succeeded',msg)> 0  then do /* ok we got logged on to remote relay*/
-           CurrentTime=Extime()
-           call logonuser  userid,node   /* LOGON FOREIGN RELAY node */
-        end
-     end
-       'DROPBUF'
- 
-return
- 
-federclose:
-/* close all federated connections before exiting */
-        'MAKEBUF'
-     do I =0 to federatednum by 1
-       'TELL RELAY at 'federated.i '/LOGOFF'
-        call logooffuser  "RELAY",node /* logff       RELAY node */
-     end
-       'DROPBUF'
 return
  
 selftest:
