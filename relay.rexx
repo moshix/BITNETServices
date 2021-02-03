@@ -19,54 +19,52 @@
 /*  v2.3    :  Make VM/SPrel6 compatible via compatibility=1 parm    */
 /*  v2.4    :  Add /FORCE option to force off users (sysop only)     */
 /*  v2.5    :  Loop detetector incoming msg counter v1.0             */
-/*  v2.6    :  Add federation v1.0, loop detector v2.0               */
+/*  v2.6    :  Loop detector v2.0                                    */
 /*  v2.7    :  loop detector v3.0                                    */
 /*  v2.7.1  :  autodetect who am i                                   */
 /*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
 /*  v2.7.3  :  loop detector disabled for now until i figure it out  */
 /*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
 /*  v2.7.6  :  minor coemstic stuff                                  */
-/*  v2.8.0  :  Federation #2                                         */
-/*  v2.8.1  :  Federation loop detector and sanity checks            */
+/*  v2.8.0  :  more fixes                                            */
+/*  v2.8.1  :  Loop detector and sanity checks                       */
 /*  v2.8.2  :  LOGOFF user count fix                                 */
 /*  v2.8.3  :  message sender doesn't see her own message anymore    */
 /*  v2.8.4  :  Some tests before starting RELAY CHAT                 */
 /*  v2.8.5  :  Fix expired users still lingering in linked list      */
 /*  v2.9.0  :  Rooms!! Up to 10 char long room name by PeterJ        */
 /*  v2.9.1  :  fancy shmancy HELP graphic                            */
-/*. v2.9.2. :  remove federation due to users triggering loops.      */
- 
- 
+/*  v2.9.2  :  Fix potential RSCS authorization error HCPMFS057I     */
+/*  v2.9.3  :  Fix ROOMS bug leading to DMTPAF208E error and loop    */
+
+
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.9.1" /* needed for federation compatibility check */
+relaychatversion="2.9.3" /* must be configured!                       */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="12zz341a29" /* any user with this passwd shuts down rver*/
+shutdownpswd="12ttsazw9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"     /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="aksj.  "     /* who is the sysop for this chat server     */
-sysopemail="sdfkj@gmail" /* where to contact this systop             */
+sysopname="Modsdfas"     /* who is the sysop for this chat server     */
+sysopemail="mmmmmmmmmmmm" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
 raterwatermark=18000      /* max msgs per minute set for this server  */
+debugmode=0               /* print debug info on RELAY console when 1 */
 send2ALL=0                /* 0 send chat msgs to users in same room   */
-                          /* 1 send chat msgs to all logged-in users  */ 
- 
-/* Federation settings below                                          */
-federation = 0           /*0=federation off,receives/no sending, 1=on */
+                          /* 1 send chat msgs to all logged-in users  */
 
- 
- 
- 
+
 /* global variables                                                  */
- 
- 
+
 returnNJEmsg="HCPMSG045E" /* messages returning for users not logged on */
 returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
-returnNJEmsg3="HCPMFS057I"/* looping error message flushed         */
+returnNJEmsg3="HCPMFS057I"/* RSCS not receiving message            */
+returnNJEmsg4="DMTPAF208E"/* Invalid user ID error message         */
+
 loggedonusers = 0        /* online user at any given moment        */
 highestusers = 0         /* most users online at any given moment  */
 totmessages  = 0         /* total number of msgs sent              */
@@ -87,34 +85,33 @@ err1="currently NOT"
 err2="to logon on"
 err3="Weclome to RELAY chat"
 err4="logged off now"
- 
+loopCondition = 0        /* when a loop condition is detected this will turn to 1 */
 
- 
- 
- 
+
+
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
 whoamiuser=""             /* for autoconfigure                        */
 whoaminode=""
 whomistack=""
 call whoami               /* who the fahma am I??                     */
 say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
- 
+
 localnode=whoaminode   /* set localnode */
- 
+
 if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level*/
- 
+
  say 'All CPU avg: 'cpu '%     Paging: 'paging()
- 
+
      say 'Machine type: 'configuration()'     RAM: 'rstorage()
      say 'Number of CPU: in LPAR: 'numcpus()
  END
      say '                        '
      say '****** LOG BELOW *******'
- 
+
 /* some simple logging  for stats etc        */
       CALL log('RELAY chat '||relaychatversion||' started. ')
- 
- 
+
+
 /* init double linked list of online users   */
 call @init
  CALL log('List has been initialized..')
@@ -123,17 +120,17 @@ if @size() /= 0 then do
    CALL log('Linked list init has failed! Abort ')
    signal xit;
 end
- 
+
 /*
 if emptybuff() < 0 then do
    CALL log('General error in draining buffer.  Abort!')
    signal xit;
 end   */
- 
- 
+
+
 /*-------------------------------------------*/
- 
- 
+
+
 /* now run a quick self test to see if NJE is working (RSCS up?) before continuing
 if selftest() < 0 then do
  CALL log('NJE Self Test failed. RSCS not running or previous messages in buffer...')
@@ -141,23 +138,22 @@ end
 else do
  CALL log('NJE Self Test passed...')
 end                                                                          */
- 
- 
+
+
 /* Invoke WAKEUP first so it will be ready to receive msgs */
 /* This call also issues a 'SET MSG IUCV' command.         */
- 
+
   'SET MSG IUCV'
   "WAKEUP +0 (IUCVMSG"
- 
+
   'MAKEBUF'
 /* In this loop, we wait for a message to arrive and       */
 /* process it when it does.  If the "operator" types on    */
 /* the console (rc=6) then leave the exec.                 */
- 
 
- 
+/* logon to all federal relay chat servers in the list     */
 
- 
+
   Do forever;
      'wakeup (iucvmsg QUIET'   /* wait for a message         */
      parse pull text          /* get what was send          */
@@ -174,9 +170,8 @@ end                                                                          */
               /* and if so.... exits!                                 */
               call highrate (receivedmsgs)
               uppuserid=TRANSLATE(userid)
- 
               if detector(msg) > 0 then call handlemsg  userid,node,msg
-    
+
           end
           else do;  /* simple msg from local user  */
         /* format is like this:                           */
@@ -191,19 +186,19 @@ end                                                                          */
         otherwise
      end
  end;   /* of do forever loop  */
- 
- 
- 
- 
+
+
+
+
 xit:
 /* when its time to quit, come here    */
- 
+
   'WAKEUP RESET';        /* turn messages from IUCV to ON    */
   'SET MSG ON'
   'DROPBUF'
 exit;
- 
- 
+
+
 handlemsg:
 /* handle all incoming messages and send to proper method */
    parse ARG userid,node,msg
@@ -212,15 +207,17 @@ handlemsg:
     CurrentTime=Extime()
     umsg = translate(msg)  /* make upper case */
     umsg=strip(umsg)
- 
+if debugmode=1 then say "handlemsg func: USERID,NODE,MSG: "userid"@"node"; "msg
     /* below few lines: loop detector                  */
-    loopmsg=SUBSTR(umsg,1,11) /* extract RSCS error msg */
- if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2 | loopmsg = returnNJEmsg3) then do
+    loopmsg=SUBSTR(umsg,1,10) /* extract RSCS error msg */
+ if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2 | loopmsg = returnNJEmsg3) ,
+     | (loopmsg = returnNJEmsg4) then do
+      loopCondition = 1
       call log('Loop detector triggered for user:  '||userid||'@'||node)
       return
     end
    commandumsg=SUBSTR(umsg,2,5)
- 
+
    updbuff=1
    SELECT                             /* HANDLE MESSAGE TYPES  */
       when (umsg = "/WHO") then
@@ -257,15 +254,15 @@ handlemsg:
       when (commandumsg = 'FORCE') then do
            call force userid,node,msg
       end
- 
- 
+
+
       otherwise
            call sendchatmsg userid,node,msg
         end
    if updBuff=1 then call refreshTime currentTime,userid,node /* for each msg ! */
    call CheckTimeout currentTime
 return
- 
+
 force:
 /* sysop forces a user out  */
   parse ARG userid,node,msg
@@ -274,7 +271,7 @@ force:
 /* say "user to be forced, as i understood it: "forceuser    */
   if (userid = sysopuser & node = sysopnode) then do /* ok user is authorized */
      listuser = forceuser || "@"||node
- 
+
       ppos=pos('/'listuser,$.@)
         if ppos=0 then do
                 call log("User logoff rejected, not logged-on:  "||listuser)
@@ -290,7 +287,7 @@ force:
        'TELL' userid 'AT' node '-> This user has been forced off: 'forceuser
        'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
         totmessages = totmessages + 2
- 
+
   end   /* of (userid=sysopuser) test */
   else do
     CALL LOG('This user:  '||userid||' @ '||node||' tried to force off user: '||forceuser)
@@ -298,16 +295,15 @@ force:
      totmessages = totmessages + 1
   end
 return
- 
- 
- 
+
+
 sendchatmsg:
 /* what we got is a message to be distributed to all online users */
     parse ARG userid,node,msg
- 
+if debugmode=1 then say "sendchatmsg func: USERID,NODE,MSG: "userid"@"node"; "msg
    CurrentTime=Extime()
    call CheckTimeout currentTime
- 
+
     listuser = userid || "@"||node
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
@@ -316,10 +312,12 @@ sendchatmsg:
                 if entry='' then iterate
                 parse value entry with '/'cuser'@'cnode'('otime')'
                      if cuser = userid & cnode = node then do
-                       'TELL' cuser 'AT' cnode '-->' /* dont' send msg to orignl sender */
+               /* dont' send msg to orignl sender */
+                 if userid \= "RSCS" & loopCondition =0 then 'TELL' cuser 'AT' cnode '-->'
                       end
                       else do
-      if send2ALL=1 then  'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
+                if send2ALL=1 & userid \= "RSCS" & loopCondition = 0 ,
+                      then  'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
                       end
              end
             totmessages = totmessages+ 1
@@ -327,9 +325,10 @@ sendchatmsg:
     end
       else do
         /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
-if userid \= "RELAY" THEN 'TELL' userid 'AT' node 'You are currently NOT logged on.'
-IF USERID \= "RELAY" THEN 'TELL' userid 'AT' node 'Welcome to RELAY chat for z/VM v'relaychatversion
-IF USERID \= "RELAY" THEN 'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
+if userid \= "RELAY" | userid \= "RSCS" then ,
+      'TELL' userid 'AT' node 'You are currently NOT logged on.'
+IF userid \= "RSCS" THEN 'TELL' userid 'AT' node 'Welcome to RELAY chat for z/VM v'relaychatversion
+IF userid \= "RSCS" THEN 'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
          totmessages = totmessages + 3
       end
 /* -----------------------------------------------------------------
@@ -347,17 +346,17 @@ IF USERID \= "RELAY" THEN 'TELL' userid 'AT' node '/HELP for help, or /LOGON to 
            'TELL ' cuser 'AT' cnode '<> 'userid'@'node':'msg
        totmessages = totmessages+ 1
      end
- 
+
 return
- 
+
 sendwho:
 /* who is online right now on this system? */
    userswho = 0    /* counter for seen usres */
    parse ARG userid,node
- 
+
    CurrentTime=Extime()
    call CheckTimeout currentTime
- 
+
    listuser = userid || "@"||node
    'TELL' userid 'AT' node '> List of currently logged on users:'
    totmessages = totmessages + 1
@@ -375,7 +374,7 @@ sendwho:
    loggedonusers = userswho
   totmessages = totmessages + 1
 return
- 
+
 logoffuser:
    parse ARG userid,node
    listuser = userid || "@"||node
@@ -396,8 +395,8 @@ logoffuser:
   'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
    totmessages = totmessages + 2
 return
- 
- 
+
+
  logonuser:
  /* add user to linked list */
     parse ARG userid,node
@@ -409,14 +408,14 @@ return
     end
     else do
        loggedonusers = @size()
- 
+
        if highestusers < loggedonusers then highestusers = highestusers + 1
- 
+
        call @put '/'listuser'('currentTime')'
        call log("List user added: "||listuser)
        CALL log('List size: '||@size())
       'TELL' userid 'AT' node '-> LOGON succeeded.  '
- 
+
       'TELL' userid 'AT' node '-> Total number of users: '@size()
       'TELL' userid 'AT' node '*************************************************'
       'TELL' userid 'AT' node '-> New /ROOM Cobol (example) command'
@@ -427,16 +426,15 @@ return
     end
     totmessages = totmessages+ 7
  return
- 
+
 systeminfo:
 /* send /SYSTEM info about this host  */
      parse ARG userid,node
      listuser = userid"@"node
- 
- 
+
    CurrentTime=Extime()
    call CheckTimeout currentTime
- 
+
      parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
      cpu = right( cpu+0, 3)
@@ -467,20 +465,20 @@ systeminfo:
      totmessages = totmessages + 9
     end
 return
- 
- 
+
+
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
     parse ARG userid,node
     onlinenow = countusers(userid,node)
- 
+
      parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
      cpu = right( cpu+0, 3)
     actualtime=Extime()
     elapsedsec=(actualtime-starttimeSEC)
     if elapsedsec = 0 then elapsedsec = 1 /* avoid division by zero on Jan 1 at 00:00 */
- 
+
     msgsrate = (receivedmsgs + totmessages) / elapsedsec
     msgsratef= FORMAT(msgsrate,4,2) /* rounding */
     msgsratef = STRIP(msgsratef)
@@ -492,16 +490,16 @@ sendstats:
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
     'TELL' userid 'AT' node '-> System CPU load      : 'STRIP(cpu)'%'
     'TELL' userid 'AT' node '-> RELAY CHAT version   : v'relaychatversion
- 
+
      totmessages = totmessages+ 7
 return
- 
+
 helpuser:
 /* send help menu */
   parse ARG userid,node
   listuser = userid"@"node
- 
- 
+
+
 'TELL' userid 'AT' node '   ____  ____  __      __   _  _     ___  _   _    __   ____      '
 'TELL' userid 'AT' node '  (  _ \( ___)(  )    /__\ ( \/ )   / __)( )_( )  /__\ (_  _)     '
 'TELL' userid 'AT' node '   )   / )__)  )(__  /(__)\ \  /   ( (__  ) _ (  /(__)\  )(       '
@@ -523,10 +521,10 @@ helpuser:
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
- 
+
   totmessages = totmessages + 19
 return
- 
+
 countusers:
  parse ARG userid,node
  listuser = userid"@"node
@@ -539,13 +537,13 @@ countusers:
      onlineusers = onlineusers + 1
  end
 return onlineusers
- 
+
 enterRoom:
   parse upper arg _user,_node,_room
   if word(_room,1)='/ROOM' then _room=word(_room,2)
   rml=length(_room)
   if rml<3 | rml>10 then  ,
-         'TELL 'userid 'AT' _node 'Room must not be below 3 or exceed 10 characters :'_room
+         'TELL '_user' AT '_node 'Room must not be below 3 or exceed 10 characters :'_room
   else do
      if symbol('allrooms')<>'VAR' then allrooms=''
      else if pos('/'_room,allrooms)=0 then allrooms=allrooms' /'_room
@@ -553,11 +551,11 @@ enterRoom:
      $Room._user=_room
      if symbol('$Room._room')=='VAR' then $Room._room=$Room._room' '_user'@'_node
         else $Room._room=_user'@'_node
-         'TELL 'userid 'AT' _node 'You have entered room: '_room
+         'TELL '_user' AT '_node' You have entered room: '_room
   end
   totmessages = totmessages + 1
 return 0
- 
+
 ShowRooms:
   if symbol('allrooms')<>'VAR' | words(allrooms)=0 then do
          'TELL 'userid ' AT 'node '> All users are in GENERAL room right now...'
@@ -573,7 +571,7 @@ ShowRooms:
           totmessages = totmessages+2
   end
 return 0
- 
+
 exitRoom:
   parse arg _user,_node
   myRoom=$Room._user
@@ -589,12 +587,12 @@ exitRoom:
   end
   $Room.myRoom=troom
 return
- 
- 
+
+
 announce:
 /* announce newly logged on user to all users */
   parse ARG userid,node
- 
+
   cj=0 /* save logons to remove, else logon buffer doesn't match  */
   do ci=1 to words($.@)
      entry=word($.@,ci)
@@ -602,10 +600,10 @@ announce:
      parse value entry with '/'cuser'@'cnode'('otime')'
      'TELL' cuser 'AT' cnode '-> New user joined:    'userid' @ 'node
   end
- 
+
 return
- 
- 
+
+
 CheckTimeout:
 /* Check if user has not sent any message, automatic LOGOFF */
    arg ctime
@@ -627,9 +625,9 @@ CheckTimeout:
       loggedonusers = loggedonusers -1
    end
 return
- 
- 
- 
+
+
+
 refreshTime:
 /* Refresh last transaction time */
  /*trace i    */
@@ -644,16 +642,16 @@ refreshTime:
    rlen=rpos-ppos
    $.@=overlay('('ctime')',$.@,ppos,rlen)
 return
- 
- 
+
+
 exTime:
 /* Calculate Seconds in this year */
   dd=(date('d')-1)*86400
   parse value time() with hh':'mm':'ss
   tt=hh*3600+mm*60+ss
 return right(dd+tt,8,'0')
- 
- 
+
+
 mytime: procedure
  timenow = left(time(),5)
  hr = left(timenow,2)
@@ -668,8 +666,8 @@ mytime: procedure
  month   = left(date('month'),3)
  year    = left(date('sorted'),4)
 return timenow',' dow day month year
- 
- 
+
+
 p:      return word(arg(1), 1)    /*pick the first word out of many items*/
 sy:      say;
          say left('', 30) "   " arg(1) '   ';
@@ -681,7 +679,7 @@ sy:      say;
 @hasopt: arg o;
         return pos(o, opt)\==0
 @size:  return $.#
- 
+
 /*                                        */
 @del:   procedure expose $.;
         arg k,m;
@@ -690,20 +688,20 @@ sy:      say;
          $.@=_;
          call @adjust;
         return
- 
+
 @get:    procedure expose $.;     arg k,m,dir,_
          call @parms 'kmd'
          do j=k  for m  by dir  while  j>0  &  j<=$.#
              _=_ subword($.@, j, 1)
         end   /*j*/
          return strip(_)
- 
+
 @parms:  arg opt      /*define a variable based on an option.*/
          if @hasopt('k')  then k=min($.#+1, max(1, p(k 1)))
          if @hasopt('m')  then m=p(m 1)
          if @hasopt('d')  then dir=p(dir 1);
          return
- 
+
 @put:    procedure expose $.;
             parse arg x,k;
             k=p(k $.#+1);
@@ -711,7 +709,7 @@ sy:      say;
             $.@=subword($.@, 1, max(0, k-1))   x   subword($.@, k);
             call @adjust
          return
- 
+
 @show:   procedure expose $.;
             parse arg k,m,dir;
             if dir==-1  &  k==''   then k=$.#
@@ -719,7 +717,7 @@ sy:      say;
             call @parms 'kmd';
             say @get(k,m, dir);
          return
- 
+
 list:
 /* this is only as examples how to use the double linked list
     for future expanesion of this program                      */
@@ -737,98 +735,98 @@ list:
    call sy 'adding to head: red'               ;  call @put  "red",0
    call sy 'showing list'                      ;  call @show
 return
- 
- 
+
+
 log:
 /* general logger function */
 /* log a line to relay machine and/or log */
    parse ARG  logline
    say mytime()' :: 'logline
 return
- 
- 
+
+
 cpubusy:
 /* how busy are the CPU(s) on this LPAR */
 /* extract CPU buy information for stats etc. */
  cplevel = space(cp_id) sl
  strlen = length(cplevel)
- 
+
  parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
         with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
  cpu = right( cpu+0, 3)
 return cpu
- 
+
 paging:
 /* how many pages per second is this LPAR doing? */
 /* extra currenct OS paging activity */
  sl = c2d(right(diag(0), 2))
  cplevel = space(cp_id) sl
  strlen = length(cplevel)
- 
+
  parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
         with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
 return page
- 
+
 rstorage:
  parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
 return rstor
- 
+
 configuration:
 /* return machine configuration */
 /* extract machine type etc. */
  if compatibility > 2 then do
 Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
      Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
- 
- 
+
+
   Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
   Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
   parse value stsi(1,1,1) with 49  type   +4 ,
                                81  seq   +16 ,
                               101  model +16 .
- 
+
   parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
                                39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
                                45 lname  +8    /* partition name         */
- 
+
   parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
                                57 cp_id +16
- 
+
   parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
          with     lnum      lcpus      vcpus        ser    lname model .
- 
+
   blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
           "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
- 
+
   brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
- 
+
 end
 return type
- 
+
 numcpus:
 /* return number of CPUs in this LPAR */
   parse value stsi(1,1,1) with 49  type   +4 ,
                                81  seq   +16 ,
                               101  model +16 .
- 
+
   parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
                                39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
                                45 lname  +8    /* partition name         */
- 
+
   parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
                                57 cp_id +16
- 
+
   parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
          with     lnum      lcpus      vcpus        ser    lname model .
- 
+
   blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
           "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s 1090 zPDT 3096 z14"
- 
+
   brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
- 
- 
+
+
 return lcpus
- 
+
 highrate:
 /* when too many incoming messages per second exit server to avoid CPU overloading */
 /* this function detects high msg rate for loop detection purposes
@@ -847,12 +845,12 @@ highrate:
    return 0
    end
 return
- 
- 
+
+
 detector:
 /* detect if a message is looping by extracting middle of an incoming message-> comparing*/
 parse ARG msg /* last message in */
- 
+
 Middle=center(prevmsg.1,20)
 Middle=strip(middle)                      /* in case message <50 we will
 have leading/trailing blanks, drop them */
@@ -864,14 +862,16 @@ If opos>0 then do
  end
 prevmsg.1=msg
 return 1
- 
+
 whoami:
- 
+
 "id (stack"
 pull whoamiuser . whoaminode . whoamistack
 whoamistack=LEFT(whoamistack,5)
 return
- 
+
+
+
 selftest:
 /* Send myself an NJE message before starting up to see if all good */
         'DROPBUF'
@@ -887,11 +887,11 @@ selftest:
   else do
         return -1
   end
- 
+
 emptybuff:
 /* empty NJE buffer before starting RELAY CHAT */
- 
- 
+
+
         'MAKEBUF'
        'wakeup (iucvmsg QUIET'   /* wait for a message         */
         parse pull text          /* get what was send          */
@@ -899,4 +899,4 @@ emptybuff:
         parse var nodeuser node '(' userid '):'
        'DROPBUF'
 return 0
- 
+
