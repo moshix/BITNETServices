@@ -486,7 +486,7 @@ sendstats:
     'TELL' userid 'AT' node '-> Total number of users: '@size()
     'TELL' userid 'AT' node '-> Highest nr.  of users: 'highestusers
     'TELL' userid 'AT' node '-> Total number of msgs : 'totmessages
-    'TELL' userid 'AT' node '-> Messages rate /minute: 'msgsratef
+    'TELL' userid 'AT' node '-> Messages rate /second: 'msgsratef
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
     'TELL' userid 'AT' node '-> System CPU load      : 'STRIP(cpu)'%'
     'TELL' userid 'AT' node '-> RELAY CHAT version   : v'relaychatversion
