@@ -38,26 +38,32 @@
 /*  v2.9.3  :  Fix ROOMS bug leading to DMTPAF208E error and loop    */
 /*  v2.9.4  :  More ROOMS bug fixing and remove /FORCE               */
 /*  v2.9.5  :  Error handling for most common NJE errors             */
+/*  v2.9.6  :  More loop detector fixes..... thanks PeterJ!          */
+/*  v2.9.7  :  Fix expired users still in rooms bug                  */
+/*  v2.9.9  :  Spit out operational warnings due to config parms     */
+/*  v3.0.0rc1  Release candidate 1 for major rel 3.0                 */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="2.9.5" /* must be configured!                       */
+relaychatversion="3.0.0rc1" /* must be configured!                    */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =5000         /* max time user can be dormant in seconds   */
+maxdormant =5800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="122341a29" /* any user with this passwd shuts down rver*/
+shutdownpswd="1zzzzzz29" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"     /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="********"     /* who is the sysop for this chat server     */
-sysopemail="******@gmail" /* where to contact this systop             */
+sysopname="zzzzzzzz"     /* who is the sysop for this chat server     */
+sysopemail="zzzzzzzgmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=18000      /* max msgs per minute set for this server  */
+raterwatermark=28000      /* max msgs per minute set for this server  */
 debugmode=0               /* print debug info on RELAY console when 1 */
 send2ALL=0                /* 0 send chat msgs to users in same room   */
                           /* 1 send chat msgs to all logged-in users  */
+log2file=1                /* all calls to log also in RELAY LOG A     */
+                          /* make sure to not run out of space !!!    */
  
  
 /* global variables                                                  */
@@ -108,18 +114,18 @@ if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level
  say 'All CPU avg: 'cpu '%     Paging: 'paging()
  
      say 'Machine type: 'configuration()'     RAM: 'rstorage()
-     say 'Number of CPU: in LPAR: 'numcpus()
+     say 'Number of CPUs in LPAR: 'numcpus()
  END
      say '                        '
      say '****** LOG BELOW *******'
  
 /* some simple logging  for stats etc        */
-      CALL log('RELAY chat '||relaychatversion||' started. ')
+      CALL log('RELAY chat '||relaychatversion||' initializing...')
  
  
 /* init double linked list of online users   */
 call @init
- CALL log('List has been initialized..')
+ CALL log('List has been initialized.')
  CALL log('List size: '||@size())
 if @size() /= 0 then do
    CALL log('Linked list init has failed! Abort ')
@@ -132,17 +138,38 @@ if emptybuff() < 0 then do
    signal xit;
 end   */
  
+/* warn upon certain config parm constellations     */
+ 
+if log2file=1 then call log ("Logging to console AND RELAY LOG A. Keep enough disk space")
+if send2ALL=0 then call log ("RELAY CHAT will send chats users in same room, send2ALL = 0")
+if send2ALL=1 then call log ("RELAY CHAT will not send chats to users, send2ALL=1")
+if compatibility =1 then call log ("RELAY CHAT starting in VM/SP mode")
+if compatibility =2 then call log ("RELAY CHAT starting in VM/ESA mode")
+if compatibility =3 then call log ("RELAY CHAT starting in z/VM mode")
+if compatibility =-1 then call log ("RELAY CHAT starting in MVS/3.8NJE mode")
+if debugmode = 0 then call log ("Debug mode is turned OFF")
+if debugmode = 1 then call log ("Debug mode is turned ON")
+ 
  
 /*-------------------------------------------*/
- 
- 
+signal on syntax
 /* now run a quick self test to see if NJE is working (RSCS up?) before continuing
 if selftest() < 0 then do
  CALL log('NJE Self Test failed. RSCS not running or previous messages in buffer...')
 end
 else do
  CALL log('NJE Self Test passed...')
-end                                                                          */
+end */
+ 
+ CALL log('********** RELAY CHAT START **********')
+ say '    ____  ____  __      __   _  _     ___  _   _    __   ____      '
+ say '   (  _ \( ___)(  )    /__\ ( \/ )   / __)( )_( )  /__\ (_  _)     '
+ say '    )   / )__)  )(__  /(__)\ \  /   ( (__  ) _ (  /(__)\  )(       '
+ say '   (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)      '
+ say '                                                                   '
+ say '  Welcome to RELAY CHAT for z/VM,VM/ESA,VM/SP,MVS/3.8 NJE  -  V'relaychatversion
+ say ''
+ 
  
  
 /* Invoke WAKEUP first so it will be ready to receive msgs */
@@ -196,6 +223,10 @@ end                                                                          */
         otherwise
      end
  end;   /* of do forever loop  */
+ 
+syntax:
+call LOG("Error signal was triggered, rc: "||rc)
+signal xit;
  
 xit:
 /* when its time to quit, come here    */
@@ -276,7 +307,7 @@ return
 sendchatmsg:
 /* what we got is a message to be distributed to all online users */
     parse ARG userid,node,msg
-if  userid \= "RELAY" | userid \= "RSCS" then do
+if  userid = "RELAY" | userid = "RSCS" then do
     /* don't send to service VMs */
     if debugmode=1 then say "sendchatmsg func: USERID,NODE,MSG: "userid"@"node"; "msg
      CALL LOG('Attention!!! Got message from illegal user: '||userid||' @ '||node)
@@ -374,10 +405,13 @@ logoffuser:
    $.@=overlay(' ',$.@,ppos,rlen)
    $.@=space($.@)
    loggedonusers = @size()
-   if loggedonusers = 1 then loggedonusers = 0
+    call log("User removed   : "||listuser)
    CALL log('List size: '||@size())
   'TELL' userid 'AT' node '-> You are logged off now.'
   'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
+ 
+   call exitRoom userid,node   /* remove this user also from rooms */
+ 
    totmessages = totmessages + 2
 return
  
@@ -428,7 +462,7 @@ systeminfo:
     'TELL' userid 'AT' node '-> OS for this host     : 'osversion
     'TELL' userid 'AT' node '-> Type of host         : 'typehost
     'TELL' userid 'AT' node '-> Location of this host: 'hostloc
-    'TELL' userid 'AT' node '-> Time Zone of         : 'timezone
+    'TELL' userid 'AT' node '-> Time Zone of RELAY   : 'timezone
     'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
     'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
     'TELL' userid 'AT' node '-> System Load          :'cpu'%'
@@ -477,6 +511,7 @@ sendstats:
     'TELL' userid 'AT' node '-> RELAY CHAT version   : v'relaychatversion
  
      totmessages = totmessages+ 7
+     call writestats                               /* write stats to disk for now */
 return
  
 helpuser:
@@ -610,7 +645,6 @@ CheckTimeout:
    do ci=1 to cj
       interpret 'call logoffuser '$remove.ci
       call log($remove.ci||'logged off due to timeout reached '||maxdormant|| ' minutes')
-      loggedonusers = loggedonusers -1
    end
 return
  
@@ -726,12 +760,20 @@ return
  
  
 log:
-/* general logger function */
-/* log a line to relay machine and/or log */
+/* general logger function                */
+/* log a line to console and RELAY LOG A  */
    parse ARG  logline
    say mytime()' :: 'logline
+   if log2file = 1 & compatibility = 3 then do
+   address command
+/*  'PIPE (name logit)',
+     '| spec /'mytime()'/ 1 /::/ n /'logLine'/ n',
+     '| >> RELAY LOG A'*/
+   logline=mytime()||' :: '||logline
+     'EXECIO 1 DISKW RELAY LOG A (STRING '||logline
+     'FINIS RELAY LOG A'
+   end
 return
- 
  
 cpubusy:
 /* how busy are the CPU(s) on this LPAR */
@@ -840,25 +882,25 @@ detector:
 parse ARG msg /* last message in */
  
 Middle=center(prevmsg.1,20)
-Middle=strip(middle)                      /* in case message <50 we will
-have leading/trailing blanks, drop them */
-Opos=pos(middle,msg)  /* middle part in new message */
+Middle=strip(middle)        /* in case message <50 we will
+                               have leading/trailing blanks, drop them */
+Opos=pos(middle,msg)       /* middle part in new message */
 If opos>0 then do
      prevmsg.1=msg
      say "message looping deteced"
+     CALL log('Attention!!! Loop condition detected by detector function!')
+     loopCondition = 1
      return -1
  end
 prevmsg.1=msg
 return 1
  
 whoami:
- 
+/* determine node name */
 "id (stack"
 pull whoamiuser . whoaminode . whoamistack
 whoamistack=LEFT(whoamistack,5)
 return
- 
- 
  
 selftest:
 /* Send myself an NJE message before starting up to see if all good */
@@ -872,19 +914,25 @@ selftest:
    if msg = "TEST100" then do
       return 0
    end
-  else do
-        return -1
-  end
+return -1
  
 emptybuff:
 /* empty NJE buffer before starting RELAY CHAT */
  
- 
-        'MAKEBUF'
-       'wakeup (iucvmsg QUIET'   /* wait for a message         */
-        parse pull text          /* get what was send          */
-        parse var text type sender . nodeuser msg
-        parse var nodeuser node '(' userid '):'
-       'DROPBUF'
+   'MAKEBUF'
+  'wakeup (iucvmsg QUIET'   /* wait for a message         */
+   parse pull text          /* get what was send          */
+   parse var text type sender . nodeuser msg
+   parse var nodeuser node '(' userid '):'
+  'DROPBUF'
 return 0
  
+writestats:
+/* WRITE STATS TO DISK */
+address command
+fileid='RELAY STATS A'
+record=" "
+record=mytime()||" :: totalmessages: "||totmessages||"  highestusers: "||highestusers
+ 'EXECIO 1 DISKW RELAY STATS A (STRING '||record
+ 'FINIS RELAY STATS A'
+return
