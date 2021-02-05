@@ -1,0 +1,926 @@
+/* ELIZA EXEC CHAT PROGRAM             */
+/*                                     */
+/* An NJE (bitnet/HNET) analyst        */
+/* for z/VM, VM/ESA and VM/SP          */
+/* Peter Jacob,Moshix                 */
+/*                                     */
+/* copyright 2021  by moshix           */
+/* Apache 2.0 license                  */
+/***************************************/
+/* execute this from RELAY VM before starting RELAY CHAT:            */
+/* defaults set tell msgcmd msgnoh to remove host(user) in output    */
+/*  CHANGE HISTORY                                                   */
+/*  V0.1    :  Humble beginnings                                     */
+/*  V0.2    :  Time out for patients who fell asleep                 */
+/*  V0.3    :  First Eliza logic                                     */
+/*  V0.4    :  Added keywords, conjigations and answers              */
+/*  V0.5    :  Added PeterJ's raxx porting of the classic basic pgm  */
+/*  V0.6    :  Connected NJE to dialogue                             */
+/*  V0.7    :  Handle logoff                                         */
+/*  V0.8    :  Added keywords and answers                            */
+/*  V0.8.1  :  fix /Available command                                */
+ 
+ 
+/* configuraiton parameters - IMPORTANT                               */
+ELIZAversion="0.8.1"     /* needed for federation compatibility check */
+timezone="CDT"           /* adjust for your server IMPORTANT          */
+maxdormant =500          /* max time user can be dormat               */
+localnode=""             /* localnode is now autodetected as 2.7.1    */
+osversion="z/VM 6.4"     /* OS version for enquries and stats         */
+typehost="IBM z114"      /* what kind of machine                      */
+hostloc  ="Stockholm,SE" /* where is this machine                     */
+sysopname="55555555"     /* who is the sysop for this chat server     */
+sysopemail="555555@gmail" /* where to contact this systop             */
+compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
+sysopuser='MAINT'         /* sysop user who can force users out       */
+sysopnode=translate(localnode) /* sysop node automatically set        */
+raterwatermark=18000      /* max msgs per minute set for this server  */
+ 
+/* global variables                                                  */
+isincluded=0               /* is keyword found ??                    */
+eStarttime=1               /* used for logged on users to start countdown to asleep */
+LastSessionStart=3000000   /* last user session started at...        */
+InSessionUser=""           /* which user is currently in session     */
+BIGLOCK=0                  /* RESET LOCK FOR MULTITENANT */
+returnNJEmsg="HCPMSG045E"  /* messages returning for users not logged on */
+returnNJEmsg2="DMTRGX334I" /* looping error message flushed         */
+returnNJEmsg3="HCPMFS057I" /* looping error message flushed         */
+loggedonusers = 0         /* online user at any given moment        */
+highestusers = 0          /* most users online at any given moment  */
+totmessages  = 0          /* total number of msgs sent              */
+otime = 0                 /* overtime to log off users after n minutes */
+starttime=mytime()        /*  for /SYSTEM                           */
+starttimeSEC=ExTime()     /*  for msg rate  calculation             */
+logline = " "             /* initialize log line                    */
+receivedmsgs=0            /* number of messages received for stats and loop*/
+err1="currently NOT"
+err2="to logon on"
+err3="Weclome to RELAY chat"
+err4="logged off now"
+illegaluser1="RSCS"       /* we should never receive a message from these users */
+illegaluser2="ROOT"       /* we should never receive a message from these users */
+ 
+ 
+/*---------------CODE SECTION STARTS BELOW --------------------------*/
+whoamiuser=""             /* for autoconfigure                        */
+whoaminode=""
+whomistack=""
+call whoami               /* who the fahma am I??                     */
+say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
+ 
+localnode=whoaminode   /* set localnode */
+ 
+if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level*/
+ 
+ say 'All CPU avg: 'cpu '%     Paging: 'paging()
+ 
+     say 'Machine type: 'configuration()'     RAM: 'rstorage()
+     say 'Number of CPU: in LPAR: 'numcpus()
+ END
+     say '                        '
+     say '****** LOG BELOW *******'
+ 
+/* some simple logging  for stats etc        */
+      CALL log('ELIZA  '||ELIZAversion||' started. ')
+ 
+ 
+/*-------------------------------------------*/
+ 
+ 
+ 
+/* initialize eliza now !! */
+/* This reads in all eliza keywords, conjugations and answers > 200 */
+if  loadTable()  /= 0 then do
+    CALL log('Eliza stem variables init failed!')
+end
+else do
+    CALL log('Eliza stem variables loaded.')
+    CALL log('Eliza now initialized.')
+end
+call log ('Keywords loaded      : '||keywords.0)
+call log ('Conjugations loaded  :    '||conjugations.0)
+call log ('Answers loaded       : '||answers.0)
+call log ('Exact system time now:'||ExTime())
+ 
+ 
+/* Invoke WAKEUP first so it will be ready to receive msgs */
+/* This call also issues a 'SET MSG IUCV' command.         */
+ 
+  'SET MSG IUCV'
+  "WAKEUP +0 (IUCVMSG"
+ 
+  'MAKEBUF'
+ 
+  Do forever;
+     'wakeup (iucvmsg QUIET'   /* wait for a message         */
+     parse pull text          /* get what was send          */
+    CurrentTime=Extime()
+     select
+        when Rc = 5 then do;  /* we have a message          */
+        /* parse it                                       */
+           if pos('From', text) > 0 then  do  /* from RSCS   */
+              parse var text type sender . nodeuser msg
+              parse var nodeuser node '(' userid '):'
+              CALL LOG('from '||userid||' @ '||node||' '||msg)
+              receivedmsgs= receivedmsgs + 1
+              /* below line checks if high rate watermark is exceeded */
+              /* and if so.... exits!                                 */
+              call highrate (receivedmsgs)
+              uppuserid=TRANSLATE(userid)
+  /* below line eliminates service messages from other relay nodes and eliminates loops */
+  if pos(err1,msg) > 0 | pos(err2,msg) > 0 | pos(err3,msg) > 0 | pos(err4,msg) > 0 then do
+              end
+              else do
+                if detector(msg) > 0 then call handlemsg  userid,node,msg
+              end
+          end
+          else do;  /* simple msg from local user  */
+        /* format is like this:                           */
+        /* *MSG    MAINT    hello                         */
+              parse var text type userid msg
+                   node = localnode
+               call handlemsg  userid,node,msg
+           end
+        end
+        when Rc = 6 then
+          signal xit
+        otherwise
+     end
+ end;   /* of do forever loop  */
+ 
+ 
+xit:
+/* when its time to quit, come here    */
+ 
+  'WAKEUP RESET';        /* turn messages from IUCV to ON    */
+  'SET MSG ON'
+  'DROPBUF'
+exit;
+ 
+ 
+handlemsg:
+/* handle all incoming messages and send to proper method */
+   parse ARG userid,node,msg
+    userid=strip(userid)
+    node=strip(node)
+    if userid = illegaluser1 | userid = illegaluser2 then do
+        call log ('Message arrived from illegal user: '||userid)
+       return
+    end
+    CurrentTime=Extime()
+    umsg = translate(msg)  /* make upper case */
+    umsg=strip(umsg)
+ 
+    /* below few lines: loop detector                  */
+    loopmsg=SUBSTR(umsg,1,11) /* extract RSCS error msg */
+ if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2 | loopmsg = returnNJEmsg3) then do
+      call log('Loop detector triggered for user:  '||userid||'@'||node)
+      return
+    end
+   commandumsg=SUBSTR(umsg,2,5)
+ 
+   updbuff=1
+   SELECT                             /* HANDLE MESSAGE TYPES  */
+      when (umsg = "/AVAILABLE") then
+           call sendAVAILABLE userid,node
+      when (umsg = "/SYSTEM") then
+           call systeminfo userid,node
+      when (umsg = "/STATS") then
+           call sendstats userid,node
+      when (umsg = "/LOGOFF") then do
+           call logoffuser userid,node
+           updbuff=0                 /* removed, nothing to update */
+      end
+      when (umsg = "/LOGON") then do
+           call logonuser  userid,node
+           updbuff=0                    /* already up-to-date */
+      end
+      when (umsg = "/HELP") then do
+           call helpuser  userid,node
+      end
+ 
+      otherwise
+           call sendchatmsg userid,node,msg
+        end
+return
+ 
+sendchatmsg:
+/* what we got is a message to be distributed to the registered patient */
+    parse ARG userid,node,msg
+ 
+   CurrentTime=Extime()
+   listuser = userid || "@"||node
+ 
+   if InSessionUser = listuser  then do
+        yrquestion=cleanse(msg)
+        yrquestion=STRIP(yrquestion)
+        yrquestion=translate(yrquestion)
+        say "User: "InSessionUser " said: "yrquestion
+       if yrquestion=-8 then return -8
+       if yrquestion=lastquestion then do
+          call respond userid,node,'You keep repeating yourself...'
+          return
+       end
+ 
+       /* .... Find Keyword .... */
+    foundkeyword=''
+    do k=1 to keywords.0
+        isincluded=POS(keywords.k,yrquestion)
+        if isincluded=0 then iterate
+        foundkeyword=keywords.k
+        say "foundkeyword: "foundkeyword
+        leave
+    end
+ 
+    conjustr=''
+    if foundkeyword='' then k=36
+       else conjustr=conjugate(yrquestion,foundkeyword,isincluded)
+       say "k,foundkeyword,conjustry: "reply(k,foundkeyword,conjustr)
+       challenge = reply(k,foundkeyword,conjustr)
+       if InSessionUser = listuser  then call respond userid,node,challenge
+       lastquestion=yrquestion          /* to check for repeat questions */
+/*     return reply(k,foundkeyword,conjustr)*/
+    end
+    else do
+        /* USER NOT LOGGED ON YET, LET'S SEND HELP TEXT */
+      call respond userid,node,'You are currently NOT in session with Eliza right now.'
+      call respond userid,node,'Welcome to ELIZA  v'ELIZAversion
+      call respond userid,node,'/HELP for help, or /LOGON to logon on'
+      end
+return
+ 
+sendAVAILABLE:
+/* Is Eliza available for a session right now?  */
+ parse ARG userid,node
+ CurrentTime=Extime()
+ if (CurrentTime - LastSessionStart) > maxdormant then do
+   InSessionUser=""
+   BIGLOCK=0
+   CALL RESPOND userid,node,"Yes, I am available for a session right now. Issue a /LOGON"
+ end
+ else do
+    CALL RESPOND userid,node,"Sorry, I am in session right now... Try later."
+  end
+return
+ 
+logoffuser:
+ parse ARG userid,node
+ CALL log('User: '||userid||' at '||node||' logged out')
+ call respond userid,node,"Our time is finished. I hope you feel better. $120.00 please"
+ BIGLOCK=0 /* RESET LOCK FOR MULTITENANT */
+ InSessionUser=""
+ LastSessionStart=999999
+return
+ 
+ logonuser:
+ /* add user to linked list */
+    parse ARG userid,node
+    CurrentTime=Extime()
+ 
+    if (CurrentTime -  LastSessionStart > maxdormant) then do
+      CALL respond userid,node,'Oh so nice to see you again!'
+      CALL respond userid,node,'Please come on in and have a seat. '
+   BIGLOCK=1 /* set biglock immediately */
+   InSessionUser=userid"@"node
+   LastSessionStart=ExTime()
+   /* ok lets begin the session for InSessionUser                 */
+    call ElizaInit
+ 
+ 
+   /* start game play here **********************  **/
+   end
+   else do
+      CALL responde userid,node,"So sorry, I am currently in session, try later"
+   end
+ return
+ 
+systeminfo:
+/* send /SYSTEM info about this host  */
+     parse ARG userid,node
+     listuser = userid"@"node
+ 
+ 
+   CurrentTime=Extime()
+ 
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)
+    'TELL' userid 'AT' node '-> NJE node name        : 'localnode
+    'TELL' userid 'AT' node '-> Eliza version        : 'ELIZAversion
+    'TELL' userid 'AT' node '-> OS for this host     : 'osversion
+    'TELL' userid 'AT' node '-> Type of host         : 'typehost
+    'TELL' userid 'AT' node '-> Location of this host: 'hostloc
+    'TELL' userid 'AT' node '-> Time Zone of         : 'timezone
+    'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
+    'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
+    'TELL' userid 'AT' node '-> System Load          :'cpu'%'
+    if compatibility > 2 then do
+       page=paging()
+       rstor=rstorage()
+       cfg=configuration()
+       lcpus=numcpus()
+   /*  parse var mcpu mpage mcf mrstor mlcpus  */
+      'TELL' userid 'AT' node '-> Pages/Sec            : 'page
+      'TELL' userid 'AT' node '-> IBM Machine Type     : 'cfg
+      'TELL' userid 'AT' node '-> Memory in LPAR or VM : 'rstor
+      'TELL' userid 'AT' node '-> Number of CPUs       : 'lcpus
+    end
+     if compatibility > 2 then do
+     totmessages = totmessages + 13
+     end
+    else do
+     totmessages = totmessages + 9
+    end
+return
+ 
+ 
+sendstats:
+/* send usage statistics to whoever asks, even if not logged on */
+    parse ARG userid,node
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)
+    actualtime=Extime()
+    elapsedsec=(actualtime-starttimeSEC)
+    if elapsedsec = 0 then elapsedsec = 1 /* avoid division by zero on Jan 1 at 00:00 */
+ 
+    msgsrate = (receivedmsgs + totmessages) / elapsedsec
+    msgsratef= FORMAT(msgsrate,4,2) /* rounding */
+    msgsratef = STRIP(msgsratef)
+    listuser = userid"@"node
+    'TELL' userid 'AT' node '-> Total number of msgs : 'totmessages
+    'TELL' userid 'AT' node '-> Messages rate /minute: 'msgsratef
+    'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
+    'TELL' userid 'AT' node '-> System CPU load      : 'STRIP(cpu)'%'
+    'TELL' userid 'AT' node '-> RELAY CHAT version   : v'ELIZAversion
+ 
+     totmessages = totmessages+ 5
+return
+ 
+helpuser:
+/* send help menu */
+  parse ARG userid,node
+  listuser = userid"@"node
+ 
+ 
+'TELL' userid 'AT' node '  _____ _     _____ ______  ___                              '
+'TELL' userid 'AT' node ' |  ___| |   |_   _|___  / / _ \      GUARANTEED NO-COVID    '
+'TELL' userid 'AT' node ' | |__ | |     | |    / / / /_\ \      ___   _    ___ _____  '
+'TELL' userid 'AT' node ' |  __|| |     | |   / /  |  _  |     / / \ | |  |_  |  ___| '
+'TELL' userid 'AT' node ' | |___| |_____| |_./ /___| | | |    / /|  \| |    | | |__   '
+'TELL' userid 'AT' node ' \____/\_____/\___/\_____/\_| |_/   / / | . ` |    | |  __|  '
+'TELL' userid 'AT' node '   for z/VM, VM/ESA, VM/SP MVS/3.8 / /  | |\  |/\__/ / |___  '
+'TELL' userid 'AT' node '                                  /_/   \_| \_/\____/\____/  '
+'TELL' userid 'AT' node '/HELP   for this help'
+'TELL' userid 'AT' node '/AVAILABLE to enquire about available. ALWAYS ENQUIRE FIRST! '
+'TELL' userid 'AT' node '/LOGON  to start a session with Eliza and feel better quickly'
+'TELL' userid 'AT' node '/LOGOFF to logoff and stop your session with Eliza'
+'TELL' userid 'AT' node '/STATS  for ... you guessed it ...statistics!'
+'TELL' userid 'AT' node '/SYSTEM for info about this host'
+'TELL' userid 'AT' node '              '
+'TELL' userid 'AT' node ' messages with  -> are dialogues from Eliza '
+ 
+  totmessages = totmessages + 15
+return
+ 
+ 
+ 
+refreshTime:
+/* Refresh last transaction time */
+ /*trace i    */
+   arg ctime,userid,node
+   listuser=userid'@'node
+   ppos=pos('/'listuser,$.@)
+   if ppos=0 then return              /* user not logged on */
+   ppos=pos('(',$.@,ppos+1)           /* find timestamp */
+   if ppos=0 then return              /* not found, let it be */
+   rpos=pos(')',$.@,ppos+1)+1         /* find end of timestamp  */
+   if rpos=0 then return              /* ) not found, let it be */
+   rlen=rpos-ppos
+   $.@=overlay('('ctime')',$.@,ppos,rlen)
+return
+ 
+ 
+exTime:
+/* Calculate Seconds in this year */
+  dd=(date('d')-1)*86400
+  parse value time() with hh':'mm':'ss
+  tt=hh*3600+mm*60+ss
+return right(dd+tt,8,'0')
+ 
+ 
+mytime: procedure
+ timenow = left(time(),5)
+ hr = left(timenow,2)
+ min = right(timenow,2)
+ if hr > 12 then timenow         = (hr - 12)'.'min' pm'
+   else if hr = 12 then timenow  = hr'.'min' pm'
+                    else timenow = hr'.'min' am'
+ if left(timenow,1) = '0' then timenow = substr(timenow,2)
+ dow     = left(date('weekday'),3)
+ day     = right(date('sorted'),2)
+ if left(day,1) = '0' then day = substr(day,2)
+ month   = left(date('month'),3)
+ year    = left(date('sorted'),4)
+return timenow',' dow day month year
+ 
+ 
+ 
+ 
+log:
+/* general logger function */
+/* log a line to relay machine and/or log */
+   parse ARG  logline
+   say mytime()' :: 'logline
+return
+ 
+ 
+cpubusy:
+/* how busy are the CPU(s) on this LPAR */
+/* extract CPU buy information for stats etc. */
+ cplevel = space(cp_id) sl
+ strlen = length(cplevel)
+ 
+ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+ cpu = right( cpu+0, 3)
+return cpu
+ 
+paging:
+/* how many pages per second is this LPAR doing? */
+/* extra currenct OS paging activity */
+ sl = c2d(right(diag(0), 2))
+ cplevel = space(cp_id) sl
+ strlen = length(cplevel)
+ 
+ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+return page
+ 
+rstorage:
+ parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
+return rstor
+ 
+configuration:
+/* return machine configuration */
+/* extract machine type etc. */
+ if compatibility > 2 then do
+Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+ 
+ 
+  Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+  Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+  parse value stsi(1,1,1) with 49  type   +4 ,
+                               81  seq   +16 ,
+                              101  model +16 .
+ 
+  parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                               39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                               45 lname  +8    /* partition name         */
+ 
+  parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                               57 cp_id +16
+ 
+  parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+         with     lnum      lcpus      vcpus        ser    lname model .
+ 
+  blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+          "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
+ 
+  brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+end
+return type
+ 
+numcpus:
+/* return number of CPUs in this LPAR */
+  parse value stsi(1,1,1) with 49  type   +4 ,
+                               81  seq   +16 ,
+                              101  model +16 .
+ 
+  parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                               39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                               45 lname  +8    /* partition name         */
+ 
+  parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                               57 cp_id +16
+ 
+  parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+         with     lnum      lcpus      vcpus        ser    lname model .
+ 
+  blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+          "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s 1090 zPDT 3096 z14"
+ 
+  brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+ 
+return lcpus
+ 
+highrate:
+/* when too many incoming messages per second exit server to avoid CPU overloading */
+/* this function detects high msg rate for loop detection purposes
+   or for system load abatement purposes                          */
+  RATE = 0
+  parse ARG receivedmsg
+  currentime=Extime()
+  elapsedtime=currentime-starttimeSEC
+  if elapsedtime = 0 then elapsedtime = 3 /* some machines too fast */
+  rate = receivedmsg/elapsedtime
+  if rate > raterwatermark then do
+     call log ('Rate high watermark exceeded, rate: '||rate)
+     signal xit;
+   end
+  else do
+   return 0
+   end
+return
+ 
+ 
+detector:
+/* detect if a message is looping by extracting middle of an incoming message-> comparing*/
+parse ARG msg /* last message in */
+ 
+Middle=center(prevmsg.1,20)
+Middle=strip(middle)                      /* in case message <50 we will
+have leading/trailing blanks, drop them */
+Opos=pos(middle,msg)  /* middle part in new message */
+If opos>0 then do
+     prevmsg.1=msg
+     say "message looping deteced"
+     return -1
+ end
+prevmsg.1=msg
+return 1
+ 
+whoami:
+ 
+"id (stack"
+pull whoamiuser . whoaminode . whoamistack
+whoamistack=LEFT(whoamistack,5)
+return
+ 
+ 
+selftest:
+/* Send myself an NJE message before starting up to see if all good */
+        'DROPBUF'
+       'TELL RELAY at 'localnode' TEST100'
+       'wakeup (iucvmsg QUIET'   /* wait for a message         */
+        parse pull text          /* get what was send          */
+        parse var text type sender . nodeuser msg
+        parse var nodeuser node '(' userid '):'
+       'DROPBUF'
+   if msg = "TEST100" then do
+      return 0
+   end
+  else do
+        return -1
+  end
+return
+ 
+respond:
+/* general TELL command for Eliza */
+parse ARG userid,node,response
+'TELL' userid 'AT' node '-> 'response
+totmessages=totmessages+1
+return 0
+ 
+/* --------------------------------------------------------------------
+ * Init Eliza
+ * --------------------------------------------------------------------
+ */
+Elizainit:
+  elizaActive='ACTIVE'
+  call respond userid,node,"                                                        "
+  call respond userid,node,"   /////////////\\\\ ELIZA/NJE                         "
+  call respond userid,node,"  (((((((((((((( \\\\                                   "
+  call respond userid,node,"  ))) ~~      ~~  (((                                   "
+  call respond userid,node,"  ((( (*)     (*) )))                                   "
+  call respond userid,node,"  )))     <       (((                                   "
+  call respond userid,node,"  ((( '\______/`  )))                                   "
+  call respond userid,node,"  )))\___________/(((                                   "
+  call respond userid,node,"         _) (_       Hi, I am Eliza. What's your problem?  "
+  call respond userid,node,"        / \_/ \                                         "
+  call respond userid,node,"       /(     )\                                        "
+  call respond userid,node,"      // )___( \\                                       "
+  call respond userid,node,"      \\(     )//                                       "
+  call respond userid,node,"       (       )                                        "
+  call respond userid,node,"        |  |  |                                         "
+  call respond userid,node,"         | | |                                          "
+  call respond userid,node,"         | | |                                          "
+  call respond userid,node,"        _|_|_|_                                         "
+  totmessages = totmessages + 18
+  y=0
+  do x = 1 to conjugations.0/2
+     y=y+1
+     wordin.x=conjugations.y
+     y=y+1
+     wordout.x=conjugations.y
+  end
+  y=0
+  do x=1 to words(refs)/2
+     y=y+1
+     s.x=word(refs,y)
+     y=y+1
+     l=word(refs,y)
+     r.x=s.x
+     n.x=s.x+l-1
+  end
+return
+ 
+/* --------------------------------------------------------------------
+ * Load Tables
+ * --------------------------------------------------------------------
+ */
+loadTable:
+  keywords.0=84
+  keywords.1 ="CAN YOU"
+  keywords.2 ="CAN I"
+  keywords.3 ="YOU ARE"
+  keywords.4 ="YOU'RE"
+  keywords.5 ="I DON'T"
+  keywords.6 ="FEEL"
+  keywords.7 ="WHY DON'T YOU"
+  keywords.8 ="WHY CAN'T I"
+  keywords.9 ="ARE YOU"
+  keywords.10="I CAN'T"
+  keywords.11="I AM"
+  keywords.12="I'M"
+  keywords.13="YOU"
+  keywords.14="I WANT"
+  keywords.15="WHAT"
+  keywords.16="HOW"
+  keywords.17="WHO"
+  keywords.18="WHERE"
+  keywords.19="WHEN"
+  keywords.20="WHEN"
+  keywords.21="WHY"
+  keywords.22="NAME"
+  keywords.23="CAUSE"
+  keywords.24="SORRY"
+  keywords.25="DREAM"
+  keywords.26="HELLO"
+  keywords.27="HI"
+  keywords.28="MAYBE"
+  keywords.29="YOUR"
+  keywords.30="ALWAYS"
+  keywords.31="THINK"
+  keywords.32="ALIKE"
+  keywords.33="YES"
+  keywords.34="FRIEND"
+  keywords.35="DATA"
+  keywords.36="COMPUTER"
+  keywords.37="CORONA"
+  keywords.38="COVID"
+  keywords.39="FACEBOOK"
+  keywords.40="TWITTER"
+  keywords.41="SOCIAL"
+  keywords.42="EMAIL"
+  keywords.43="PHONE"
+  keywords.44="TWEET"
+  keywords.45="WHATSAPP"
+  keywords.46="WORK"
+  keywords.47="HOME"
+  keywords.48="WIFE"
+  keywords.49="HUSBAND"
+  keywords.50="CHILD"
+  keywords.51="CHILDREN"
+  keywords.52="OFFICE"
+  keywords.53="INTERNET"
+  keywords.54="YELLOW"
+  keywords.55="BLUE"
+  keywords.56="RED"
+  keywords.57="WHITE"
+  keywords.58="BLACK"
+  keywords.59="POLIICS"
+  keywords.60="HEALTH"
+  keywords.61="LONELY"
+  keywords.62="SAD"
+  keywords.63="UNHAPPY"
+  keywords.64="TIRED"
+  keywords.65="HAPPY"
+  keywords.66="EXHAUSTED"
+  keywords.67="UNSURE"
+  keywords.68="UNSATISFIED"
+  keywords.69="BETTER"
+  keywords.70="SORRY"
+  keywords.71="MAYBE"
+  keywords.72="PERHAPS"
+  keywords.73="ELIZA"
+  keywords.74="DREAM"
+  keywords.75="CAUSE"
+  keywords.76="NAME"
+  keywords.77="MOTHER"
+  keywords.78="FATHER"
+  keywords.79="JEWISH"
+  keywords.80="COVID"
+  keywords.81="VACCINE"
+  keywords.82="hospital"
+  keywords.83="sick"
+  keywords.84="breath"
+ 
+  conjugations.0=18
+  conjugations.1 ="ARE"
+  conjugations.2 ="AM"
+  conjugations.3 ="WERE"
+  conjugations.4 ="WAS"
+  conjugations.5 ="YOU"
+  conjugations.6 ="I"
+  conjugations.7 ="YOUR"
+  conjugations.8 ="MY"
+  conjugations.9 ="I'VE"
+  conjugations.10="YOU'VE"
+  conjugations.11="YOU'VE"
+  conjugations.12="ME"
+  conjugations.13="YOU"
+  conjugations.14="YY'ALL"
+  conjugations.15="THEY"
+  conjugations.16="WE"
+  conjugations.17="ME"
+  conjugations.18="YOU"
+ 
+  answers.0 = 114
+  answers.1 ="DON'T YOU BELIEVE THAT I CAN*"
+  answers.2 ="PERHAPS YOU WOULD LIKE TO BE LIKE ME*"
+  answers.3 ="YOU WANT ME TO BE ABLE TO*"
+  answers.4 ="PERHAPS YOU DON'T WANT TO*"
+  answers.5 ="DO YOU WANT TO BE ABLE TO*"
+  answers.6 ="WHAT MAKES YOU THINK I AM*"
+  answers.7 ="DOES IT PLEASE YOU TO BELIEVE I AM*"
+  answers.8 ="PERHAPS YOU WOULD LIKE TO BE*"
+  answers.9 ="DO YOU SOMETIMES WISH YOU WERE*"
+  answers.10="DON'T YOU REALLY*"
+  answers.11="WHY DON'T YOU*"
+  answers.12="DO YOU WISH TO BE ABLE TO*"
+  answers.13="DOES THAT TROUBLE YOU*"
+  answers.14="DO YOU OFTEN FEEL*"
+  answers.15="DO YOU OFTEN FEEL*"
+  answers.16="DO YOU ENJOY FEELING*"
+  answers.17="DO YOU REALLY BELIEVE I DON'T*"
+  answers.18="PERHAPS IN GOOD TIME I WILL*"
+  answers.19="DO YOU WANT ME TO*"
+  answers.20="DO YOU THINK YOU SHOULD BE ABLE TO*"
+  answers.21="WHY CAN'T YOU*"
+  answers.22="WHY ARE YOU INTERESTED IN WHETHER OR NOT I AM*"
+  answers.23="WOULD YOU PREFER IF I WERE NOT*"
+  answers.24="PERHAPS IN YOUR FANTASIES I AM*"
+  answers.25="HOW DO YOU KNOW YOU CAN'T*"
+  answers.26="HAVE YOU TRIED?"
+  answers.27="PERHAPS YOU CAN NOW*"
+  answers.28="DID YOU COME TO ME BECAUSE YOU ARE*"
+  answers.29="HOW LONG HAVE YOU BEEN*"
+  answers.30="DO YOU BELIEVE IT IS NORMAL TO BE*"
+  answers.31="DO YOU ENJOY BEING*"
+  answers.32="WE WERE DISCUSSING YOU--NOT ME."
+  answers.33="OH, I*"
+  answers.34="YOU'RE NOT REALLY TALKING ABOUT ME, ARE YOU?"
+  answers.35="WHAT WOULD IT MEAN TO YOU IF YOU GOT*"
+  answers.36="WHY DO YOU WANT*"
+  answers.37="SUPPOSE YOU SOON GOT*"
+  answers.38="WHAT IF YOU NEVER GOT*"
+  answers.39="I SOMETIMES ALSO WANT*"
+  answers.40="WHY DO YOU ASK?"
+  answers.41="DOES THAT QUESTION INTEREST YOU?"
+  answers.42="WHAT ANSWER WOULD PLEASE YOU THE MOST?"
+  answers.43="WHAT DO YOU THINK?"
+  answers.44="ARE SUCH QUESTIONS ON YOUR MIND OFTEN?"
+  answers.45="WHAT IS IT THAT YOU REALLY WANT TO KNOW?"
+  answers.46="HAVE YOU ASKED ANYONE ELSE?"
+  answers.47="HAVE YOU ASKED SUCH QUESTIONS BEFORE?"
+  answers.48="WHAT ELSE COMES TO MIND WHEN YOU ASK THAT?"
+  answers.49="NAMES DON'T INTEREST ME."
+  answers.50="I DON'T CARE ABOUT NAMES --PLEASE GO ON."
+  answers.51="IS THAT THE REAL REASON?"
+  answers.52="DON'T ANY OTHER REASONS COME TO MIND?"
+  answers.53="DOES THAT REASON EXPLAIN ANYTHING ELSE?"
+  answers.54="WHAT OTHER REASONS MIGHT THERE BE?"
+  answers.55="PLEASE DON'T APOLOGIZE!"
+  answers.56="APOLOGIES ARE NOT NECESSARY."
+  answers.57="WHAT FEELINGS DO YOU HAVE WHEN YOU APOLOGIZE?"
+  answers.58="DON'T BE SO DEFENSIVE!"
+  answers.59="WHAT DOES THAT DREAM SUGGEST TO YOU?"
+  answers.60="DO YOU DREAM OFTEN?"
+  answers.61="WHAT PERSONS APPEAR IN YOUR DREAMS?"
+  answers.62="ARE YOU DISTURBED BY YOUR DREAMS?"
+  answers.63="HOW DO YOU DO ...PLEASE STATE YOUR PROBLEM."
+  answers.64="YOU DON'T SEEM QUITE CERTAIN."
+  answers.65="WHY THE UNCERTAIN TONE?"
+  answers.67="YOU AREN'T SURE?"
+  answers.68="DON'T YOU KNOW?"
+  answers.69="ARE YOU SAYING NO JUST TO BE NEGATIVE?"
+  answers.70="YOU ARE BEING A BIT NEGATIVE."
+  answers.71="WHY NOT?"
+  answers.72="ARE YOU SURE?"
+  answers.73="WHY NO?"
+  answers.74="WHY ARE YOU CONCERNED ABOUT MY*"
+  answers.75="WHAT ABOUT YOUR OWN*"
+  answers.76="CAN YOU THINK OF A SPECIFIC EXAMPLE?"
+  answers.77="WHEN?"
+  answers.78="WHAT ARE YOU THINKING OF?"
+  answers.79="REALLY, ALWAYS?"
+  answers.80="DO YOU REALLY THINK SO?"
+  answers.81="BUT YOU ARE NOT SURE YOU*"
+  answers.82="DO YOU DOUBT YOU*"
+  answers.83="IN WHAT WAY?"
+  answers.84="WHAT RESEMBLANCE DO YOU SEE?"
+  answers.85="WHAT DOES THE SIMILARITY SUGGEST TO YOU?"
+  answers.86="WHAT OTHER CONNECTIONS DO YOU SEE?"
+  answers.87="COULD THERE REALLY BE SOME CONNECTION?"
+  answers.88="HOW?"
+  answers.89="YOU SEEM QUITE POSITIVE."
+  answers.90="ARE YOU SURE?"
+  answers.91="I SEE."
+  answers.92="I UNDERSTAND."
+  answers.93="WHY DO YOU BRING UP THE TOPIC OF FRIENDS?"
+  answers.94="DO YOUR FRIENDS WORRY YOU?"
+  answers.95="DO YOUR FRIENDS PICK ON YOU?"
+  answers.96="ARE YOU SURE YOU HAVE ANY FRIENDS?"
+  answers.97="DO YOU IMPOSE ON YOUR FRIENDS?"
+  answers.98="PERHAPS YOUR LOVE FOR FRIENDS WORRIES YOU."
+  answers.99="DO COMPUTERS WORRY YOU?"
+  answers.100 ="ARE YOU TALKING ABOUT ME IN PARTICULAR?"
+  answers.101 ="ARE YOU FRIGHTENED BY MACHINES?"
+  answers.102 ="WHY DO YOU MENTION COMPUTERS?"
+  answers.103 ="WHAT DO YOU THINK MACHINES HAVE TO DO WITH YOUR PROBLEM?"
+  answers.104 ="DON'T YOU THINK COMPUTERS CAN HELP PEOPLE?"
+  answers.105 ="WHAT IS IT ABOUT MACHINES THAT WORRIES YOU?"
+  answers.106 ="SAY, DO YOU HAVE ANY PSYCHOLOGICAL PROBLEMS?"
+  answers.107 ="WHAT DOES THAT SUGGEST TO YOU?"
+  answers.108 ="I SEE."
+  answers.109 ="I'M NOT SURE I UNDERSTAND YOU FULLY."
+  answers.110 ="COME COME ELUCIDATE YOUR THOUGHTS."
+  answers.111 ="CAN YOU ELABORATE ON THAT?"
+  answers.112 ="THAT IS QUITE INTERESTING."
+  answers.113 ="I DON'T CARE"
+  answers.114 ="YOU CAN STICK THAT WHERE THE SUN DONT SHINE"
+  refs='1 3 4 2 6 4 6 4 10 4 14 3 17 3 20 2 22 3 25 3 '
+  refs=refs' 28 4 28 4 32 3 35 5 40 9 40 9 40 9 40 9 40 9 40 9'
+  refs=refs' 49 2 51 4 55 4 59 4 63 1 63 1 64 5 69 5 74 2 76 4'
+  refs=refs' 80 3 83 7 90 3 93 6 99 7 106 6 '
+RETURN 0
+/* --------------------------------------------------------------------
+ * TAKE PART OF STRING AND CONJUGATE IT
+ * --------------------------------------------------------------------
+ */
+conjugate:
+  parse arg yrquestion,foundkeyword,l
+  conjustr=" "right(yrquestion,length(yrquestion)-length(foundkeyword)-l+1)" "
+  do l=1 to words(conjustr)
+     wrd=word(conjustr,l)
+     do x=1 to conjugations.0/2
+        if wrd=wordin.x then conjustr=wordreplace(wordout.x,conjustr,l)
+     end
+  end
+return space(conjustr,1)
+ 
+/* --------------------------------------------------------------------
+ * WordReplace(newword,string,wordnumber-toreplace)
+ * --------------------------------------------------------------------
+ */
+wordreplace:
+  parse arg _r,_s,_w
+  _p=wordindex(_s,_w)
+  if _p<1 then return _s
+return substr(_s,1,_p-1)_r' 'substr(_s,_p+wordlength(_s,_w)+1)
+ 
+/* --------------------------------------------------------------------
+ * Cleanse Question, remove punctuation marks
+ * --------------------------------------------------------------------
+ */
+cleanse:
+  yrquestion=translate(arg(1),'','.,;:?!')
+  if pos('shut',yrquestion)>0 then return -8
+return yrquestion
+ 
+/* --------------------------------------------------------------------
+ * Construct Reply
+ * --------------------------------------------------------------------
+ */
+reply:
+  parse arg k,foundkw,constr
+  if foundkw='' then return "You will have to elaborate more for me to help you."
+  xr=r.k
+  foundanswer = answers.xr
+  r.k=r.k+1
+  if r.k>n.k then r.k=s.k
+  lastquestion=yrquestion
+  if right(foundanswer,1)="*" then  ,
+     return space(substr(foundanswer,1,length(foundanswer)-1)' 'conjustr,1)
+return foundanswer
+ 
+ /* --------------------------------------------------------------------
+  * Construct Reply
+  * --------------------------------------------------------------------
+  */
+ reply:
+   parse arg k,foundkw,constr
+   if foundkw='' then return "You will have to elaborate more for me to help you."
+   xr=r.k
+   foundanswer = answers.xr
+   r.k=r.k+1
+   if r.k>n.k then r.k=s.k
+   lastquestion=yrquestion
+   if right(foundanswer,1)="*" then  ,
+      return space(substr(foundanswer,1,length(foundanswer)-1)' 'conjustr,1)
+ return foundanswer
+ 
