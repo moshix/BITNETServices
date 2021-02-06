@@ -45,25 +45,26 @@
 /*  v3.0.0rc2  Release candidate 2 for major rel 3.0                 */
 /*  v3.0.0rc3  Made all / messages go to hELP, cosmetic stuff        */
 /*  v3.0.0  :  RElease 3.0 with /ROOMs announcment upon /LOGON       */
+/*  v3.0.1  :  Fix message delivery bug                              */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.0.0"  /* must be configured!                    */
+relaychatversion="3.0.1"  /* must be configured!                    */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="zzzzzzzzz" /* any user with this passwd shuts down rver*/
+shutdownpswd="888888898" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"     /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
 sysopname="Mmmmmmmm"     /* who is the sysop for this chat server     */
-sysopemail="mmmmmm@gmail" /* where to contact this systop             */
+sysopemail="dddddd@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
 raterwatermark=18000      /* max msgs per minute set for this server  */
 debugmode=0               /* print debug info on RELAY console when 1 */
-send2ALL=0                /* 0 send chat msgs to users in same room   */
+send2ALL=1                /* 0 send chat msgs to users in same room   */
                           /* 1 send chat msgs to all logged-in users  */
 log2file=1                /* all calls to log also in RELAY LOG A     */
                           /* make sure to not run out of space !!!    */
@@ -198,12 +199,13 @@ end */
   Do forever;
      'wakeup (iucvmsg QUIET'   /* wait for a message         */
      parse pull text           /* get what was send          */
-    CurrentTime=Extime()
+     CurrentTime=Extime()
      select
         when Rc = 5 then do;   /* we have a message          */
            if pos('From', text) > 0 then  do
               parse var text type sender . nodeuser msg
               parse var nodeuser node '(' userid '):'
+              say "FIXX userid - node - msg :"userid " " node " "msg
               CALL LOG('from '||userid||' @ '||node||' '||msg)
               receivedmsgs= receivedmsgs + 1
               /* below line checks if high rate watermark is exceeded */
@@ -217,7 +219,7 @@ end */
         /* format is like this:                           */
         /* *MSG    MAINT    hello                         */
               parse var text type userid msg
-                   node = localnode
+               node = localnode
                call handlemsg  userid,node,msg
            end
         end
@@ -248,21 +250,22 @@ else return 0
 handlemsg:
 /* handle all incoming messages and send to proper method */
    parse ARG userid,node,msg
+    origmsg=msg
     userid=strip(userid)
     node=strip(node)
     CurrentTime=Extime()
     umsg = translate(msg)  /* make upper case */
     umsg=strip(umsg)
-if debugmode=1 then say "handlemsg func: USERID,NODE,MSG: "userid" @ "node": "msg
+if debugmode=1 then say "FIXX handlemsg func: USERID,NODE,MSG: "userid" @ "node": "msg
     /* below few lines: error handling                 */
     loopmsg=SUBSTR(umsg,1,10) /* extract RSCS error msg */
 if errorhandler(loopmsg) > 1 then do
+         sau "FIXX handlemsg func: errorhandle > 1"
          loopCondition = 1
          /* silently  drop message and don't process it */
          call log('Loop detector triggered for user:  '||userid||'@'||node)
          return
  end
- commandumsg=SUBSTR(umsg,2,5)
  
    updbuff=1
    SELECT                             /* HANDLE MESSAGE TYPES  */
@@ -298,13 +301,13 @@ if errorhandler(loopmsg) > 1 then do
            signal xit
       end
  
-       when left(umsg,1) = "/" then do
-               call helpuser  userid,node
-        end
- 
+      when left(umsg,1) = "/" then do
+            call helpuser  userid,node
+      end
  
       otherwise
-           call sendchatmsg userid,node,msg
+           say "FIXX before sendchatmsg invocation - msg= "origmsg
+           call sendchatmsg userid,node,origmsg
         end
    if updBuff=1 then call refreshTime currentTime,userid,node /* for each msg ! */
    call CheckTimeout currentTime
