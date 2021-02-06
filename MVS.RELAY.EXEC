@@ -29,13 +29,14 @@
 /*  v2.7.8  :  add HEARTBEAT function to check availability of RELAY */
 /*  v2.7.9  :  added many error conditions detection                 */
 /*  v3.0.0  :  Ported forward to RELAY EXEC 3.0.0 for z/VM, VM       */
+/*  v3.0.1  :  Allow empty message lines when  sendin                */
 
 
 SIGNAL on SYNTAX  /* allow graceful termination in case of errors    */
 
 /* configuraiton parameters - IMPORTANT                               */
 
-relaychatversion="3.0.0" /* needed for federation compatibility check */
+relaychatversion="3.0.1" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode="HOUCICS"      /* localnode is now autodetected as 2.7.1    */
@@ -164,7 +165,7 @@ handlemsg:
        node = localnode
       CALL WTO "REL400I MSG RECEIVED FROM: "||USERID||" @ "||NODE
     end
-    TEXT = STRIP(TEXT)
+   /* TEXT = STRIP(TEXT). */
     UMSG = TRANSLATE(TEXT)
     node= STRIP(node)
     CurrentTime=Extime()
