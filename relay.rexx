@@ -42,23 +42,26 @@
 /*  v2.9.7  :  Fix expired users still in rooms bug                  */
 /*  v2.9.9  :  Spit out operational warnings due to config parms     */
 /*  v3.0.0rc1  Release candidate 1 for major rel 3.0                 */
+/*  v3.0.0rc2  Release candidate 2 for major rel 3.0                 */
+/*  v3.0.0rc3  Made all / messages go to hELP, cosmetic stuff        */
+/*  v3.0.0  :  RElease 3.0 with /ROOMs announcment upon /LOGON       */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.0.0rc1" /* must be configured!                    */
+relaychatversion="3.0.0"  /* must be configured!                    */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =5800         /* max time user can be dormat               */
+maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="1zzzzzz29" /* any user with this passwd shuts down rver*/
+shutdownpswd="zzzzzzzzz" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"     /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="zzzzzzzz"     /* who is the sysop for this chat server     */
-sysopemail="zzzzzzzgmail" /* where to contact this systop             */
+sysopname="Mmmmmmmm"     /* who is the sysop for this chat server     */
+sysopemail="mmmmmm@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=28000      /* max msgs per minute set for this server  */
+raterwatermark=18000      /* max msgs per minute set for this server  */
 debugmode=0               /* print debug info on RELAY console when 1 */
 send2ALL=0                /* 0 send chat msgs to users in same room   */
                           /* 1 send chat msgs to all logged-in users  */
@@ -152,7 +155,7 @@ if debugmode = 1 then call log ("Debug mode is turned ON")
  
  
 /*-------------------------------------------*/
-signal on syntax
+/*  signal on syntax*/
 /* now run a quick self test to see if NJE is working (RSCS up?) before continuing
 if selftest() < 0 then do
  CALL log('NJE Self Test failed. RSCS not running or previous messages in buffer...')
@@ -295,6 +298,10 @@ if errorhandler(loopmsg) > 1 then do
            signal xit
       end
  
+       when left(umsg,1) = "/" then do
+               call helpuser  userid,node
+        end
+ 
  
       otherwise
            call sendchatmsg userid,node,msg
@@ -408,11 +415,10 @@ logoffuser:
     call log("User removed   : "||listuser)
    CALL log('List size: '||@size())
   'TELL' userid 'AT' node '-> You are logged off now.'
-  'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
  
    call exitRoom userid,node   /* remove this user also from rooms */
  
-   totmessages = totmessages + 2
+   totmessages = totmessages + 1
 return
  
  
@@ -436,11 +442,10 @@ return
       'TELL' userid 'AT' node '-> LOGON succeeded.  '
  
       'TELL' userid 'AT' node '-> Total number of users: '@size()
-      'TELL' userid 'AT' node '*************************************************'
       'TELL' userid 'AT' node '-> New /ROOM Cobol (example) command'
       'TELL' userid 'AT' node '-> New /ROOMS command to list all rooms with users'
-      'TELL' userid 'AT' node '*************************************************'
       'TELL' userid 'AT' node '                          '
+       call ShowRooms userid,node  /* show new user who is in which room */
        call announce  userid, node /* announce to all users  of new user */
     end
     totmessages = totmessages+ 7
@@ -562,7 +567,7 @@ enterRoom:
   if word(_room,1)='/ROOM' then _room=word(_room,2)
   rml=length(_room)
   if rml<3 | rml>10 then  ,
-         'TELL '_user' AT '_node 'Room must not be below 3 or exceed 10 characters :'_room
+         'TELL '_user' AT '_node 'Room name min 3 chars and max 10 chars  :'_room
   else do
      if symbol('allrooms')<>'VAR' then allrooms=''
      else if pos('/'_room,allrooms)=0 then allrooms=allrooms' /'_room
@@ -570,7 +575,7 @@ enterRoom:
      $Room._user=_room
      if symbol('$Room._room')=='VAR' then $Room._room=$Room._room' '_user'@'_node
         else $Room._room=_user'@'_node
- if LEFT(_user,4) \= "$ROO" then  'TELL '_user' AT '_node' You have entered room: '_room
+ if LEFT(_user,4) \= "$ROO" then  'TELL '_user' AT '_node 'You have entered room: '_room
   end
   totmessages = totmessages + 1
 return 0
@@ -580,7 +585,7 @@ ShowRooms:
   parse upper arg userid,node
   if debugmode=1 then say "Showrooms func: userid @ node: "userid" @ "node
   if symbol('allrooms')<>'VAR' | words(allrooms)=0 then do
-         'TELL' userid 'AT' node '> All users are in GENERAL room right now...'
+         'TELL' userid 'AT' node '-> All users are in GENERAL room right now...'
      totmessages = totmessages + 1
      return
    end
@@ -588,8 +593,8 @@ ShowRooms:
       troom=substr(word(allrooms,ri),2)
       if symbol('$Room.troom')<>'VAR' then iterate
       tusers=$Room.troom
-          'TELL 'userid' AT 'node '>ROOM   : 'troom' has 'words(tusers)' user(s)'
-          'TELL' userid 'AT' node '>Users  : 'tusers
+          'TELL 'userid' AT 'node troom'       : has 'words(tusers)' user(s)'
+          'TELL' userid 'AT' node 'Users  : 'tusers
           totmessages = totmessages+2
   end
 return 0
@@ -603,7 +608,8 @@ exitRoom:
   if symbol('$Room._room')<>'VAR' then return
   do ci=1 to words($Room.myRoom)
      if word($Room.myRoom,ci)=_user'@'node then do
-            'TELL 'userid' AT 'node '>You left room: 'myRoom
+            'TELL 'userid' AT 'node 'You left room: 'myRoom
+             totmessages = totmessages + 1
         iterate
      end
      troom=troom' 'word($Room.myRoom,ci)
@@ -764,7 +770,7 @@ log:
 /* log a line to console and RELAY LOG A  */
    parse ARG  logline
    say mytime()' :: 'logline
-   if log2file = 1 & compatibility = 3 then do
+   if log2file = 1 & compatibility > 0 then do
    address command
 /*  'PIPE (name logit)',
      '| spec /'mytime()'/ 1 /::/ n /'logLine'/ n',
@@ -929,10 +935,12 @@ return 0
  
 writestats:
 /* WRITE STATS TO DISK */
+if compatibility > 0 then do
 address command
 fileid='RELAY STATS A'
 record=" "
 record=mytime()||" :: totalmessages: "||totmessages||"  highestusers: "||highestusers
  'EXECIO 1 DISKW RELAY STATS A (STRING '||record
  'FINIS RELAY STATS A'
+end
 return
