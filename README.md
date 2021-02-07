@@ -106,8 +106,15 @@ ELIZA/NJE is available in MVS 3.8 and VM versions. This is a single-tenant imple
 /STATS         some stats
 /HELP          HELP menu
 <br><br>
+<h1>Special Thanks To:</h1>
+<br>
+Peter Jacob<br>
+Mike Grossman<br>
+Neale Ferguson<br>
+Bob Polmanter<br>
+Turgut Kalfaoglu<br><br>
 
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: January 29, 2021<br>
+UPDATED: February 7, 2021<br>
 Moshix
 
