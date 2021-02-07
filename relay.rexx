@@ -46,19 +46,20 @@
 /*  v3.0.0rc3  Made all / messages go to hELP, cosmetic stuff        */
 /*  v3.0.0  :  RElease 3.0 with /ROOMs announcment upon /LOGON       */
 /*  v3.0.1  :  Fix message delivery bug                              */
+/*  v3.0.2  :  Fix ExitRoom                                          */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.0.1"  /* must be configured!                    */
+relaychatversion="3.0.2"  /* must be configured!                    */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1800         /* max time user can be dormat               */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="888888898" /* any user with this passwd shuts down rver*/
+shutdownpswd="12t34ttt9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"     /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="Mmmmmmmm"     /* who is the sysop for this chat server     */
-sysopemail="dddddd@gmail" /* where to contact this systop             */
+sysopname="tttttttt"     /* who is the sysop for this chat server     */
+sysopemail="tttttt@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -604,7 +605,7 @@ return 0
  
 exitRoom:
 /* exit a user from a room */
-  parse arg userid,node
+  parse arg _user,node
   myRoom=$Room._user
   $Room._user=''   /* clear current room entry */
   troom=''
