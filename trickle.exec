@@ -1,0 +1,11 @@
+/* TRICKLE EXEC      PROGRAM           */                                                                                           
+/*                                     */                               
+/* An NJE (bitnet/HNET) FILE server    */                               
+/* for z/VM, VM/ESA and VM/SP          */                                                         
+/*                                     */                               
+/* copyright 2020, 2021  by moshix     */                               
+/* Apache 2.0 license                  */                               
+/***************************************/                               
+/* execute this from RELAY VM before starting TRICKLE                */ 
+/* defaults set tell msgcmd msgnoh to remove host(user) in output    */ 
+/*  CHANGE HISTORY                                                   */ 
