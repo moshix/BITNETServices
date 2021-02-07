@@ -93,6 +93,8 @@ The original RELAY description can be found here: https://en.wikipedia.org/wiki/
 
 
 <h1>TRICKLE FILE SERVER</h1>
+<br>More information and code here soon. 
+<br><br>
 
 <h1>ELIZA</h1>
 <br>
