@@ -4,10 +4,6 @@
 <h1>RELAY CHAT Implementation</h1>
 
 
-
-REXX CHAT 
----------
-
 This is the actively maintained RELAY CHAT. 
 
 
@@ -37,8 +33,8 @@ Commands supported by RELAY EXEC:
 
 
 
-REXX VERSION INSTALLATION
--------------------------
+INSTALLATION
+------------
 
 This program runs on z/VM, VM/ESA 2.x and VM/SP6. No version earlier than VM/SP rel6 is supported currently.  
 
@@ -71,7 +67,7 @@ An MVS 3.8 version of RELAY CHAT is also availble in this repo.
 FUTURE FEATURES
 ---------------
 <br><br>
-- Federation of relay chat servers                  [DONE]<br>
+- Federation of relay chat servers                  <br>
 - Loop detection                                    [DONE]<br>
 - Message throttling                                    [DONE]<br>
 - Persisting users unto a file for crash recovery<br>
