@@ -1,45 +1,14 @@
-# Two Different BITNET Implementations of RELAY CHAT: One in Go and one in REXX for z/VM  
-
-This Go program operates a chat server on the BITNET NJE protocol network, of which HNET is one operating implementation as of Dec 2019. More about HNET here: http://moshix.dynu.net
-<br><br>
-
-GO VERSION INSTALLATION
------------------------
-
-git clone the repo
-change the fifo path at the beginning of the program
-go build chat.go
-start
-
-GO VERSION OPERATION
---------------------
-
-Minimum Go version is 1.12. <br>
-you need to make sure that whatever receives messages for the NJE chat server will create a string like this:
-USER@NODE:message<br>
-
-where USER is the sending user, NODE is the sending node, and message is the payload. <br>
-
-that string nees to be written to a FIFO pipe, which chat.go reads and listens to.<br> 
-
-The commands for clients are:<br><br>
-
-/LOGON to add yourself to the distribution list for messages<br>
-/LOGOFF to remove yourself from distributions of messages<br>
-/WHO    who is logged on currently?<br>
-/ROOM
-/ROOMS
-/STATS   some chat server stats<br>
-message  whatever you want to tell yourfriends on the channel<br>
+# Modern Re-Implementations of Traditional BITNET Services RELAY CHAT, TRICKLE, LISTSERV
 
 
-<br><br><br>
+<h1>RELAY CHAT Implementation</h1>
 
 
-REXX VERSION: RELAY EXEC 
-------------------------
 
-This is the actively maintained version of RELAY CHAT. 
+REXX CHAT 
+---------
+
+This is the actively maintained RELAY CHAT. 
 
 
 It's a re-implementation from scratch of the very famous RELAY chat written by  Jeff Kell (RIP) 
@@ -120,6 +89,10 @@ Read more about RELAY CHAT and its history here: http://web.inter.nl.net/users/f
 The original RELAY description can be found here: https://en.wikipedia.org/wiki/BITNET_Relay
 
 <br><br>
+
+
+
+<h1>TRICKLE FILE SERVER</h1>
 ORIGINAL RELEASE: November 2020<br>
 UPDATED: January 29, 2021<br>
 Moshix
