@@ -1,4 +1,4 @@
-# Modern Re-Implementations of Traditional BITNET Services RELAY CHAT, TRICKLE, LISTSERV
+# Modern Re-Implementations of Traditional BITNET Services RELAY CHAT, TRICKLE, LISTSERV, ELIZA
 
 
 <h1>RELAY CHAT Implementation</h1>
@@ -93,6 +93,20 @@ The original RELAY description can be found here: https://en.wikipedia.org/wiki/
 
 
 <h1>TRICKLE FILE SERVER</h1>
+
+<h1>ELIZA</h1>
+<br>
+ELIZA/NJE is available in MVS 3.8 and VM versions. This is a single-tenant implementation, ie only one NJE user at a time can enter into a session with ELIZA/NJE. <br>The commands are the same for both versions:
+<br>
+/AVAILABLE     check if eliza is available for a session 
+/LOGON         start a session
+/LOGOFF        finish a session
+/WHO           who is in a session currently
+/SYSTEM        information about this particular node
+/STATS         some stats
+/HELP          HELP menu
+<br><br>
+
 ORIGINAL RELEASE: November 2020<br>
 UPDATED: January 29, 2021<br>
 Moshix
