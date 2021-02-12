@@ -47,19 +47,22 @@
 /*  v3.0.0  :  RElease 3.0 with /ROOMs announcment upon /LOGON       */
 /*  v3.0.1  :  Fix message delivery bug                              */
 /*  v3.0.2  :  Fix ExitRoom                                          */
+/*  v3.0.3  :  Add more lenient command interpretation               */
+/*  v3.0.4  :  Message delivery bug fix after timeout cleanup        */
+/*  v3.0.5  :  Prune some unneeded coce, countusers() etc            */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.0.2"  /* must be configured!                    */
+relaychatversion="3.0.5"  /* must be configured!                      */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =1800         /* max time user can be dormat               */
+maxdormant =300          /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="12t34ttt9" /* any user with this passwd shuts down rver*/
+shutdownpswd="1ttttrrr9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM z114"     /* what kind of machine                      */
+typehost="IBM z114"     /* what kind of machine                       */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="tttttttt"     /* who is the sysop for this chat server     */
-sysopemail="tttttt@gmail" /* where to contact this systop             */
+sysopname="rrrrrrrr"     /* who is the sysop for this chat server     */
+sysopemail="rrrrrr@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -206,7 +209,6 @@ end */
            if pos('From', text) > 0 then  do
               parse var text type sender . nodeuser msg
               parse var nodeuser node '(' userid '):'
-              say "FIXX userid - node - msg :"userid " " node " "msg
               CALL LOG('from '||userid||' @ '||node||' '||msg)
               receivedmsgs= receivedmsgs + 1
               /* below line checks if high rate watermark is exceeded */
@@ -221,6 +223,7 @@ end */
         /* *MSG    MAINT    hello                         */
               parse var text type userid msg
                node = localnode
+           call LOG ("Received internal rscs message from: "||userid||" @ "||node||" "||msg)
                call handlemsg  userid,node,msg
            end
         end
@@ -261,7 +264,7 @@ if debugmode=1 then say "FIXX handlemsg func: USERID,NODE,MSG: "userid" @ "node"
     /* below few lines: error handling                 */
     loopmsg=SUBSTR(umsg,1,10) /* extract RSCS error msg */
 if errorhandler(loopmsg) > 1 then do
-         sau "FIXX handlemsg func: errorhandle > 1"
+         if debugmode=1 then say "FIXX handlemsg func: errorhandle > 1"
          loopCondition = 1
          /* silently  drop message and don't process it */
          call log('Loop detector triggered for user:  '||userid||'@'||node)
@@ -280,7 +283,16 @@ if errorhandler(loopmsg) > 1 then do
            call logoffuser userid,node
            updbuff=0                 /* removed, nothing to update */
       end
+      when (umsg = "/LOGOUT") then do
+           call logoffuser userid,node
+           updbuff=0                 /* removed, nothing to update */
+      end
       when (umsg = "/LOGON") then do
+           call logonuser  userid,node
+           call enterRoom userid,node,'GENERAL'   /* enter default GENERAL room */
+           updbuff=0                    /* already up-to-date */
+      end
+      when (umsg = "/LOGIN") then do
            call logonuser  userid,node
            call enterRoom userid,node,'GENERAL'   /* enter default GENERAL room */
            updbuff=0                    /* already up-to-date */
@@ -297,6 +309,12 @@ if errorhandler(loopmsg) > 1 then do
       when (umsg = "/HELP") then do
            call helpuser  userid,node
       end
+      when (umsg = "/MENU") then do
+           call helpuser  userid,node
+      end
+      when (umsg = "/HELPME") then do
+           call helpuser  userid,node
+      end
       when (umsg = shutdownpswd) then do
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
@@ -307,7 +325,6 @@ if errorhandler(loopmsg) > 1 then do
       end
  
       otherwise
-           say "FIXX before sendchatmsg invocation - msg= "origmsg
            call sendchatmsg userid,node,origmsg
         end
    if updBuff=1 then call refreshTime currentTime,userid,node /* for each msg ! */
@@ -334,12 +351,13 @@ end
                 entry=word($.@,ci)
                 if entry='' then iterate
                 parse value entry with '/'cuser'@'cnode'('otime')'
-                     if cuser = userid & cnode = node then do
-               /* dont' send msg to orignl sender */
-                 if userid \= "RSCS" & loopCondition =0 then 'TELL' cuser 'AT' cnode '-->'
-                      end
-                      else do
-                if send2ALL=1 & userid \= "RSCS" & loopCondition = 0 ,
+                if cuser = userid & cnode = node then do
+               /* send msg to orignal sender in special format */
+              if userid \= "RSCS" & loopCondition =0 then 'TELL' cuser 'AT' cnode '-->'msg
+              end
+               else do
+                /* originally we checked here for config parm:send2ALL=1   */
+                if userid \= "RSCS" & loopCondition = 0 ,
                       then  'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
                       end
              end
@@ -438,7 +456,7 @@ return
     else do
        loggedonusers = @size()
  
-       if highestusers < loggedonusers then highestusers = highestusers + 1
+       if highestusers < loggedonusers then highestusers = loggedonusers
  
        call @put '/'listuser'('currentTime')'
        call log("List user added: "||listuser)
@@ -498,7 +516,6 @@ return
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
     parse ARG userid,node
-    onlinenow = countusers(userid,node)
  
      parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
@@ -553,18 +570,6 @@ helpuser:
   totmessages = totmessages + 18
 return
  
-countusers:
- parse ARG userid,node
- listuser = userid"@"node
- onlineusers = 0
- do ci=1 to words($.@)
-     entry=word($.@,ci)
-     if entry='' then iterate
-     parse value entry with '/'cuser'@'cnode'('otime')'
-     lasttime=ctime-otime
-     onlineusers = onlineusers + 1
- end
-return onlineusers
  
 enterRoom:
   parse upper arg _user,_node,_room
@@ -648,13 +653,14 @@ CheckTimeout:
 /*    say cuser cnode ctime otime ctime-otime*/
       if ctime-otime > maxdormant then do  /* timeout per configuration */
          cj=cj+1
-         say 'removed user: 'cnode
          $remove.cj=cuser','cnode
       end
    end
    do ci=1 to cj
+       $remove.ci=cuser','cnode
+/*    call logoffuser cuser,cnode   */
       interpret 'call logoffuser '$remove.ci
-      call log($remove.ci||'logged off due to timeout reached '||maxdormant|| ' minutes')
+      call log($remove.ci||'logged off - timeout reached  after '||maxdormant|| ' seconds')
    end
 return
  
