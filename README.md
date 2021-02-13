@@ -94,16 +94,7 @@ Here is the current help file.
 <pre>
 trickle /help
                        
-Ready;
-
-_____________________.____________  ____  __.____     ___________
-\__    ___/\______   \   \_   ___ \|    |/ _|    |    \_   _____/
-  |    |    |       _/   /    \  \/|      < |    |     |    __)_ 
-  |    |    |    |   \   \     \___|    |  \|    |___  |        \
-  |____|    |____|_  /___|\______  /____|__ \_______ \/_______  /
-                   \/            \/        \/       \/        \/ 
-
- From FILESERV:   TRICKLE/NJE v0.1
+Ready
                                                 
  From FILESERV:   TRICKLE/NJE v0.1
  From FILESERV:
