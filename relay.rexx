@@ -50,11 +50,11 @@
 /*  v3.0.3  :  Add more lenient command interpretation               */
 /*  v3.0.4  :  Message delivery bug fix after timeout cleanup        */
 /*  v3.0.5  :  Prune some unneeded coce, countusers() etc            */
-/*  v3.1.0  :  Show last  chat lines upon login or /history cmd      */
+/*  v3.2.0  :  DOOR to TRICKLE                                       */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.1.0"  /* must be configured!                      */
+relaychatversion="3.2.0"  /* must be configured!                      */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =500          /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
@@ -326,6 +326,9 @@ if errorhandler(loopmsg) > 1 then do
       when (umsg = "/HISTORY") then do
            call history   userid,node
       end
+      when LEFT(umsg,8) = "/TRICKLE" then do
+           call TRICKLE   userid,node,origmsg
+      end
       when (umsg = shutdownpswd) then do
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
@@ -586,13 +589,14 @@ helpuser:
 'TELL' userid 'AT' node '/ROOM    NAME (max 10  char) to change to room NAME'
 'TELL' userid 'AT' node '/ROOMS   to see all rooms with users'
 'TELL' userid 'AT' node '/HISTORY to see all rooms with users'
+'TELL' userid 'AT' node '/DOOR    to issue DOOR commands for TRICKLE,LISTSERV,NETSERV'
 'TELL' userid 'AT' node '              '
 /* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
  
-  totmessages = totmessages + 19
+  totmessages = totmessages + 20
 return
  
  
@@ -669,7 +673,6 @@ return
 history:
 /* show history of last 20 chat messages to /history or upon login */
   parse ARG userid,node
- 
 i=0
 z=history.0
  'TELL 'userid' AT 'node 'Previous 'history.0' number of message: '
@@ -678,6 +681,21 @@ do  i = 1 to z   by 1
        'TELL 'userid' AT 'node '- 'history.i
    end
 end
+return 0
+ 
+trickle:
+/* send trickle messages to FILESERV  */
+lmsg=0
+payload=0
+parse ARG userid,node,otmsg
+lmsg=LENGTH(otmsg)
+payload=lmsg-LENGTH("/TRICKLE ")-3
+say "lmsg  payload: "lmsg payload
+tmsg= RIGHT(otmsg,payload)
+tmsg=translate(tmsg)
+say "trickle command: "tmsg
+'TELL TRICKLE AT FILESERV /DOOR 'userid' 'node' 'tmsg
+ 
 return
  
 CheckTimeout:
