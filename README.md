@@ -89,20 +89,57 @@ The original RELAY description can be found here: https://en.wikipedia.org/wiki/
 
 
 <h1>TRICKLE FILE SERVER</h1>
-<br>More information and code here soon. 
+<br>
+Here is the current help file.
+<pre>
+trickle /help
+                       
+Ready;
+ From FILESERV:  ___________ _____ _____  _   __ _      _____
+ From FILESERV: |_   _| ___ \_   _/  __ \| | / /| |    |  ___|
+ From FILESERV:   | | | |_/ / | | | /  \/| |/ / | |    | |__
+ From FILESERV:   | | |    /  | | | |    |    \ | |    |  __|
+ From FILESERV:   | | | |\ \ _| |_| \__/\| |\  \| |____| |___
+ From FILESERV:   \_/ \_| \_|\___/ \____/\_| \_/\_____/\____/
+ From FILESERV:   TRICKLE/NJE v0.1
+ From FILESERV:
+ From FILESERV:   /HELP   for this help menu
+ From FILESERV:   /PDGET  dirname.file to receive a file in your spool
+ From FILESERV:   /DIR    to see contents a directory / being top level dir
+ From FILESERV:   /TREE   to see the full tree of directories and files
+ From FILESERV:   /SUB    to subscribe to chagnes to a directory
+ From FILESERV:   /STATS  for TRICKLE stats
+ From FILESERV:   /SYSTEM for information about this TRICKLE server
+ From FILESERV: Execution time: 0.126s excluding net transmission time
+</pre>
 <br><br>
 
 <h1>ELIZA</h1>
 <br>
 ELIZA/NJE is available in MVS 3.8 and VM versions. This is a single-tenant implementation, ie only one NJE user at a time can enter into a session with ELIZA/NJE. <br>The commands are the same for both versions:
 <br>
-/AVAILABLE     check if eliza is available for a session 
-/LOGON         start a session
-/LOGOFF        finish a session
-/WHO           who is in a session currently
-/SYSTEM        information about this particular node
-/STATS         some stats
-/HELP          HELP menu
+<pre>
+eliza /help
+You: /help                             ...
+Ready;
+   _____ _     _____ ______  ___
+  |  ___| |   |_   _|___  / / _ \      GUARANTEED NO-COVID
+  | |__ | |     | |    / / / /_\ \      ___   _    ___ _____
+  |  __|| |     | |   / /  |  _  |     / / \ | |  |_  |  ___|
+  | |___| |_____| |_./ /___| | | |    / /|  \| |    | | |__
+  \____/\_____/\___/\_____/\_| |_/   / / | . ` |    | |  __|
+    for z/VM, VM/ESA, VM/SP MVS/3.8 / /  | |\  |/\__/ / |___
+                                   /_/   \_| \_/\____/\____/
+ /HELP   for this help
+ /AVAILABLE to enquire about available. ALWAYS ENQUIRE FIRST!
+ /LOGON  to start a session with Eliza and feel better quickly
+ /LOGOFF to logoff and stop your session with Eliza
+ /STATS  for ... you guessed it ...statistics!
+ /SYSTEM for info about this host
+  
+  messages with  -> are dialogues from Eliza
+
+</pre>
 <br><br>
 <h1>Special Thanks To:</h1>
 <br>
