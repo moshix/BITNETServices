@@ -110,7 +110,6 @@ Peter Jacob<br>
 Mike Grossman<br>
 Neale Ferguson<br>
 Bob Polmanter<br>
-Turgut Kalfaoglu<br><br>
 
 ORIGINAL RELEASE: November 2020<br>
 UPDATED: February 7, 2021<br>
