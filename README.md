@@ -96,12 +96,13 @@ trickle /help
                        
 Ready;
 
-From FILESERV  _______ _____  _____ _____ _  ___      ______ 
-From FILESERV |__   __|  __ \|_   _/ ____| |/ / |    |  ____|
-From FILESERV    | |  | |__) | | || |    | ' /| |    | |__   
-From FILESERV    | |  |  _  /  | || |    |  < | |    |  __|  
-From FILESERV    | |  | | \ \ _| || |____| . \| |____| |____ 
-From FILESERV    |_|  |_|  \_\_____\_____|_|\_\______|______|
+ From FILESERV:  ___________ _____ _____  _   __ _      _____
+ From FILESERV: |_   _| ___ \_   _/  __ \| | / /| |    |  ___|
+ From FILESERV:   | | | |_/ / | | | /  \/| |/ / | |    | |__
+ From FILESERV:   | | |    /  | | | |    |    \ | |    |  __|
+ From FILESERV:   | | | |\ \ _| |_| \__/\| |\  \| |____| |___
+ From FILESERV:   \_/ \_| \_|\___/ \____/\_| \_/\_____/\____/
+ From FILESERV:   TRICKLE/NJE v0.1
                                                 
  From FILESERV:   TRICKLE/NJE v0.1
  From FILESERV:
