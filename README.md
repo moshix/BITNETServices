@@ -30,6 +30,7 @@ Commands supported by RELAY EXEC:
 5. /DM       (direct message to a user)
 6. /SHUTDOWN (for sysopt only and requires password)
 7. /ROOM.    (go into room X)
+8. /ROOMS     (SHOW ALL USERS IN THEIR ROOMS)
 
 
 
@@ -73,6 +74,7 @@ FUTURE FEATURES
 - Persisting users unto a file for crash recovery<br>
 - MVS 3.8 port with BREXX[DONE]<br>
 - Chat rooms [DONE]<br>
+- recent chat history upon login [DONE]<br>
 <br><br>
 
 
