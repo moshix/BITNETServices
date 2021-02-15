@@ -49,9 +49,9 @@
 /*  v3.0.2  :  Fix ExitRoom                                          */
 /*  v3.0.3  :  Add more lenient command interpretation               */
 /*  v3.0.4  :  Message delivery bug fix after timeout cleanup        */
-/*  v3.0.5  :  Prune some unneeded coce, countusers() etc            */
-/*  v3.2.0  :  DOOR to TRICKLE                                       */
- 
+/*  v3.0.5  :  Prune some unneeded code, countusers() etc            */
+/*  v3.1.0  :  DOOR to TRICKLE                                       */
+/*  v3.2.0  :  Once a minute clean up inactive users automatically!  */
  
 /* configuraiton parameters - IMPORTANT                               */
 relaychatversion="3.2.0"  /* must be configured!                      */
@@ -106,6 +106,7 @@ err4="logged off now"
 loopCondition = 0        /* when a loop condition is detected this will turn to 1 */
 history.0=10            /* history goes back 20 last chat lines */
 historypointer=1         /* pointer to last entry in history     */
+silentlogoff=0           /* silently logg off user by 1/min wakeup call */
  
  
  
@@ -192,8 +193,6 @@ end
 /* This call also issues a 'SET MSG IUCV' command.         */
  
   'SET MSG IUCV'
-  "WAKEUP +0 (IUCVMSG"
- 
   'MAKEBUF'
 /* In this loop, we wait for a message to arrive and       */
 /* process it when it does.  If the "operator" types on    */
@@ -209,10 +208,18 @@ end
 /* ******************************************************* */
  
   Do forever;
-     'wakeup (iucvmsg QUIET'   /* wait for a message         */
-     parse pull text           /* get what was send          */
+     'wakeup +1 (iucvmsg QUIET'  /* wake up 1/min and also get msg */
+     parse pull text          
      CurrentTime=Extime()
      select
+     when Rc = 2 then do                                             
+          /* timer has expired */                                      
+           CALL log('Checkout timer triggered!'||CurrenTime)                                                                
+           silentlogoff=1  /* set for silent logoff to avoid loops */   
+           CurrentTime=Extime()                                         
+           call CheckTimeout currentTime                                
+           silentlogoff=0                                               
+           end       
         when Rc = 5 then do;   /* we have a message          */
            if pos('From', text) > 0 then  do
               parse var text type sender . nodeuser msg
@@ -461,11 +468,11 @@ logoffuser:
    loggedonusers = @size()
     call log("User removed   : "||listuser)
    CALL log('List size: '||@size())
-  'TELL' userid 'AT' node '-> You are logged off now.'
- 
+    if silentlogoff=0 then do /* we can have from 1/min routine */
+    'TELL' userid 'AT' node '-> You are logged off now.'
+    totmessages = totmessages + 1
+    end
    call exitRoom userid,node   /* remove this user also from rooms */
- 
-   totmessages = totmessages + 1
 return
  
  
