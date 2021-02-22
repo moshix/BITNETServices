@@ -51,19 +51,23 @@
 /*  v3.0.4  :  Message delivery bug fix after timeout cleanup        */
 /*  v3.0.5  :  Prune some unneeded code, countusers() etc            */
 /*  v3.1.0  :  DOOR to TRICKLE                                       */
+/*  v3.1.1  :  Cosmetic fixes                                        */
 /*  v3.2.0  :  Once a minute clean up inactive users automatically!  */
+/*  v3.3.0  :  Experimentally remove rooms due to poor demand for it */
+/*  v3.4.0  :  Split /HISTORY INTO /HISTORY (chats) and /USERS       */
+/*  v3.4.1  :  Some cosmetic fixes                                   */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.2.0"  /* must be configured!                      */
+relaychatversion="3.4.1" /* must be configured!                       */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =500          /* max time user can be dormant in seconds   */
+maxdormant =1000         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="1ttttrrr9" /* any user with this passwd shuts down rver*/
+shutdownpswd="13422tr 9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM z114"     /* what kind of machine                       */
+typehost="IBM z114"      /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="rrrrrrrr"     /* who is the sysop for this chat server     */
-sysopemail="rrrrrr@gmail" /* where to contact this systop             */
+sysopname="wwwwww  "     /* who is the sysop for this chat server     */
+sysopemail="wwwww@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -73,6 +77,8 @@ send2ALL=1                /* 0 send chat msgs to users in same room   */
                           /* 1 send chat msgs to all logged-in users  */
 log2file=1                /* all calls to log also in RELAY LOG A     */
                           /* make sure to not run out of space !!!    */
+history.0=15              /* history goes back n  last chat lines */
+ushistory.0=15            /* user logon/logff history n entries   */
  
  
 /* global variables                                                  */
@@ -104,10 +110,9 @@ err2="to logon on"
 err3="Weclome to RELAY chat"
 err4="logged off now"
 loopCondition = 0        /* when a loop condition is detected this will turn to 1 */
-history.0=10            /* history goes back 20 last chat lines */
 historypointer=1         /* pointer to last entry in history     */
+ushistorypointer=1      /* pointer to last entry in user history*/
 silentlogoff=0           /* silently logg off user by 1/min wakeup call */
- 
  
  
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
@@ -154,7 +159,7 @@ end   */
  
 if log2file=1 then call log ("Logging to console AND RELAY LOG A. Keep enough disk space")
 if send2ALL=0 then call log ("RELAY CHAT will send chats users in same room, send2ALL = 0")
-if send2ALL=1 then call log ("RELAY CHAT will not send chats to users, send2ALL=1")
+if send2ALL=1 then call log ("RELAY CHAT will send chats to users, send2ALL=1")
 if compatibility =1 then call log ("RELAY CHAT starting in VM/SP mode")
 if compatibility =2 then call log ("RELAY CHAT starting in VM/ESA mode")
 if compatibility =3 then call log ("RELAY CHAT starting in z/VM mode")
@@ -193,6 +198,8 @@ end
 /* This call also issues a 'SET MSG IUCV' command.         */
  
   'SET MSG IUCV'
+/*"WAKEUP +1 (IUCVMSG"  really needed??                    */
+ 
   'MAKEBUF'
 /* In this loop, we wait for a message to arrive and       */
 /* process it when it does.  If the "operator" types on    */
@@ -208,19 +215,22 @@ end
 /* ******************************************************* */
  
   Do forever;
-     'wakeup +1 (iucvmsg QUIET'  /* wake up 1/min and also get msg */
-     parse pull text          
-     CurrentTime=Extime()
+     'wakeup +4 (iucvmsg QUIET'   /* QUIET wake up 1/min and also get msg */
+ 
+ /*    parse pull text   */
+    CurrentTime=Extime()
      select
-     when Rc = 2 then do                                             
-          /* timer has expired */                                      
-           CALL log('Checkout timer triggered!'||CurrenTime)                                                                
-           silentlogoff=1  /* set for silent logoff to avoid loops */   
-           CurrentTime=Extime()                                         
-           call CheckTimeout currentTime                                
-           silentlogoff=0                                               
-           end       
+        when Rc = 2 then do
+           /* timer has expired */
+      /*   CALL log('Checkout timer triggered at:  '||mytime()) */
+           silentlogoff=1  /* set for silent logoff to avoid loops */
+           CurrentTime=Extime()
+           call CheckTimeout currentTime
+           silentlogoff=0
+           end
+ 
         when Rc = 5 then do;   /* we have a message          */
+           parse pull text
            if pos('From', text) > 0 then  do
               parse var text type sender . nodeuser msg
               parse var nodeuser node '(' userid '):'
@@ -304,19 +314,21 @@ if errorhandler(loopmsg) > 1 then do
       end
       when (umsg = "/LOGON") then do
            call logonuser  userid,node
-           call enterRoom userid,node,'GENERAL'   /* enter default GENERAL room */
+  /*RMX    call enterRoom userid,node,'GENERAL'*/ /* enter default GENERAL room */
            updbuff=0                              /* already up-to-date */
       end
       when (umsg = "/LOGIN") then do
            call logonuser  userid,node
-           call enterRoom userid,node,'GENERAL'   /* enter default GENERAL room */
+   /*RMX   call enterRoom userid,node,'GENERAL'*/ /* enter default GENERAL room */
            updbuff=0                              /* already up-to-date */
       end
       when (pos("/ROOMS",umsg)>0) then do
-           call ShowRooms userid,node
+/*RMX      call ShowRooms userid,node  */
+/*RMX*/    call helpuser userid,node
       end
       when (pos("/ROOM",umsg)>0) then do
-           call EnterRoom  userid,node,umsg
+/*RMX      call EnterRoom  userid,node,umsg  */
+/*RMX*/    call helpuser userid,node
       end
       when umsg='/ECHO' then do
                'TELL' userid 'AT' node 'USER: 'userid' Node: 'node
@@ -333,8 +345,8 @@ if errorhandler(loopmsg) > 1 then do
       when (umsg = "/HISTORY") then do
            call history   userid,node
       end
-      when LEFT(umsg,8) = "/TRICKLE" then do
-           call TRICKLE   userid,node,origmsg
+      when (umsg = "/USERS") then do
+           call users   userid,node
       end
       when (umsg = shutdownpswd) then do
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
@@ -409,7 +421,7 @@ end
  *  send2ALL is 0
  * -----------------------------------------------------------------
  */
-   if symbol('$Room.userid')<>'VAR' then do
+/* RMX if symbol('$Room.userid')<>'VAR' then do
       'TELL ' userid 'AT' node 'You have not entered a room yet.'
       return
    end
@@ -417,13 +429,13 @@ end
     do ci=1 to words($Room.myRoom)
        entry=word($Room.myRoom,ci)
        if entry='' then iterate
-       if entry=userid'@'node then iterate /* no  msgs to yourself */
+       if entry=userid'@'node then iterate
            'TELL ' userid 'AT' node 'Message sent to: 'entry
        parse value entry with cuser'@'cnode
            'TELL ' cuser 'AT' cnode '<> 'userid'@'node':'msg
        totmessages = totmessages+ 1
      end
- 
+*/
 return
  
 sendwho:
@@ -435,7 +447,7 @@ sendwho:
    call CheckTimeout currentTime
  
    listuser = userid || "@"||node
-   'TELL' userid 'AT' node '> List of currently logged on users:'
+   'TELL' userid 'AT' node '->List of currently logged on users:'
    totmessages = totmessages + 1
    do ci=1 to words($.@)
       entry=word($.@,ci)
@@ -443,11 +455,11 @@ sendwho:
       parse value entry with '/'cuser'@'cnode'('otime')'
       currenttime=Extime()
       lasttime=currenttime-otime
-      'TELL' userid 'AT' node '> ' cuser'@'cnode'  - last seen: 'lasttime' seconds ago'
+      'TELL' userid 'AT' node '->' cuser'@'cnode'  - last seen: 'lasttime' seconds ago'
       totmessages = totmessages + 1
       userswho = userswho + 1
    end
-  'TELL' userid 'AT' node '> Total online right now: 'userswho
+  'TELL' userid 'AT' node '->Total online right now: 'userswho
    loggedonusers = userswho
   totmessages = totmessages + 1
 return
@@ -468,11 +480,16 @@ logoffuser:
    loggedonusers = @size()
     call log("User removed   : "||listuser)
    CALL log('List size: '||@size())
-    if silentlogoff=0 then do /* we can have from 1/min routine */
-    'TELL' userid 'AT' node '-> You are logged off now.'
-    totmessages = totmessages + 1
-    end
-   call exitRoom userid,node   /* remove this user also from rooms */
+   if silentlogoff=0 then do/* only do chatty logoff when not caled by 1/min routine */
+  'TELL' userid 'AT' node '-> You are logged off now.'
+   totmessages = totmessages + 1
+   end
+   histuser=userid||" @ "||node||" logged off at: "||mytime()
+   call insertusrhist histuser,ushistorypointer
+ if  ushistorypointer < ushistory.0 then ushistorypointer=ushistorypointer +1
+ 
+ 
+/*RMX  call exitRoom userid,node */   /* remove this user also from rooms */
 return
  
  
@@ -496,15 +513,13 @@ return
       'TELL' userid 'AT' node '-> LOGON succeeded.  '
  
       'TELL' userid 'AT' node '-> Total number of users: '@size()
-      'TELL' userid 'AT' node '-> New /ROOM Cobol (example) command'
-      'TELL' userid 'AT' node '-> New /ROOMS command to list all rooms with users'
-      'TELL' userid 'AT' node '
-                               '
-       call ShowRooms userid,node  /* show new user who is in which room */
-       call history   userid,node  /* show last 20 chat messages upon login */
+       call history   userid,node  /* show last    chat messages upon login */
        call announce  userid, node /* announce to all users  of new user */
+       histuser=userid||" @ "||node||" logged on at : "||mytime()
+       call insertusrhist histuser,ushistorypointer
+ if  ushistorypointer < ushistory.0 then ushistorypointer=ushistorypointer +1
     end
-    totmessages = totmessages+ 7
+    totmessages = totmessages+ 5
  return
  
 systeminfo:
@@ -593,17 +608,15 @@ helpuser:
 'TELL' userid 'AT' node '/LOGOFF  to logoff and stop getting chat messages'
 'TELL' userid 'AT' node '/STATS   for chat statistics'
 'TELL' userid 'AT' node '/SYSTEM  for info aobut this host'
-'TELL' userid 'AT' node '/ROOM    NAME (max 10  char) to change to room NAME'
-'TELL' userid 'AT' node '/ROOMS   to see all rooms with users'
-'TELL' userid 'AT' node '/HISTORY to see all rooms with users'
-'TELL' userid 'AT' node '/DOOR    to issue DOOR commands for TRICKLE,LISTSERV,NETSERV'
+'TELL' userid 'AT' node '/ECHO    send an echo to yourself                  '
+'TELL' userid 'AT' node '/HISTORY to see a history of recent chat messages'
+'TELL' userid 'AT' node '/USERS   to see a history of recent users logon/logoff'
 'TELL' userid 'AT' node '              '
-/* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
  
-  totmessages = totmessages + 20
+  totmessages = totmessages + 18
 return
  
  
@@ -653,8 +666,10 @@ exitRoom:
   if symbol('$Room._room')<>'VAR' then return
   do ci=1 to words($Room.myRoom)
      if word($Room.myRoom,ci)=_user'@'node then do
-            'TELL 'userid' AT 'node 'You left room: 'myRoom
+         if silentlogoff=0 then do
+             'TELL 'userid' AT 'node 'You left room: 'myRoom
              totmessages = totmessages + 1
+         end
         iterate
      end
      troom=troom' 'word($Room.myRoom,ci)
@@ -680,30 +695,37 @@ return
 history:
 /* show history of last 20 chat messages to /history or upon login */
   parse ARG userid,node
+ 
 i=0
+found=0
 z=history.0
- 'TELL 'userid' AT 'node 'Previous 'history.0' number of message: '
+ 'TELL 'userid' AT 'node 'Previous 'history.0' messages             : '
 do  i = 1 to z   by 1
    if history.i /= "" then do
        'TELL 'userid' AT 'node '- 'history.i
+       found=found+1
    end
 end
-return 0
- 
-trickle:
-/* send trickle messages to FILESERV  */
-lmsg=0
-payload=0
-parse ARG userid,node,otmsg
-lmsg=LENGTH(otmsg)
-payload=lmsg-LENGTH("/TRICKLE ")-3
-say "lmsg  payload: "lmsg payload
-tmsg= RIGHT(otmsg,payload)
-tmsg=translate(tmsg)
-say "trickle command: "tmsg
-'TELL TRICKLE AT FILESERV /DOOR 'userid' 'node' 'tmsg
- 
+if found < 1 then 'TELL 'userid' AT 'node '...bummer... no chat history so far...'
 return
+ 
+users:
+/* show history of last user logons/logoffs                        */
+  parse ARG userid,node
+ 
+i=0
+found=0
+z=ushistory.0
+ 'TELL 'userid' AT 'node 'Previous 'ushistory.0' user events        : '
+do  i = 1 to z   by 1
+   if ushistory.i /= "" then do
+       'TELL 'userid' AT 'node '- 'ushistory.i
+       found=found+1
+   end
+end
+if found < 1 then 'TELL 'userid' AT 'node '...bummer... no events found so far.'
+return
+ 
  
 CheckTimeout:
 /* Check if user has not sent any message, automatic LOGOFF */
@@ -724,6 +746,7 @@ CheckTimeout:
 /*    call logoffuser cuser,cnode   */
       interpret 'call logoffuser '$remove.ci
       call log($remove.ci||'logged off - timeout reached  after '||maxdormant|| ' seconds')
+      silentlogoff=0 /* reset silent logoff to zero */
    end
 return
  
@@ -1038,6 +1061,27 @@ history.17=""
 history.18=""
 history.19=""
 history.20=""
+ 
+ushistory.1=""
+ushistory.2=""
+ushistory.3=""
+ushistory.4=""
+ushistory.5=""
+ushistory.6=""
+ushistory.7=""
+ushistory.8=""
+ushistory.9=""
+ushistory.10=""
+ushistory.11=""
+ushistory.12=""
+ushistory.13=""
+ushistory.14=""
+ushistory.15=""
+ushistory.16=""
+ushistory.17=""
+ushistory.18=""
+ushistory.19=""
+ushistory.20=""
 return 0
  
 inserthistory:
@@ -1056,6 +1100,25 @@ if pointer >= history.0 then do
   end
  
   history.z = hmsg/* insert msg at the bottom */
+end
+ 
+return 0
+insertusrhist:
+/* insert history item and scroll */
+parse ARG huser,usrpointer
+if usrpointer < ushistory.0 then do
+ ushistory.usrpointer = huser
+end
+ 
+if usrpointer >= ushistory.0 then do
+/* ok, we need to scroll up */
+ 
+  do i = 1 to ushistory.0
+      d = i + 1
+      ushistory.i =ushistory.d
+  end
+ 
+  ushistory.z = huser /* insert user at bottom */
 end
  
 return 0
