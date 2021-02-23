@@ -10,65 +10,18 @@
 /***************************************/
 /* execute this from RELAY VM before starting RELAY CHAT:            */
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
-/*  CHANGE HISTORY                                                   */
-/*  V0.1-0.9:  testing WAKEUP mechanism                              */
-/*  v1.0    :  double linked list for in memory processing,bug fixing*/
-/*  v2.0    :  Configurble parameters, remove hardwired data         */
-/*  v2.1    :  Add LPAR and machine measurement for stats            */
-/*  v2.2    :  Add /SYSTEM command                                   */
-/*  v2.3    :  Make VM/SPrel6 compatible via compatibility=1 parm    */
-/*  v2.4    :  Add /FORCE option to force off users (sysop only)     */
-/*  v2.5    :  Loop detetector incoming msg counter v1.0             */
-/*  v2.6    :  Loop detector v2.0                                    */
-/*  v2.7    :  loop detector v3.0                                    */
-/*  v2.7.1  :  autodetect who am i                                   */
-/*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
-/*  v2.7.3  :  loop detector disabled for now until i figure it out  */
-/*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
-/*  v2.7.6  :  minor coemstic stuff                                  */
-/*  v2.8.0  :  more fixes                                            */
-/*  v2.8.1  :  Loop detector and sanity checks                       */
-/*  v2.8.2  :  LOGOFF user count fix                                 */
-/*  v2.8.3  :  message sender doesn't see her own message anymore    */
-/*  v2.8.4  :  Some tests before starting RELAY CHAT                 */
-/*  v2.8.5  :  Fix expired users still lingering in linked list      */
-/*  v2.9.0  :  Rooms!! Up to 10 char long room name by PeterJ        */
-/*  v2.9.1  :  fancy shmancy HELP graphic                            */
-/*  v2.9.2  :  Fix potential RSCS authorization error HCPMFS057I     */
-/*  v2.9.3  :  Fix ROOMS bug leading to DMTPAF208E error and loop    */
-/*  v2.9.4  :  More ROOMS bug fixing and remove /FORCE               */
-/*  v2.9.5  :  Error handling for most common NJE errors             */
-/*  v2.9.6  :  More loop detector fixes..... thanks PeterJ!          */
-/*  v2.9.7  :  Fix expired users still in rooms bug                  */
-/*  v2.9.9  :  Spit out operational warnings due to config parms     */
-/*  v3.0.0rc1  Release candidate 1 for major rel 3.0                 */
-/*  v3.0.0rc2  Release candidate 2 for major rel 3.0                 */
-/*  v3.0.0rc3  Made all / messages go to hELP, cosmetic stuff        */
-/*  v3.0.0  :  RElease 3.0 with /ROOMs announcment upon /LOGON       */
-/*  v3.0.1  :  Fix message delivery bug                              */
-/*  v3.0.2  :  Fix ExitRoom                                          */
-/*  v3.0.3  :  Add more lenient command interpretation               */
-/*  v3.0.4  :  Message delivery bug fix after timeout cleanup        */
-/*  v3.0.5  :  Prune some unneeded coce, countusers() etc            */
-/*  v3.1.0  :  Show last  chat lines upon login or /history cmd      */
-/*  v3.1.1  :  Cosmetic fixes                                        */
-/*  v3.2.0  :  Once a minute clean up inactive users automatically!  */
-/*  v3.3.0  :  Experimentally remove rooms due to poor demand for it */
-/*  v3.4.0  :  Split /HISTORY INTO /HISTORY (chats) and /USERS       */
-/*  v3.4.1  :  Some cosmetic fixes                                   */
-/*  v3.4.2  :  Added minor /VERSION feature to see what others run   */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.4.2" /* must be configured!                       */
+relaychatversion="3.4.4" /* must be configured!                       */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
-maxdormant =1000         /* max time user can be dormant in seconds   */
+maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="1t313rrr9" /* any user with this passwd shuts down rver*/
+shutdownpswd="1t234rrr9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"      /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="dddddX  "     /* who is the sysop for this chat server     */
-sysopemail="ddddx@gmail" /* where to contact this systop             */
+sysopname="MrrrrX  "     /* who is the sysop for this chat server     */
+sysopemail="rrrrx@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -80,118 +33,12 @@ log2file=1                /* all calls to log also in RELAY LOG A     */
                           /* make sure to not run out of space !!!    */
 history.0=15              /* history goes back n  last chat lines */
 ushistory.0=15            /* user logon/logff history n entries   */
+silentlogoff=0            /* silently logg off user by 1/min wakeup call */
  
- 
-/* global variables                                                  */
-                          /* RSCS error messages we need to catch    */
-returnNJEmsg= "HCPMSG045E"/* messages returning for users not logged on */
-returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
-returnNJEmsg3="HCPMFS057I"/* RSCS not receiving message            */
-returnNJEmsg4="DMTPAF208E"/* Invalid user ID message               */
-returnNJEmsg5="DMTPAF210E"/* RSCS DMTPAF210E Invalid location      */
- 
-loggedonusers = 0        /* online user at any given moment        */
-highestusers = 0         /* most users online at any given moment  */
-totmessages  = 0         /* total number of msgs sent              */
-otime = 0                /* overtime to log off users after n minutes */
-starttime=mytime()       /*  for /SYSTEM                           */
-starttimeSEC=ExTime()    /*  for msg rate  calculation             */
-logline = " "            /* initialize log line                    */
-receivedmsgs=0           /* number of messages received for stats and loop*/
-premsg.0=6               /* needed for loop detector to compare    */
-premsg.1=""
-premsg.2=""
-premsg.3=""
-premsg.4=""
-premsg.5=""
-premsg.6=""
-msgrotator=1             /* this will rotate the 7 prev msgs       */
-err1="currently NOT"
-err2="to logon on"
-err3="Weclome to RELAY chat"
-err4="logged off now"
-loopCondition = 0        /* when a loop condition is detected this will turn to 1 */
-historypointer=1         /* pointer to last entry in history     */
-ushistorypointer=1      /* pointer to last entry in user history*/
-silentlogoff=0           /* silently logg off user by 1/min wakeup call */
  
  
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
-whoamiuser=""             /* for autoconfigure                        */
-whoaminode=""
-whomistack=""
-call whoami               /* who the fahma am I??                     */
-say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
- 
-localnode=whoaminode   /* set localnode */
- 
-if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level*/
- 
-     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
-       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
- say 'All CPU avg: 'cpu '%     Paging: 'paging()
- 
-     say 'Machine type: 'configuration()'     RAM: 'rstorage()
-     say 'Number of CPUs in LPAR: 'numcpus()
- END
-     say '                        '
-     say '****** LOG BELOW *******'
- 
-/* some simple logging  for stats etc        */
-      CALL log('RELAY chat '||relaychatversion||' initializing...')
- 
- 
-/* init double linked list of online users   */
-call @init
- CALL log('List has been initialized.')
- CALL log('List size: '||@size())
-if @size() /= 0 then do
-   CALL log('Linked list init has failed! Abort ')
-   signal xit;
-end
- 
-/*
-if emptybuff() < 0 then do
-   CALL log('General error in draining buffer.  Abort!')
-   signal xit;
-end   */
- 
-/* warn upon certain config parm constellations     */
- 
-if log2file=1 then call log ("Logging to console AND RELAY LOG A. Keep enough disk space")
-if send2ALL=0 then call log ("RELAY CHAT will send chats users in same room, send2ALL = 0")
-if send2ALL=1 then call log ("RELAY CHAT will send chats to users, send2ALL=1")
-if compatibility =1 then call log ("RELAY CHAT starting in VM/SP mode")
-if compatibility =2 then call log ("RELAY CHAT starting in VM/ESA mode")
-if compatibility =3 then call log ("RELAY CHAT starting in z/VM mode")
-if compatibility =-1 then call log ("RELAY CHAT starting in MVS/3.8NJE mode")
-if debugmode = 0 then call log ("Debug mode is turned OFF")
-if debugmode = 1 then call log ("Debug mode is turned ON")
- 
- 
-/*-------------------------------------------*/
-/*  signal on syntax*/
-/* now run a quick self test to see if NJE is working (RSCS up?) before continuing
-if selftest() < 0 then do
- CALL log('NJE Self Test failed. RSCS not running or previous messages in buffer...')
-end
-else do
- CALL log('NJE Self Test passed...')
-end */
- 
-if inithistory() = 0 then do               /* init history vars */
- CALL log('History initialization passed')
-end
- CALL log('Depth of history for this run: '||history.0)
- 
- CALL log('********** RELAY CHAT START **********')
- say '    ____  ____  __      __   _  _     ___  _   _    __   ____      '
- say '   (  _ \( ___)(  )    /__\ ( \/ )   / __)( )_( )  /__\ (_  _)     '
- say '    )   / )__)  )(__  /(__)\ \  /   ( (__  ) _ (  /(__)\  )(       '
- say '   (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)      '
- say '                                                                   '
- say '  Welcome to RELAY CHAT for z/VM,VM/ESA,VM/SP,MVS/3.8 NJE  -  V'relaychatversion
- say ''
+if relinit() /= 0 then signal xit /* initialize RELAY CHAT properly and run tests */
  
  
  
@@ -491,7 +338,7 @@ logoffuser:
   'TELL' userid 'AT' node '-> You are logged off now.'
    totmessages = totmessages + 1
    end
-   histuser=userid||" @ "||node||" logged off at: "||mytime()
+   histuser=mytime()||" User: "userid||" @ "||node||" logged off"
    call insertusrhist histuser,ushistorypointer
  if  ushistorypointer < ushistory.0 then ushistorypointer=ushistorypointer +1
  
@@ -522,7 +369,7 @@ return
       'TELL' userid 'AT' node '-> Total number of users: '@size()
        call history   userid,node  /* show last    chat messages upon login */
        call announce  userid, node /* announce to all users  of new user */
-       histuser=userid||" @ "||node||" logged on at : "||mytime()
+       histuser=mytime()||" User: "userid||" @ "||node||" logged on "
        call insertusrhist histuser,ushistorypointer
  if  ushistorypointer < ushistory.0 then ushistorypointer=ushistorypointer +1
     end
@@ -707,7 +554,7 @@ history:
 i=0
 found=0
 z=history.0
- 'TELL 'userid' AT 'node '> Previous 'history.0' messages             : '
+ 'TELL 'userid' AT 'node '> Previous 'history.0' messages:'
  totmessages = totmessages + 1
 do  i = 1 to z   by 1
    if history.i /= "" then do
@@ -727,7 +574,7 @@ users:
 i=0
 found=0
 z=ushistory.0
- 'TELL 'userid' AT 'node 'Previous 'ushistory.0' user events        : '
+ 'TELL 'userid' AT 'node 'Previous 'ushistory.0' user events: '
  totmessages = totmessages + 1
 do  i = 1 to z   by 1
    if ushistory.i /= "" then do
@@ -1123,8 +970,9 @@ if pointer >= history.0 then do
  
   history.z = hmsg/* insert msg at the bottom */
 end
- 
 return 0
+ 
+ 
 insertusrhist:
 /* insert history item and scroll */
 parse ARG huser,usrpointer
@@ -1142,6 +990,167 @@ if usrpointer >= ushistory.0 then do
  
   ushistory.z = huser /* insert user at bottom */
 end
+return 0
+ 
+relinit:
+/* this is the general RELAY CHAT init and setup testing function   */
+/* it is executed early during RELAY chat start, must return 0     */
+/* GLOBAL VARIABLES        pls adapt to your installation            */
+                          /* RSCS error messages we need to catch    */
+returnNJEmsg= "HCPMSG045E"/* messages returning for users not logged on */
+returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
+returnNJEmsg3="HCPMFS057I"/* RSCS not receiving message            */
+returnNJEmsg4="DMTPAF208E"/* Invalid user ID message               */
+returnNJEmsg5="DMTPAF210E"/* RSCS DMTPAF210E Invalid location      */
+ 
+loggedonusers = 0        /* online user at any given moment        */
+highestusers = 0         /* most users online at any given moment  */
+totmessages  = 0         /* total number of msgs sent              */
+otime = 0                /* overtime to log off users after n minutes */
+starttime=mytime()       /*  for /SYSTEM                           */
+starttimeSEC=ExTime()    /*  for msg rate  calculation             */
+logline = " "            /* initialize log line                    */
+receivedmsgs=0           /* number of messages received for stats and loop*/
+premsg.0=6               /* needed for loop detector to compare    */
+premsg.1=""
+premsg.2=""
+premsg.3=""
+premsg.4=""
+premsg.5=""
+premsg.6=""
+msgrotator=1             /* this will rotate the 7 prev msgs       */
+err1="currently NOT"
+err2="to logon on"
+err3="Weclome to RELAY chat"
+err4="logged off now"
+loopCondition = 0        /* when a loop condition is detected this will turn to 1 */
+historypointer=1         /* pointer to last entry in history     */
+ushistorypointer=1      /* pointer to last entry in user history*/
+ 
+whoamiuser=""             /* for autoconfigure                        */
+whoaminode=""
+whomistack=""
+call whoami               /* who the fahma am I??                     */
+say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
+ 
+localnode=whoaminode   /* set localnode */
+ 
+if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level*/
+ 
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+ say 'All CPU avg: 'cpu '%     Paging: 'paging()
+ 
+     say 'Machine type: 'configuration()'     RAM: 'rstorage()
+     say 'Number of CPUs in LPAR: 'numcpus()
+ END
+     say '                        '
+     say '****** LOG BELOW *******'
+ 
+/* some simple logging  for stats etc        */
+      CALL log('RELAY chat '||relaychatversion||' initializing...')
+ 
+ 
+/* init double linked list of online users   */
+call @init
+ CALL log('List has been initialized.')
+ CALL log('List size: '||@size())
+if @size() /= 0 then do
+   CALL log('Linked list init has failed! Abort ')
+   signal xit;
+end
+ 
+/*
+if emptybuff() < 0 then do
+   CALL log('General error in draining buffer.  Abort!')
+   signal xit;
+end   */
+ 
+/* warn upon certain config parm constellations     */
+ 
+if log2file=1 then call log ("Logging to console AND RELAY LOG A. Keep enough disk space")
+if send2ALL=0 then call log ("RELAY CHAT will send chats users in same room, send2ALL = 0")
+if send2ALL=1 then call log ("RELAY CHAT will send chats to users, send2ALL=1")
+if compatibility =1 then call log ("RELAY CHAT starting in VM/SP mode")
+if compatibility =2 then call log ("RELAY CHAT starting in VM/ESA mode")
+if compatibility =3 then call log ("RELAY CHAT starting in z/VM mode")
+if compatibility =-1 then call log ("RELAY CHAT starting in MVS/3.8NJE mode")
+if debugmode = 0 then call log ("Debug mode is turned OFF")
+if debugmode = 1 then call log ("Debug mode is turned ON")
+ 
+ 
+/*-------------------------------------------*/
+/*  signal on syntax*/
+/* now run a quick self test to see if NJE is working (RSCS up?) before continuing
+if selftest() < 0 then do
+ CALL log('NJE Self Test failed. RSCS not running or previous messages in buffer...')
+end
+else do
+ CALL log('NJE Self Test passed...')
+end */
+ 
+if inithistory() = 0 then do               /* init history vars */
+ CALL log('History initialization passed')
+end
+ CALL log('Depth of history for this run: '||history.0)
+ 
+ CALL log('********** RELAY CHAT START **********')
+ say '    ____  ____  __      __   _  _     ___  _   _    __   ____      '
+ say '   (  _ \( ___)(  )    /__\ ( \/ )   / __)( )_( )  /__\ (_  _)     '
+ say '    )   / )__)  )(__  /(__)\ \  /   ( (__  ) _ (  /(__)\  )(       '
+ say '   (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)      '
+ say '                                                                   '
+ say '  Welcome to RELAY CHAT for z/VM,VM/ESA,VM/SP,MVS/3.8 NJE  -  V'relaychatversion
+ say ''
+ 
  
 return 0
  
+/*  CHANGE HISTORY                                                   */
+/*  V0.1-0.9:  testing WAKEUP mechanism                              */
+/*  v1.0    :  double linked list for in memory processing,bug fixing*/
+/*  v2.0    :  Configurble parameters, remove hardwired data         */
+/*  v2.1    :  Add LPAR and machine measurement for stats            */
+/*  v2.2    :  Add /SYSTEM command                                   */
+/*  v2.3    :  Make VM/SPrel6 compatible via compatibility=1 parm    */
+/*  v2.4    :  Add /FORCE option to force off users (sysop only)     */
+/*  v2.5    :  Loop detetector incoming msg counter v1.0             */
+/*  v2.6    :  Loop detector v2.0                                    */
+/*  v2.7    :  loop detector v3.0                                    */
+/*  v2.7.1  :  autodetect who am i                                   */
+/*  v2.7.2  :  fix stats, high msg rate and last time user seen      */
+/*  v2.7.3  :  loop detector disabled for now until i figure it out  */
+/*  v2.7.4  :  differentiate compatibility for VMSP,VMESA and z/VM   */
+/*  v2.7.6  :  minor coemstic stuff                                  */
+/*  v2.8.0  :  more fixes                                            */
+/*  v2.8.1  :  Loop detector and sanity checks                       */
+/*  v2.8.2  :  LOGOFF user count fix                                 */
+/*  v2.8.3  :  message sender doesn't see her own message anymore    */
+/*  v2.8.4  :  Some tests before starting RELAY CHAT                 */
+/*  v2.8.5  :  Fix expired users still lingering in linked list      */
+/*  v2.9.0  :  Rooms!! Up to 10 char long room name by PeterJ        */
+/*  v2.9.1  :  fancy shmancy HELP graphic                            */
+/*  v2.9.2  :  Fix potential RSCS authorization error HCPMFS057I     */
+/*  v2.9.3  :  Fix ROOMS bug leading to DMTPAF208E error and loop    */
+/*  v2.9.4  :  More ROOMS bug fixing and remove /FORCE               */
+/*  v2.9.5  :  Error handling for most common NJE errors             */
+/*  v2.9.6  :  More loop detector fixes..... thanks PeterJ!          */
+/*  v2.9.7  :  Fix expired users still in rooms bug                  */
+/*  v2.9.9  :  Spit out operational warnings due to config parms     */
+/*  v3.0.0rc1  Release candidate 1 for major rel 3.0                 */
+/*  v3.0.0rc2  Release candidate 2 for major rel 3.0                 */
+/*  v3.0.0rc3  Made all / messages go to hELP, cosmetic stuff        */
+/*  v3.0.0  :  RElease 3.0 with /ROOMs announcment upon /LOGON       */
+/*  v3.0.1  :  Fix message delivery bug                              */
+/*  v3.0.2  :  Fix ExitRoom                                          */
+/*  v3.0.3  :  Add more lenient command interpretation               */
+/*  v3.0.4  :  Message delivery bug fix after timeout cleanup        */
+/*  v3.0.5  :  Prune some unneeded coce, countusers() etc            */
+/*  v3.1.0  :  Show last  chat lines upon login or /history cmd      */
+/*  v3.1.1  :  Cosmetic fixes                                        */
+/*  v3.2.0  :  Once a minute clean up inactive users automatically!  */
+/*  v3.3.0  :  Experimentally remove rooms due to poor demand for it */
+/*  v3.4.0  :  Split /HISTORY INTO /HISTORY (chats) and /USERS       */
+/*  v3.4.1  :  Some cosmetic fixes                                   */
+/*  v3.4.3  :  Added minor /VERSION feature to see what others run   */
+/*  v3.4.4  :  Made start of source easier and put init into function*/
