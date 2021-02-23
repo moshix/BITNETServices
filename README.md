@@ -1,4 +1,4 @@
-# Modern Re-Implementations of Traditional BITNET Services RELAY CHAT, TRICKLE, LISTSERV, ELIZA
+# Modern Implementations of Traditional BITNET Services RELAY CHAT, TRICKLE, LISTSERV, ELIZA
 
 
 <h1>RELAY CHAT Implementation</h1>
