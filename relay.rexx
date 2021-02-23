@@ -49,25 +49,26 @@
 /*  v3.0.2  :  Fix ExitRoom                                          */
 /*  v3.0.3  :  Add more lenient command interpretation               */
 /*  v3.0.4  :  Message delivery bug fix after timeout cleanup        */
-/*  v3.0.5  :  Prune some unneeded code, countusers() etc            */
-/*  v3.1.0  :  DOOR to TRICKLE                                       */
+/*  v3.0.5  :  Prune some unneeded coce, countusers() etc            */
+/*  v3.1.0  :  Show last  chat lines upon login or /history cmd      */
 /*  v3.1.1  :  Cosmetic fixes                                        */
 /*  v3.2.0  :  Once a minute clean up inactive users automatically!  */
 /*  v3.3.0  :  Experimentally remove rooms due to poor demand for it */
 /*  v3.4.0  :  Split /HISTORY INTO /HISTORY (chats) and /USERS       */
 /*  v3.4.1  :  Some cosmetic fixes                                   */
+/*  v3.4.2  :  Added minor /VERSION feature to see what others run   */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.4.1" /* must be configured!                       */
+relaychatversion="3.4.2" /* must be configured!                       */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1000         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="13422tr 9" /* any user with this passwd shuts down rver*/
+shutdownpswd="1t313rrr9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"      /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="wwwwww  "     /* who is the sysop for this chat server     */
-sysopemail="wwwww@gmail" /* where to contact this systop             */
+sysopname="dddddX  "     /* who is the sysop for this chat server     */
+sysopemail="ddddx@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -342,6 +343,12 @@ if errorhandler(loopmsg) > 1 then do
       when (umsg = "/HELPME") then do
            call helpuser  userid,node
       end
+      when (umsg = "/VERSION") then do
+           call version   userid,node
+      end
+      when (umsg = "/VER") then do
+           call version   userid,node
+      end
       when (umsg = "/HISTORY") then do
            call history   userid,node
       end
@@ -611,12 +618,13 @@ helpuser:
 'TELL' userid 'AT' node '/ECHO    send an echo to yourself                  '
 'TELL' userid 'AT' node '/HISTORY to see a history of recent chat messages'
 'TELL' userid 'AT' node '/USERS   to see a history of recent users logon/logoff'
+'TELL' userid 'AT' node '/VERSION for information about the current RELAY CHAT version'
 'TELL' userid 'AT' node '              '
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
  
-  totmessages = totmessages + 18
+  totmessages = totmessages + 19
 return
  
  
@@ -699,14 +707,17 @@ history:
 i=0
 found=0
 z=history.0
- 'TELL 'userid' AT 'node 'Previous 'history.0' messages             : '
+ 'TELL 'userid' AT 'node '> Previous 'history.0' messages             : '
+ totmessages = totmessages + 1
 do  i = 1 to z   by 1
    if history.i /= "" then do
-       'TELL 'userid' AT 'node '- 'history.i
+       'TELL 'userid' AT 'node '> 'history.i
+       totmessages = totmessages + 1
        found=found+1
    end
 end
-if found < 1 then 'TELL 'userid' AT 'node '...bummer... no chat history so far...'
+if found < 1 then 'TELL 'userid' AT 'node '> ...bummer... no chat history so far...'
+       totmessages = totmessages + 1
 return
  
 users:
@@ -717,13 +728,24 @@ i=0
 found=0
 z=ushistory.0
  'TELL 'userid' AT 'node 'Previous 'ushistory.0' user events        : '
+ totmessages = totmessages + 1
 do  i = 1 to z   by 1
    if ushistory.i /= "" then do
-       'TELL 'userid' AT 'node '- 'ushistory.i
+       'TELL 'userid' AT 'node '> 'ushistory.i
+       totmessages = totmessages + 1
        found=found+1
    end
 end
-if found < 1 then 'TELL 'userid' AT 'node '...bummer... no events found so far.'
+if found < 1 then 'TELL 'userid' AT 'node '> ...bummer... no events found so far.'
+       totmessages = totmessages + 1
+return
+ 
+ 
+version:
+/* send to requestor the current RELAY CHAT version                */
+  parse ARG userid,node
+'TELL' userid 'AT' node '> RELAY CHAT for z/VM, VM/ESA, VM/SP, MVS 3.8 NJE   V'relaychatversion
+totmessages = totmessages + 1
 return
  
  
