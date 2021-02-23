@@ -29,8 +29,11 @@ Commands supported by RELAY EXEC:
 4. /SYSTEM
 5. /DM       (direct message to a user)
 6. /SHUTDOWN (for sysopt only and requires password)
-7. /ROOM.    (go into room X)
-8. /ROOMS     (SHOW ALL USERS IN THEIR ROOMS)
+7. /USERS
+8. /HISTORY
+9. /VERSION
+10./LOGON
+11./LOGOFF
 
 
 
@@ -73,7 +76,6 @@ FUTURE FEATURES
 - Message throttling                                    [DONE]<br>
 - Persisting users unto a file for crash recovery<br>
 - MVS 3.8 port with BREXX[DONE]<br>
-- Chat rooms [DONE]<br>
 - recent chat history upon login [DONE]<br>
 <br><br>
 
@@ -146,6 +148,6 @@ Neale Ferguson<br>
 Bob Polmanter<br>
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: February 14, 2021<br>
+UPDATED: February 21, 2021<br>
 Moshix
 
