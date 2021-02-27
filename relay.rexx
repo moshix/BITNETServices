@@ -12,16 +12,16 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.4.4" /* must be configured!                       */
+relaychatversion="3.5.0" /* must be configured!                       */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="1t234rrr9" /* any user with this passwd shuts down rver*/
+shutdownpswd="1ttttrrr9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"      /* what kind of machine                      */
 hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="MrrrrX  "     /* who is the sysop for this chat server     */
-sysopemail="rrrrx@gmail" /* where to contact this systop             */
+sysopname="dddddddd"     /* who is the sysop for this chat server     */
+sysopemail="ddddd@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -186,6 +186,9 @@ if errorhandler(loopmsg) > 1 then do
       end
       when (umsg = "/MENU") then do
            call helpuser  userid,node
+      end
+      when (umsg = "/BENCHMARK") then do
+           call usrbenchmark userid,node
       end
       when (umsg = "/HELPME") then do
            call helpuser  userid,node
@@ -396,6 +399,7 @@ systeminfo:
     'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
     'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
     'TELL' userid 'AT' node '-> System Load          :'cpu'%'
+    'TELL' userid 'AT' node '-> This system speed    :  'sysperf'sec -- IBM z114 0.25 sec'
     if compatibility > 2 then do
        page=paging()
        rstor=rstorage()
@@ -408,12 +412,29 @@ systeminfo:
       'TELL' userid 'AT' node '-> Number of CPUs       : 'lcpus
     end
      if compatibility > 2 then do
-     totmessages = totmessages + 13
+     totmessages = totmessages + 14
      end
     else do
-     totmessages = totmessages + 9
+     totmessages = totmessages + 10
     end
 return
+ 
+usrbenchmark:
+/* send to user a fuller benchmark suite */
+    parse ARG userid,node
+  'TELL' userid 'AT' node '-> Benchmark Overiew (smaller number is better)'
+  'TELL' userid 'AT' node '-> --------------------------------------------'
+  'TELL' userid 'AT' node '->                  '
+ 
+  'TELL' userid 'AT' node '-> This system                   :  'sysperf
+  'TELL' userid 'AT' node '-> IBM z114                      :  0.225'
+  'TELL' userid 'AT' node '-> IBM zEC12                     :  0.230'
+  'TELL' userid 'AT' node '-> IBM z/PDT on Xeon 3.5Ghz      :  0.850'
+  'TELL' userid 'AT' node '-> IBM z/PDT on Xeon 2.4Ghz      :  1.250'
+  'TELL' userid 'AT' node '-> Hyperion 4.0 on Xeon 3.5Ghz   :  8.800'
+  totmessages = totmessages + 9
+return 0
+ 
  
  
 sendstats:
@@ -1025,7 +1046,10 @@ err3="Weclome to RELAY chat"
 err4="logged off now"
 loopCondition = 0        /* when a loop condition is detected this will turn to 1 */
 historypointer=1         /* pointer to last entry in history     */
-ushistorypointer=1      /* pointer to last entry in user history*/
+ushistorypointer=1       /* pointer to last entry in user history*/
+ 
+sysperf=0                /* /benchmark system performance (in sec) holder */
+ 
  
 whoamiuser=""             /* for autoconfigure                        */
 whoaminode=""
@@ -1094,6 +1118,11 @@ if inithistory() = 0 then do               /* init history vars */
 end
  CALL log('Depth of history for this run: '||history.0)
  
+ CALL LOG ('Starting relative system benchmarking')
+ sysperf=benchmark()
+ call LOG ('This system 8x8 benchmark in sec: '||sysperf||'  -- IBM z114 M05: 0.25 sec')
+ call LOG ('System solution should show 92: '||bsolution)
+ 
  CALL log('********** RELAY CHAT START **********')
  say '    ____  ____  __      __   _  _     ___  _   _    __   ____      '
  say '   (  _ \( ___)(  )    /__\ ( \/ )   / __)( )_( )  /__\ (_  _)     '
@@ -1102,9 +1131,50 @@ end
  say '                                                                   '
  say '  Welcome to RELAY CHAT for z/VM,VM/ESA,VM/SP,MVS/3.8 NJE  -  V'relaychatversion
  say ''
- 
- 
 return 0
+ 
+benchmark:
+/* benchmark relative system speed with nqueen problem 8x8 */
+elp=time('E')
+bsolution=queen(8,1)
+elp=Trunc(time('e')-elp,3) /* number of seconds */
+return elp
+ 
+QUEEN: PROCEDURE expose count
+ parse arg n,noprint
+ chess.0=copies('. + ',n%2)
+ chess.1=copies('+ . ',n%2)
+ chessAl='a b c d e f g h i j k l m n o p q r s t u v x y z'
+ count = 0
+ k = 1
+ a.k = 0
+ do while k>0
+    a.k = a.k + 1
+    do while a.k<= n & place(k) =0
+       a.k = a.k +1
+    end
+    if a.k > n then k=k-1
+    else do   /* a.k <= n */
+       if k=n then do
+          count=count+1
+       end
+       else do
+          k=k+1
+          a.k=0
+       end
+    end
+end
+return count
+ 
+place: procedure expose a. count
+/* place queens on chess board for /benchmark command */
+ parse arg ps
+ do i=1 to ps-1
+    if a.i = a.ps then return 0
+    if abs(a.i-a.ps)=(ps-i) then return 0
+ end
+return 1
+ 
  
 /*  CHANGE HISTORY                                                   */
 /*  V0.1-0.9:  testing WAKEUP mechanism                              */
@@ -1154,3 +1224,4 @@ return 0
 /*  v3.4.1  :  Some cosmetic fixes                                   */
 /*  v3.4.3  :  Added minor /VERSION feature to see what others run   */
 /*  v3.4.4  :  Made start of source easier and put init into function*/
+/*  v3.5.0  :  /BENCHMARK FEATURE TO get relatie system speed        */
