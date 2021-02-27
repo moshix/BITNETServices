@@ -34,6 +34,7 @@ Commands supported by RELAY EXEC:
 9. /VERSION
 10./LOGON
 11./LOGOFF
+12./BENCHMARK
 
 
 
@@ -77,6 +78,7 @@ FUTURE FEATURES
 - Persisting users unto a file for crash recovery<br>
 - MVS 3.8 port with BREXX[DONE]<br>
 - recent chat history upon login [DONE]<br>
+- system benchmarking for user reference and flagellation [DONE]<br>
 <br><br>
 
 
@@ -148,6 +150,6 @@ Neale Ferguson<br>
 Bob Polmanter<br>
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: February 21, 2021<br>
+UPDATED: March 1st, 2021<br>
 Moshix
 
