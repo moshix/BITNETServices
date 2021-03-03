@@ -13,18 +13,22 @@
 /*  V0.1    :  Humble beginnings                                     */
 /*  V0.2    :  Add user command history /users                       */
 /*  V0.3    :  Add /benchmark command                                */
+/*  V0.4    :  Add /store bcast: /store pswd linenr(1-5) msg         */
+/*  V0.5    :  Add /WAKEME  at time  10.10.10 or IN 10 mini          */
+/*  V0.6    :  Regular wake up of BUTLER to run scheduler            */
+/*  V0.7    :  Use double linked list instead of scheduler array     */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-butlerversion="0.1"      /* needed                                    */
-timezone="EDT"           /* adjust for your server IMPORTANT          */
-maxdormant =500          /* max time user can be dormat               */
-localnode=""             /* localnode is now autodetected as 2.7.1    */
-osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM z114"      /* what kind of machine                      */
-hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="adfasdfx  "   /* who is the sysop for this chat server     */
-sysopemail="sdfasfx@gmail" /* where to contact this systop             */
+butlerversion="0.7"       /* needed                                    */
+timezone="EDT"            /* adjust for your server IMPORTANT          */
+localnode=""              /* localnode is now autodetected as 2.7.1    */
+osversion="z/VM 6.4"      /* OS version for enquries and stats         */
+typehost="IBM z114"       /* what kind of machine                      */
+hostloc  ="Sddddddddddd"  /* where is this machine                     */
+sysopname="Mddddddd"      /* who is the sysop for this chat server     */
+sysopemail="dddddd@gmail" /* where to contact this systop             */
+postpswd="ddd"            /* password needed to store bcast msgs       */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -40,6 +44,8 @@ BIGLOCK=0                  /* RESET LOCK FOR MULTITENANT */
 returnNJEmsg="HCPMSG045E" /* messages returning for users not logged on */
 returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
 returnNJEmsg3="HCPMFS057I"/* looping error message flushed         */
+returnNJEmsg4="HCPMSG045E"/* user not logged on                    */
+returnNJEmsg5="DMSWTL648E"/* userid not found, no message sent     */
 loggedonusers = 0        /* online user at any given moment        */
 highestusers = 0         /* most users online at any given moment  */
 totmessages  = 0         /* total number of msgs sent              */
@@ -57,10 +63,10 @@ illegaluser2="ROOT"      /* we should never receive a message from these users *
 historypointer=1
 history.0=20             /* max 20 entries for user command history */
 BCASTMSG.0=5             /* MAX 5 BROADCAST LINES                  */
-BCASTMSG.1="The SysAdmin has not yet set the broadcast message"
-BCASTMSG.2=""
-BCASTMSG.3=""
-BCASTMSG.4=""
+BCASTMSG.1="Hello wonderful human and welcome to LILITH!"
+BCASTMSG.2=" LILITH is currently operating at nominal WARP speed..."
+BCASTMSG.3="No downtime is currently planned for the mainframe/HNET services"
+BCASTMSG.4="***IMPORTANT! ALL USERS MUST CHECK BROADCAST MSGS UPON LOGIN!***"
 BCASTMSG.5=""
 sysperf=0                /* /benchmark system performance (in sec) holder */
  
@@ -72,17 +78,21 @@ call initbutler          /* initalize butler and do all the fancy stuff to start
 /* This call also issues a 'SET MSG IUCV' command.         */
  
   'SET MSG IUCV'
-  "WAKEUP +0 (IUCVMSG"
  
   'MAKEBUF'
  
   Do forever;
-     'wakeup (iucvmsg QUIET'   /* wait for a message         */
-     parse pull text          /* get what was send          */
-    CurrentTime=Extime()
+     'wakeup +1 (iucvmsg QUIET'   /* wake up every minute anyway */
+/*   parse pull text   */        /* get what was send          */
      select
+           when Rc = 2 then do
+           /* timer has expired */
+           call scheduler              /* check if any scheduled slots */
+           end
+ 
         when Rc = 5 then do;  /* we have a message          */
         /* parse it                                       */
+            parse pull text
            if pos('From', text) > 0 then  do  /* from RSCS   */
               parse var text type sender . nodeuser msg
               parse var nodeuser node '(' userid '):'
@@ -138,7 +148,7 @@ handlemsg:
  
     /* below few lines: loop detector                  */
     loopmsg=SUBSTR(umsg,1,11) /* extract RSCS error msg */
- if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2 | loopmsg = returnNJEmsg3) then do
+ if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2 | loopmsg = returnNJEmsg3 loopmsg = returnNJEmsg5 ) then do
       call log('Loop detector triggered for user:  '||userid||'@'||node)
       return
     end
@@ -148,6 +158,8 @@ handlemsg:
    SELECT                             /* HANDLE MESSAGE TYPES  */
       when (umsg = "/BCAST") then
            call sendbcast    userid,node
+      when (LEFT(umsg,6) = "/STORE") then
+           call storebcast   userid,node,msg
       when (umsg = "/CPU") then
            call sendcpu      userid,node
       when (umsg = "/SYSTEM") then
@@ -165,6 +177,9 @@ handlemsg:
       when (umsg = "/HISTORY") then do
            call users   userid,node
        end
+      when (LEFT(umsg,9)g = "/FORECAST") then do
+           call forecast userid,node
+       end
  
       when (umsg = "/LOGON") then do
            call logonuser  userid,node
@@ -174,6 +189,9 @@ handlemsg:
            call helpuser  userid,node
       end
  
+      when LEFT(umsg,7) = "/WAKEME"  then do
+           call wakeme  userid,node,msg
+      end
       when (umsg = "/BENCHMARK") then do
            call usrbenchmark userid,node
        end
@@ -186,20 +204,128 @@ handlemsg:
         end
 return
  
+wakeme:
+/*this function allows user to be sent wake up message in + min or at specific time */
+ 
+ parse ARG userid,node,msg
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : WAKEME  !"
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 
+ Parse Value msg With . wtype wtime wunit
+ 
+ wtype=translate(wtype)                         /* make upper case */
+ wunit=translate(wunit)                         /* make min or hour upper */
+ if wtype /= "AT" & wtype /= "IN" then do      /* wrong type       */
+       call RESPOND userid,node,"SYNTAX: /WAKEME AT|IN TIME (MIN|HOUR)"
+       call log (histuser||" wrong type specified:  : "||wtype)
+       return -1
+  end
+ 
+ if wtype = "IN" & (wunit /= "MIN"& wunit /= "HOUR") then do
+       call RESPOND userid,node,"for /WAKEME only MIN or HOUR are allowed"
+       call log (histuser||" wrong unit specified   : "||wunit)
+       return -1
+  end
+ 
+ if wtype = "IN" & datatype(wtime,W) /= "1" then do   /* not an integer number */
+       call RESPOND userid,node,"for /WAKEME only integer hour or minute  allowed"
+       call log (histuser||" wrong time amount      : "||wtime)
+       return -1
+  end
+ 
+wnow = epochtime()                           /* exact time now in seconds since epoch */
+wadd=-5                                       /* default subtract 5 sec, so  it expires immedaitely */
+                                              /* this results in no wake up being sent to user, safe option */
+if wtype = "IN" & wunit = "MIN" then do
+   wadd=wtime * 60
+end
+ 
+if wtype = "IN" & wunit = "HOUR" then do
+   wadd=wtime * 60* 60
+end
+if wtype ="AT" then do
+   parse value wtime with phh':'pmm':'pss
+   if phh < 00 | phh > 24 then do
+       call respond userid,node,'Hour must be 00 to 24 because of the whole day rotation thing...'
+       return -1
+   end
+ 
+   if pmm < 00 | pmm > 59 then do
+       call respond userid,node,'Minutes must be between 00 and 59 dude...'
+       return -1
+   end
+ 
+   if pss < 00 | pss > 59 then do
+       call respond userid,node,'Seconds must be between 00 and 59 dude...'
+       return -1
+   end
+wfuture=0
+if wtype ="AT" then scheduletime=epochat(wtime)
+ 
+if wtype ="IN" then scheduletime = wnow+wadd      * time at which to schedule wwake up time */
+call schedule userid,node,scheduletime        /* call time scheduler */
+ 
+return 0
+ 
+storebcast:
+/* this function allows sysop/sysadmin to store bcast messages */
+ 
+ parse ARG userid,node,msg
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : STORE!!!!"
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 
+ Parse Value msg With . pswd bnum pload
+ 
+if pswd  /= postpswd then  do
+  call RESPOND userid,node,"STORE password is wrong!"
+  call log (histuser||" tried STORE of bcast with wrong password: "||msg)
+  return -1
+end
+/* ok, password was correct, let's get bcast line number and then the bcast message */
+ 
+if bnum < 1 | bnum > 5 then do
+   call RESPOND userid,node,"You must select a broadcast line 1,2,3,4 or 5 after password!"
+   call log (histuser||" didn't indicate a broadcast line in     : "||bnum)
+   return -1
+end
+bcastholder=bnum
+/* ok, we now have a broadcast line number, let's get the line content */
+ 
+  rml=length(pload)
+  if rml<10 | rml>72 then  do
+   call RESPOND userid,node,"Your broadcast line must be > 10 char, < 72 char             "
+   call log (histuser||" broadcast line length was illegal with chars : "||rml)
+   return -1
+end
+/* ok, legnth is legal, let's store in appropriate bcast container */
+bcaststr=pload
+bcastmsg.bcastholder=bcaststr
+   call RESPOND userid,node,"Your broadcast line is stored in line nr: "||bcastholder
+   call log (histuser||" stored the following bcast line:"||bcaststr)
+ 
+return 0
  
 sendbcast:
 /* SENDS TO REQUEST THE BROADCAST MESSAGE       */
  parse ARG userid,node
- histuser=userid||" @ "||node||" : BCAST "
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : BCAST    "
  call inserthistory histuser,historypointer
  if  historypointer < history.0 then historypointer=historypointer +1
  
- 
- CurrentTime=Extime()
+if node = localnode then do
    CALL RESPOND userid,node,bcastmsg.1
    do i=2 to    bcastmsg.0
       if bcastmsg.i /= " " then  CALL RESPOND userid,node,bcastmsg.i
    end
+end
+else  do
+   call RESPOND userid,node,"Broadcast is only for local users... sorry..."
+end
 return 0
  
  
@@ -208,12 +334,12 @@ systeminfo:
 /* send /SYSTEM info about this host  */
      parse ARG userid,node
      listuser = userid"@"node
- histuser=userid||" @ "||node||" : SYSINFO"
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : SYSINFO  "
  call inserthistory histuser,historypointer
  if  historypointer < history.0 then historypointer=historypointer +1
  
  
-   CurrentTime=Extime()
  
      parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
@@ -250,7 +376,8 @@ return
 sendstats:
 /* send usage statistics to whoever asks, even if not logged on */
     parse ARG userid,node
-    histuser=userid||" @ "||node||" : STATS "
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : STATS    "
     call inserthistory histuser,historypointer
     if  historypointer < history.0 then historypointer=historypointer +1
      parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
@@ -276,7 +403,8 @@ return
 helpuser:
 /* send help menu */
   parse ARG userid,node
-    histuser=userid||" @ "||node||" : HELP  "
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : HELP     "
     call inserthistory histuser,historypointer
     if  historypointer < history.0 then historypointer=historypointer +1
   listuser = userid"@"node
@@ -295,18 +423,21 @@ helpuser:
 'TELL' userid 'AT' node '/STORE     to store the broadcast message (requires pswd        '
 'TELL' userid 'AT' node '/USERS     to see history of users commands'
 'TELL' userid 'AT' node '/BENCHMARK to see the performance of this machien'
-'TELL' userid 'AT' node 'TIME       to get time zone and time of this server'
+'TELL' userid 'AT' node '/TIME      to get time zone and time of this server'
+'TELL' userid 'AT' node '/WAKEME    will wake you up at at the time specified (next 24 hours)'
+'TELL' userid 'AT' node '/FORECAST  will send you the weather forecast for your city'
 'TELL' userid 'AT' node '              '
 'TELL' userid 'AT' node ' messages with  -> are dialogues from Butler '
  
-  totmessages = totmessages + 17
+  totmessages = totmessages + 19
 return
  
  
 users:
 /* show history of last 20 chat messages to /users                 */
   parse ARG userid,node
-    histuser=userid||" @ "||node||" : USERS "
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : USERS    "
     call inserthistory histuser,historypointer
     if  historypointer < history.0 then historypointer=historypointer +1
  
@@ -329,7 +460,8 @@ return
 usrbenchmark:
 /* send to user a fuller benchmark suite */
     parse ARG userid,node
-    histuser=userid||" @ "||node||" : BENCHMARK"
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : BENCHMARK"
     call inserthistory histuser,historypointer
     if  historypointer < history.0 then historypointer=historypointer +1
  
@@ -350,7 +482,8 @@ return 0
 sendtime:
 /* send time and time zone to user */
     parse ARG userid,node
-    histuser=userid||" @ "||node||" : TIME "
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : TIME"
     call inserthistory histuser,historypointer
     if  historypointer < history.0 then historypointer=historypointer +1
  Parse Value Diag(8,'QUERY TIME') With . . timenow tz tday tdate
@@ -365,18 +498,27 @@ sendcpu:
 /* send  cpu busy of this machine */
  
     parse ARG userid,node
-    histuser=userid||" @ "||node||" : TIME "
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : CPU "
     call inserthistory histuser,historypointer
     if  historypointer < history.0 then historypointer=historypointer +1
  
     CALL RESPOND userid,node,"CPU busy average for this machine:  "cpubusy()||" %"
 return 0
  
+forecast:
+/* send weather forecast thru RELAY service */
  
+    parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : FORECAST"
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
  
- 
- 
- 
+/* extract city from /forecast xxx and send to RELAY as following:
+      smsg rscs cmd relay forecast CITY
+      */
+return 0
  
  
  
@@ -402,6 +544,31 @@ exTime:
   tt=hh*3600+mm*60+ss
 return right(dd+tt,8,'0')
  
+epochtime: procedure
+/*return date and time of now since jan 1 2021 */
+today = Date('Base')
+days = today - Date('Base', '20210101', 'Standard')
+/* TIME IS 00:09:05 EDT WEDNESDAY 03/03/21 */
+qtime=time()
+parse var qtime hh':'mm':'ss
+tt=hh*3600+mm*60+ss
+dd=days*86400
+sincepoch=tt+dd
+return sincepoch
+ 
+epochat: procedure
+/*return future epoch time based on date       */
+parse arg futuretime
+ 
+today = Date('Base')
+days = today - Date('Base', '20210101', 'Standard')
+/* TIME IS 00:09:05 EDT WEDNESDAY 03/03/21 */
+qtime=futuretime
+parse var qtime hh':'mm':'ss
+tt=hh*3600+mm*60+ss
+dd=days*86400
+sincepoch=tt+dd
+return sincepoch
  
 mytime: procedure
  timenow = left(time(),5)
@@ -417,11 +584,6 @@ mytime: procedure
  month   = left(date('month'),3)
  year    = left(date('sorted'),4)
 return timenow',' dow day month year
- 
- 
- 
- 
- 
  
 log:
 /* general logger function                */
@@ -613,6 +775,41 @@ if pointer >= history.0 then do
 end
 return 0
  
+ 
+schedule:
+/* insert schedule for wakeup in linkedin list */
+parse arg userid,node,scheduletime
+schedulecontent = userid||"@"||node||":"||scheduletime    /* jim@sevmm1 3282829 */
+call @put schedulecontent
+call log ("New Event to schedule list: "||schedulecontent)
+call log ("New list size:              "||@size())
+call respond userid,node,"Got it. You will be getting a wake up message at the specified time."
+return 0
+ 
+scheduler:
+/* called at each 1 minute by wakeup routine to send wakeme signals to users */
+i=0
+do i=0 to @size()
+sentry=@get(i)
+ if sentry="" then iterate
+ parse value sentry with sendto':'stime
+ scurrenttime=epochtime()
+   if scurrenttime > (stime-3) then do
+  /*  say "WMX: found matching scheduling slot. "*/
+      'TELL' sendto 'WAKEY WAKEY! THIS IS BUTLER WITH YOUR WAKE UP CALL!'
+       call compactor i /* tell compactor to remove entry i and compact the list */
+    end
+end
+return 0
+ 
+compactor:
+/* this s the garbage collector for the scheduler list */
+parse arg delpointer /* which entry we elminate */
+call @del delpointer
+/* here is the algorithm to compact hte list   */
+return
+ 
+ 
 benchmark:
 /* benchmark relative system speed with nqueen problem 8x8 */
 elp=time('E')
@@ -686,17 +883,100 @@ if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level
  
 call inithistory
 call log ('History initalized...')
-call log ('Exact system time now:'||timenow||" "||date)
+call log ('Exact time in seconds: '||epochtime())
+ 
+/* init double linked list of online users   */
+call @init
+ CALL log('List has been initialized.')
+ CALL log('List size: '||@size())
+if @size() /= 0 then do
+   CALL log('Linked list init has failed! Abort ')
+   signal xit;
+end
+ 
+ 
 sysperf=benchmark()
+   CALL log('Benchmark performed. This machine speeed: '||sysperf)
+ 
 CALL log('********** BUTLER  START **********')
  say '  ____  __  __  ____  __    ____  ____                      '
  say ' (  _ \(  )(  )(_  _)(  )  ( ___)(  _ \                     '
  say '  ) _ < )(__)(   )(   )(__  )__)  )   /                     '
  say ' (____/(______) (__) (____)(____)(_)\_)                     '
  say '                                                            '
- say '  for VM/SP, VM/ESA and z/VM                                '
+ say '  for VM/SP, VM/ESA and z/VM  by Moshix                     '
  say '                                                            '
- say '  Welcome to Butler                                         '
+ say '  Butler now listening for requests...                      '
  say '                                                            '
+ say '                                                            '
+ say '  Feel free to #CP DISC....                                 '
  
-return 0
+return
+ 
+p:      return word(arg(1), 1)    /*pick the first word out of many items*/
+sy:      say;
+         say left('', 30) "   " arg(1) '   ';
+         return
+@init:   $.@=;
+        @adjust: $.@=space($.@);
+        $.#=words($.@);
+        return
+@hasopt: arg o;
+        return pos(o, opt)\==0
+@size:  return $.#
+ 
+/*                                        */
+@del:   procedure expose $.;
+        arg k,m;
+        call @parms 'km'
+         _=subword($.@, k, k-1)   subword($.@, k+m)
+         $.@=_;
+         call @adjust;
+        return
+ 
+@get:    procedure expose $.;     arg k,m,dir,_
+         call @parms 'kmd'
+         do j=k  for m  by dir  while  j>0  &  j<=$.#
+             _=_ subword($.@, j, 1)
+        end   /*j*/
+         return strip(_)
+ 
+@parms:  arg opt      /*define a variable based on an option.*/
+         if @hasopt('k')  then k=min($.#+1, max(1, p(k 1)))
+         if @hasopt('m')  then m=p(m 1)
+         if @hasopt('d')  then dir=p(dir 1);
+         return
+ @put:    procedure expose $.;
+            parse arg x,k;
+            k=p(k $.#+1);
+            call @parms 'k'
+            $.@=subword($.@, 1, max(0, k-1))   x   subword($.@, k);
+            call @adjust
+         return
+ 
+@show:   procedure expose $.;
+            parse arg k,m,dir;
+            if dir==-1  &  k==''   then k=$.#
+            m=p(m $.#);
+            call @parms 'kmd';
+            say @get(k,m, dir);
+         return
+ 
+list:
+/* this is only as examples how to use the double linked list
+    for future expanesion of this program                      */
+   call sy 'initializing the list.'            ;  call @init
+   call sy 'building list: blue'               ;  call @put "blue"
+   call sy 'displaying list size.'             ;  say  "list size="@size()
+   call sy 'forward list'                      ;  call @show
+   call sy 'backward list'                     ;  call @show ,,-1
+   call sy 'showing 4th item'                  ;  call @show 4,1
+   call sy 'showing 5th & 6th items'           ;  call @show 5,2
+   call sy 'adding item before item 4: black'  ;  call @put "black",4
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to tail: white'             ;  call @put "white"
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to head: red'               ;  call @put  "red",0
+   call sy 'showing list'                      ;  call @show
+return
+ 
