@@ -17,18 +17,19 @@
 /*  V0.5    :  Add /WAKEME  at time  10.10.10 or IN 10 mini          */
 /*  V0.6    :  Regular wake up of BUTLER to run scheduler            */
 /*  V0.7    :  Use double linked list instead of scheduler array     */
+/*  V0.8    :  Fix logic in very complex (too?) wakeme module        */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-butlerversion="0.7"       /* needed                                    */
+butlerversion="0.8"       /* needed                                    */
 timezone="EDT"            /* adjust for your server IMPORTANT          */
 localnode=""              /* localnode is now autodetected as 2.7.1    */
 osversion="z/VM 6.4"      /* OS version for enquries and stats         */
 typehost="IBM z114"       /* what kind of machine                      */
-hostloc  ="Sddddddddddd"  /* where is this machine                     */
-sysopname="Mddddddd"      /* who is the sysop for this chat server     */
-sysopemail="dddddd@gmail" /* where to contact this systop             */
-postpswd="ddd"            /* password needed to store bcast msgs       */
+hostloc  ="Stockholm,SE"  /* where is this machine                     */
+sysopname="rrrrrr  "      /* who is the sysop for this chat server     */
+sysopemail="rrrrrr@gmail" /* where to contact this systop             */
+postpswd="rw2r"          /* password needed to store bcast msgs       */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -170,38 +171,34 @@ handlemsg:
            call logoffuser userid,node
            updbuff=0                 /* removed, nothing to update */
       end
-      when (umsg = "/USERS") then do
+      when (umsg = "/USERS") then
            call users   userid,node
-       end
  
-      when (umsg = "/HISTORY") then do
+      when (umsg = "/HISTORY") then
            call users   userid,node
-       end
-      when (LEFT(umsg,9)g = "/FORECAST") then do
+ 
+      when (LEFT(umsg,9)g = "/FORECAST") then
            call forecast userid,node
-       end
  
-      when (umsg = "/LOGON") then do
-           call logonuser  userid,node
-           updbuff=0                    /* already up-to-date */
-      end
-      when (umsg = "/HELP") then do
-           call helpuser  userid,node
-      end
  
-      when LEFT(umsg,7) = "/WAKEME"  then do
+ 
+      when (umsg = "/HELP") then
+          call helpuser  userid,node
+ 
+ 
+      when (LEFT(umsg,7) = "/WAKEME")  then
            call wakeme  userid,node,msg
-      end
-      when (umsg = "/BENCHMARK") then do
+ 
+ 
+      when (umsg = "/BENCHMARK") then
            call usrbenchmark userid,node
-       end
-      when (umsg = "/TIME") then do
+ 
+      when (umsg = "/TIME") then
            call sendtime userid,node
-      end
  
       otherwise
            call helpuser    userid,node,msg
-        end
+      end
 return
  
 wakeme:
@@ -234,7 +231,6 @@ wakeme:
        call log (histuser||" wrong time amount      : "||wtime)
        return -1
   end
- 
 wnow = epochtime()                           /* exact time now in seconds since epoch */
 wadd=-5                                       /* default subtract 5 sec, so  it expires immedaitely */
                                               /* this results in no wake up being sent to user, safe option */
@@ -245,6 +241,7 @@ end
 if wtype = "IN" & wunit = "HOUR" then do
    wadd=wtime * 60* 60
 end
+ 
 if wtype ="AT" then do
    parse value wtime with phh':'pmm':'pss
    if phh < 00 | phh > 24 then do
@@ -261,10 +258,11 @@ if wtype ="AT" then do
        call respond userid,node,'Seconds must be between 00 and 59 dude...'
        return -1
    end
+end
 wfuture=0
 if wtype ="AT" then scheduletime=epochat(wtime)
  
-if wtype ="IN" then scheduletime = wnow+wadd      * time at which to schedule wwake up time */
+if wtype ="IN" then scheduletime = wnow+wadd     /* time at which to schedule wwake up time */
 call schedule userid,node,scheduletime        /* call time scheduler */
  
 return 0
