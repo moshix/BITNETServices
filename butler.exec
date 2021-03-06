@@ -1,6 +1,6 @@
 /* BUTLER EXEC                         */
 /*                                     */
-/* A VM geneeral service program       */
+/* A VM general service program        */
 /* for z/VM, VM/ESA and VM/SP          */
 /* Moshix                              */
 /*                                     */
@@ -18,18 +18,20 @@
 /*  V0.6    :  Regular wake up of BUTLER to run scheduler            */
 /*  V0.7    :  Use double linked list instead of scheduler array     */
 /*  V0.8    :  Fix logic in very complex (too?) wakeme module        */
+/*  V1.0    :  First web service !! /FOREX                           */
+/*  V1.1    :  Moon phase indicator           /MOON                  */
  
  
 /* configuraiton parameters - IMPORTANT                               */
-butlerversion="0.8"       /* needed                                    */
+butlerversion="1.1"       /* needed                                    */
 timezone="EDT"            /* adjust for your server IMPORTANT          */
 localnode=""              /* localnode is now autodetected as 2.7.1    */
 osversion="z/VM 6.4"      /* OS version for enquries and stats         */
 typehost="IBM z114"       /* what kind of machine                      */
 hostloc  ="Stockholm,SE"  /* where is this machine                     */
-sysopname="rrrrrr  "      /* who is the sysop for this chat server     */
-sysopemail="rrrrrr@gmail" /* where to contact this systop             */
-postpswd="rw2r"          /* password needed to store bcast msgs       */
+sysopname="zzzzzz  "      /* who is the sysop for this chat server     */
+sysopemail="zzzzzz@gmail" /* where to contact this systop             */
+postpswd="125"            /* password needed to store bcast msgs       */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -177,6 +179,12 @@ handlemsg:
       when (umsg = "/HISTORY") then
            call users   userid,node
  
+      when (umsg = "/FOREX") then
+           call forex   userid,node
+ 
+      when (umsg = "/MOON") then
+           call moon   userid,node
+ 
       when (LEFT(umsg,9)g = "/FORECAST") then
            call forecast userid,node
  
@@ -294,8 +302,8 @@ bcastholder=bnum
 /* ok, we now have a broadcast line number, let's get the line content */
  
   rml=length(pload)
-  if rml<10 | rml>72 then  do
-   call RESPOND userid,node,"Your broadcast line must be > 10 char, < 72 char             "
+  if rml<10 | rml>95 then  do
+   call RESPOND userid,node,"Your broadcast line must be > 10 char, < 95 char             "
    call log (histuser||" broadcast line length was illegal with chars : "||rml)
    return -1
 end
@@ -326,7 +334,37 @@ else  do
 end
 return 0
  
+forex:
+/* get forex infro from relayserv.bitnet.systems/cleanforex */
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : FOREX   "
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 'ERASE FOREX OUT A'
+ 'WW2GET https://relayserver.dynu.net/cleanforex FOREX OUT A'
+  do forever
+     'EXECIO 1 DISKR FOREX OUT A (VAR LINEIN'
+      if rc<>0 then leave
+    call respond userid,node,LINEIN
+  end
+ 'FINIS' 'FOREX OUT A'
+return 0
  
+moon:
+/* get moon phase from relayserver.bitnet.systems */
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : MOON    "
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 'ERASE MOON OUT A'
+ 'WW2GET http://relayserv.dynu.net/cleanmoon MOON OUT A'
+  do forever
+     'EXECIO 1 DISKR MOON OUT A (VAR LINEIN'
+      if rc<>0 then leave
+    call respond userid,node,LINEIN
+  end
+ 'FINIS' 'MOON  OUT A'
+return 0
  
 systeminfo:
 /* send /SYSTEM info about this host  */
@@ -423,11 +461,12 @@ helpuser:
 'TELL' userid 'AT' node '/BENCHMARK to see the performance of this machien'
 'TELL' userid 'AT' node '/TIME      to get time zone and time of this server'
 'TELL' userid 'AT' node '/WAKEME    will wake you up at at the time specified (next 24 hours)'
-'TELL' userid 'AT' node '/FORECAST  will send you the weather forecast for your city'
+'TELL' userid 'AT' node '/FOREX     gets your updated foreign exchange prices from web '
+'TELL' userid 'AT' node '/MOON      check out the current moon phase!'
 'TELL' userid 'AT' node '              '
 'TELL' userid 'AT' node ' messages with  -> are dialogues from Butler '
  
-  totmessages = totmessages + 19
+  totmessages = totmessages + 20
 return
  
  
