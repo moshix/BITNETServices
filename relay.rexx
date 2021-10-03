@@ -12,16 +12,16 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.5.0" /* must be configured!                       */
+relaychatversion="3.5.1" /* must be configured!                       */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="1ttttrrr9" /* any user with this passwd shuts down rver*/
+shutdownpswd="1t333rrr9" /* any user with this passwd shuts down rver*/
 osversion="z/VM 6.4"     /* OS version for enquries and stats         */
 typehost="IBM z114"      /* what kind of machine                      */
-hostloc  ="Stockholm,SE" /* where is this machine                     */
-sysopname="dddddddd"     /* who is the sysop for this chat server     */
-sysopemail="ddddd@gmail" /* where to contact this systop             */
+hostloc  ="Timbuktu.   " /* where is this machine                     */
+sysopname="MOdsdf  "     /* who is the sysop for this chat server     */
+sysopemail="moadffdd.  " /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -425,14 +425,16 @@ usrbenchmark:
   'TELL' userid 'AT' node '-> Benchmark Overiew (smaller number is better)'
   'TELL' userid 'AT' node '-> --------------------------------------------'
   'TELL' userid 'AT' node '->                  '
+  'TELL' userid 'AT' node '-> In seconds:      '
  
   'TELL' userid 'AT' node '-> This system                   :  'sysperf
   'TELL' userid 'AT' node '-> IBM z114                      :  0.225'
   'TELL' userid 'AT' node '-> IBM zEC12                     :  0.230'
   'TELL' userid 'AT' node '-> IBM z/PDT on Xeon 3.5Ghz      :  0.850'
   'TELL' userid 'AT' node '-> IBM z/PDT on Xeon 2.4Ghz      :  1.250'
-  'TELL' userid 'AT' node '-> Hyperion 4.0 on Xeon 3.5Ghz   :  8.800'
-  totmessages = totmessages + 9
+  'TELL' userid 'AT' node '-> Hyperion 4.4 on Xeon 3.5Ghz   :  8.800'
+  'TELL' userid 'AT' node '-> Hyperion 4.4 on Xeon 2.1Ghz   : 12.010'
+  totmessages = totmessages + 11
 return 0
  
  
@@ -477,22 +479,23 @@ helpuser:
 'TELL' userid 'AT' node '                                                                  '
 'TELL' userid 'AT' node ' Welcome to RELAY CHAT for z/VM,VM/ESA,VM/SP,MVS  V'relaychatversion
 'TELL' userid 'AT' node '                                                                  '
-'TELL' userid 'AT' node '/HELP    for this chat version'
-'TELL' userid 'AT' node '/WHO     for connected users'
-'TELL' userid 'AT' node '/LOGON   to logon to this chat room and start getting chat messages'
-'TELL' userid 'AT' node '/LOGOFF  to logoff and stop getting chat messages'
-'TELL' userid 'AT' node '/STATS   for chat statistics'
-'TELL' userid 'AT' node '/SYSTEM  for info aobut this host'
-'TELL' userid 'AT' node '/ECHO    send an echo to yourself                  '
-'TELL' userid 'AT' node '/HISTORY to see a history of recent chat messages'
-'TELL' userid 'AT' node '/USERS   to see a history of recent users logon/logoff'
-'TELL' userid 'AT' node '/VERSION for information about the current RELAY CHAT version'
+'TELL' userid 'AT' node '/HELP      for this chat version'
+'TELL' userid 'AT' node '/WHO       for connected users'
+'TELL' userid 'AT' node '/LOGON     to logon to to chat and start getting chat messages'
+'TELL' userid 'AT' node '/LOGOFF    to logoff and stop getting chat messages'
+'TELL' userid 'AT' node '/STATS     for chat statistics'
+'TELL' userid 'AT' node '/SYSTEM    for info aobut this host'
+'TELL' userid 'AT' node '/ECHO      send an echo to yourself                  '
+'TELL' userid 'AT' node '/HISTORY   to see a history of recent chat messages'
+'TELL' userid 'AT' node '/USERS     to see a history of recent users logon/logoff'
+'TELL' userid 'AT' node '/VERSION   for information about the current RELAY CHAT version'
+'TELL' userid 'AT' node '/BENCHMARK for information about the current RELAY CHAT version'
 'TELL' userid 'AT' node '              '
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
  
-  totmessages = totmessages + 19
+  totmessages = totmessages + 20
 return
  
  
@@ -1225,3 +1228,4 @@ return 1
 /*  v3.4.3  :  Added minor /VERSION feature to see what others run   */
 /*  v3.4.4  :  Made start of source easier and put init into function*/
 /*  v3.5.0  :  /BENCHMARK FEATURE TO get relatie system speed        */
+/*  v3.5.1  :  Cosmetics                                             */
