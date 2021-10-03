@@ -2,8 +2,6 @@
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
-/* by collaboration of Peter Jacob,    */
-/* Neale Ferguson, Moshix              */
 /*                                     */
 /* copyright 2020, 2021  by moshix     */
 /* Apache 2.0 license                  */
