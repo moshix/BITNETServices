@@ -24,13 +24,14 @@
 # Ver 0.18 - fixed expiry of old users, add new user and count of logged on users for /STATS
 # Ver 0.19 - fixed count of max users
 # Ver 0.20 - Make sure only logged on users can send messages!
+# Ver 0.21 - Enable logging to RELAY.LOG and fix order of expiry of old users
 #
 # TODO !! UPDATE LAST ACTIVITY TIME WHEN USER SENDS MESSAGE WHICH IS NOT A COMMAND!
 
 # Global Variables
-VERSION="0.20"
+VERSION="0.21"
 MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="1xxx3RRR9"  # any user with this passwd shuts down rver
+SHUTDOWNPSWD="1TzzzzzR9"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7  "      # OS version for enquries and stats         */
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                      */
 HOSTLOC="TIMBUKTU    "    # where is this machine                     */
@@ -89,9 +90,12 @@ echo "This password can shutdown remotely: ${green}$SHUTDOWNPSWD ${reset}"
 echo "|____________________________________________________________|"
 }
 
-logit() {
-
-}
+logit () {
+# log to file all traffic and error messages
+if [ $LOG2FILE == "1" ]; then 
+  logdate=`date`
+  echo "$logdate:$1=$2" >> RELAY.LOG
+fi
 }
 load_users() {
 # first remove duplicate entries before loading
@@ -170,6 +174,7 @@ if [ -v 'onlineusers[$1]' ]; then
      # send_msg "$row" "$2"  # $2 in this case is the payload
      /usr/bin/send -m $row "> $2"
      let NUMBERMSGS++
+     logit "$1" "$2"
   done
 else 
  send_msg "$1" ">> You need to log in to send messages. /HELP or /LOGON"
@@ -206,10 +211,12 @@ send_msg () {
 # sends message and updates counter to $1 user and $2 message
 /usr/bin/send -m $1 $2
 let NUMBERMSGS++
+logit "$1" "$2"
 }
 
 handle_msg () {
 # handle a new incomign message with par $INCOMINGSENDER $INCOMINGMSG
+logit "$1" "IN[$2]"
 uppermsg=$(echo $2 | tr 'a-z' 'A-Z')
 if [[ $uppermsg == "/STATS" ]]; then
     send_msg "$1" "RELAY CHAT STATISTICS"
@@ -300,8 +307,8 @@ if read line < /root/chat/chat.pipe; then
 #     set -xT
     parse_incoming $line
     update_user "$INCOMINGSENDER" # update last seen timestamp if user exists
+    remove_old  #remove expired users before we send messages
     handle_msg "$INCOMINGSENDER" "$INCOMINGMSG"
-    remove_old  #remove expired users before we send messages SHOULD BE IDEALLY BEFORE handle_msg
 fi
 done
 
