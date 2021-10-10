@@ -25,13 +25,14 @@
 # Ver 0.19 - fixed count of max users
 # Ver 0.20 - Make sure only logged on users can send messages!
 # Ver 0.21 - Enable logging to RELAY.LOG and fix order of expiry of old users
-#
+# Ver 0.22 - /DM direct message from one user to the next
+# Ver 0.23 - Catch NJE errros and beginning of throttling algo
 # TODO !! UPDATE LAST ACTIVITY TIME WHEN USER SENDS MESSAGE WHICH IS NOT A COMMAND!
 
 # Global Variables
-VERSION="0.21"
+VERSION="0.23"
 MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="1TzzzzzR9"  # any user with this passwd shuts down rver
+SHUTDOWNPSWD="1Tzzzzzz9"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7  "      # OS version for enquries and stats         */
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                      */
 HOSTLOC="TIMBUKTU    "    # where is this machine                     */
@@ -49,6 +50,16 @@ USHISTORY=15              #  user logon/logff history n entries   */
 SILENTLOGOFF=0            #  silently logg off user by 1/min wakeup call */
 EXPIRE=30                 # expire users after n minutes
 EXPIRESECONDS=$(( 60 * $EXPIRE ))
+LASTMESSAGETIME=0         # for throttling purposes
+LASTMESSAGE1=""
+LASTMESSAGE2=""
+
+ERRORMSG1="HCPMSG045E"    # messages returning for users not logged on 
+ERRORMSG2="DMTRGX334I"    # looping error message flushed        
+ERRORMSG3="HCPMFS057I"    # RSCS not receiving message          
+ERRORMSG4="DMTPAF208E"    # Invalid user ID message            
+ERRORMSG5="DMTPAF210E"    # RSCS DMTPAF210E Invalid location  
+
 red=`tput setaf 1`
 green=`tput setaf 2`
 reset=`tput sgr0`
@@ -97,6 +108,22 @@ if [ $LOG2FILE == "1" ]; then
   echo "$logdate:$1=$2" >> RELAY.LOG
 fi
 }
+
+dm_user ()  {
+# send direct message from one user to another
+# first let's make sure we have a from user in $1
+# a to user in $2 and a message in $3
+for i in "$@"
+do
+ if [ $i == "" ]; then
+  send_msg "$1" ">> Message formatting error for /DM"
+fi
+done
+
+# we assume input is correct
+send_msg "$2" ">> DM from $1:  $3"
+}
+
 load_users() {
 # first remove duplicate entries before loading
 awk '!seen[$0]++' users.txt > onlineusers.array
@@ -209,9 +236,13 @@ printf "%s\n" ${!onlineusers[@]}|grep -q $1  && onlineusers[$1]=$datenow
 
 send_msg () {
 # sends message and updates counter to $1 user and $2 message
-/usr/bin/send -m $1 $2
-let NUMBERMSGS++
-logit "$1" "$2"
+if [ "$2" != "" ]; then
+   /usr/bin/send -m $1 $2
+   let NUMBERMSGS++
+   logit "$1" "$2"
+else
+   echo "CHAT500E General send_msg formatting error. Message is empty"
+fi
 }
 
 handle_msg () {
@@ -258,6 +289,10 @@ if [[ $uppermsg == "/LOGOFF" ]]; then
     remove_user "$1"
 fi
 
+if [[ $uppermsg == "/DM" ]]; then
+   dm_user "$1" "$2" "$3"
+fi
+
 if [[ $uppermsg == "/WHO" ]]; then
 for row in "${!onlineusers[@]}";do
     send_msg "$1" "User: $row    .......is ONLINE"
@@ -275,7 +310,8 @@ if [[ $uppermsg == "/HELP" ]]; then
    send_msg "$1" "To log off from chat server........................../LOGOFF"
    send_msg "$1" "To see details about this chat server:.............../SYSTEM"
    send_msg "$1" "To see statistics about this chat server:............/STATS"
-   send_msg "$1" "To see who is online now:...........rver:............/WHO"
+   send_msg "$1" "To see who is online now:............................/WHO"
+   send_msg "$1" "To send a direct message to another user............./DM" 
    send_msg "$1" "To see this help menu:.............................../HELP"
 fi
 
@@ -308,7 +344,12 @@ if read line < /root/chat/chat.pipe; then
     parse_incoming $line
     update_user "$INCOMINGSENDER" # update last seen timestamp if user exists
     remove_old  #remove expired users before we send messages
-    handle_msg "$INCOMINGSENDER" "$INCOMINGMSG"
+    if [[ "$INCOMINGMSG" == *"$ERRORMSG1"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG2"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG3"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG4"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG5"* ]] ; then 
+        # yes there is at at least one error message
+       echo "${red} ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG ${reset}"
+    else
+        handle_msg "$INCOMINGSENDER" "$INCOMINGMSG"
+    fi
 fi
 done
 
