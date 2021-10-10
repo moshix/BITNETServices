@@ -30,7 +30,7 @@
 # Global Variables
 VERSION="0.20"
 MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="1T3aazRR9"  # any user with this passwd shuts down rver
+SHUTDOWNPSWD="1xxx3RRR9"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7  "      # OS version for enquries and stats         */
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                      */
 HOSTLOC="TIMBUKTU    "    # where is this machine                     */
@@ -89,6 +89,10 @@ echo "This password can shutdown remotely: ${green}$SHUTDOWNPSWD ${reset}"
 echo "|____________________________________________________________|"
 }
 
+logit() {
+
+}
+}
 load_users() {
 # first remove duplicate entries before loading
 awk '!seen[$0]++' users.txt > onlineusers.array
