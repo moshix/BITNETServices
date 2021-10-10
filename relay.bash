@@ -21,13 +21,16 @@
 # Ver 0.15 - expire users after > $EXPIRE
 # Ver 0.16 - changed associative array onlineusers to just key(user) and value(time alast active)
 # Ver 0.17 - fixed bugs in handling of send_msg where recipient was not formatted correctly
+# Ver 0.18 - fixed expiry of old users, add new user and count of logged on users for /STATS
+# Ver 0.19 - fixed count of max users
+# Ver 0.20 - Make sure only logged on users can send messages!
 #
 # TODO !! UPDATE LAST ACTIVITY TIME WHEN USER SENDS MESSAGE WHICH IS NOT A COMMAND!
 
 # Global Variables
-VERSION="0.17"
+VERSION="0.20"
 MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="1T563RRR9"  # any user with this passwd shuts down rver
+SHUTDOWNPSWD="1T3aazRR9"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7  "      # OS version for enquries and stats         */
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                      */
 HOSTLOC="TIMBUKTU    "    # where is this machine                     */
@@ -106,19 +109,19 @@ done
 
 remove_old() {
 # remove expired users from associative array
- set -xT
+# set -xT
 for row in "${!onlineusers[@]}";do
   value=${onlineusers[$row]}
   retimenow=`date +%s` # date in seconds
   compvalue=$(( retimenow - value ))
   echo "for user $row resident time is: $compvalue in seconds"
-  if [ $compvalue > $EXPIRESECONDS ] ; then
+  if (( $compvalue > $EXPIRESECONDS )) ; then
     echo "user $row has exceeded their welcome.."
     remove_user "$row"
    send_msg "$row" "You have been logged out due to inactivity"  
   fi
 done
- set +xT
+# set +xT
 }
 
 
@@ -145,22 +148,34 @@ else
     send_msg "$1" ">> User: $row"
   done
   send_msg "$1" ">> /HELP for a help menu."
-let NUMBERUSERS++
-MAXUSERS=$((NUMBERUSERS+1))
-fi
+  let NUMBERUSERS++
+  if (( $NUMBERUSERS > $MAXUSERS )); then
+     MAXUSERS=$((NUMBERUSERS+1))
+  fi
+fi 
 }
 
 send_chatmsg() {
 # send non-command chat message to all logged in users $1 is user and $2 is message
 # this function only gets one parameter, ie the message
-for row in "${!onlineusers[@]}";do
-  send_msg "$row" "$1"  # $2 in this case is the payload
-done
+# make sure the sender is actually logged on!
+if [ -v 'onlineusers[$1]' ]; then
+  # yes, user is logged on and can send messages
+
+  for row in "${!onlineusers[@]}";do
+     # send_msg "$row" "$2"  # $2 in this case is the payload
+     /usr/bin/send -m $row "> $2"
+     let NUMBERMSGS++
+  done
+else 
+ send_msg "$1" ">> You need to log in to send messages. /HELP or /LOGON"
+fi
 }
 
 remove_user() {
 # remove user from array because of logout or expiry or error message NJE
-echo " "
+unset $onlineusers[$1]
+send_msg "$1" ">> You have been logged off"
 }
 
 parse_incoming() {
@@ -254,7 +269,7 @@ if [[ $uppermsg == "/HELP" ]]; then
 fi
 
 # must be a pure chat message... send it now
-if [[ ${uppermsg:0:1} != "/" ]] ; then send_chatmsg "$2"; fi
+if [[ ${uppermsg:0:1} != "/" ]] ; then send_chatmsg "$1" "$2"; fi
 #set -v -x +e
 }
 
@@ -282,7 +297,7 @@ if read line < /root/chat/chat.pipe; then
     parse_incoming $line
     update_user "$INCOMINGSENDER" # update last seen timestamp if user exists
     handle_msg "$INCOMINGSENDER" "$INCOMINGMSG"
-#    remove_old  #remove expired users before we send messages SHOULD BE IDEALLY BEFORE handle_msg
+    remove_old  #remove expired users before we send messages SHOULD BE IDEALLY BEFORE handle_msg
 fi
 done
 
