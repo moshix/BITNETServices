@@ -27,33 +27,38 @@
 # Ver 0.21 - Enable logging to RELAY.LOG and fix order of expiry of old users
 # Ver 0.22 - /DM direct message from one user to the next
 # Ver 0.23 - Catch NJE errros and beginning of throttling algo
-# TODO !! UPDATE LAST ACTIVITY TIME WHEN USER SENDS MESSAGE WHICH IS NOT A COMMAND!
+# Ver 0.24 - Fix some corner cases of funny formed non-command messages
+# Ver 0.30 - Thottling and fixes
+# Ver 0.40 - Message loop detection
+# TODO !!  - Last n users history /command
 
 # Global Variables
-VERSION="0.23"
+VERSION="0.40"
 MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="1Tzzzzzz9"  # any user with this passwd shuts down rver
-OSVERSION="RHEL 7  "      # OS version for enquries and stats         */
-TYPEHOST="GCLOUD SERVER"  # what kind of machine                      */
-HOSTLOC="TIMBUKTU    "    # where is this machine                     */
-SYSOPNAME="MOSHIX  "      # who is the sysop for this chat server     */
-SYSOPEMAIL="SOSO@SOSO  "  # where to contact this systop             */
-SYSOPUSER='ROOT'          #  sysop user who can force users out       */
-RATERWATERMARK=800        #  max msgs per minute set for this server  */
-DEBUGMODE=0               #  print debug info on RELAY console when 1 */
-SEND2ALL=1                #  0 send chat msgs to users in same room   */
-                          #  1 send chat msgs to all logged-in users  */
-LOG2FILE=1                #  all calls to log also in RELAY LOG A     */
-                          #  make sure to not run out of space !!!    */
-HISTORY=15                #  history goes back n  last chat lines */
-USHISTORY=15              #  user logon/logff history n entries   */
-SILENTLOGOFF=0            #  silently logg off user by 1/min wakeup call */
+SHUTDOWNPSWD="1T3989898"  # any user with this passwd shuts down rver
+OSVERSION="RHEL 7  "      # OS version for enquries and stats       
+TYPEHOST="GCLOUD SERVER"  # what kind of machine                     
+HOSTLOC="TIMBUKTU    "    # where is this machine                
+SYSOPNAME="MOSHIX  "      # who is the sysop for this chat server 
+SYSOPEMAIL="SOSO@SOSO  "  # where to contact this systop           
+SYSOPUSER='ROOT'          #  sysop user who can force users out     
+RATERWATERMARK=800        #  max msgs per minute set for this server 
+DEBUGMODE=0               #  print debug info on RELAY console when 1 
+SEND2ALL=1                #  0 send chat msgs to users in same room
+                          #  1 send chat msgs to all logged-in users
+LOG2FILE=1                #  all calls to log also in RELAY LOG A 
+                          #  make sure to not run out of space !!!
+HISTORY=15                #  history goes back n  last chat lines 
+USHISTORY=15              #  user logon/logff history n entries  
+SILENTLOGOFF=0            #  silently logg off user by 1/min wakeup call 
 EXPIRE=30                 # expire users after n minutes
 EXPIRESECONDS=$(( 60 * $EXPIRE ))
 LASTMESSAGETIME=0         # for throttling purposes
 LASTMESSAGE1=""
 LASTMESSAGE2=""
 
+
+loopflag="false"          # for loop detection purposes 
 ERRORMSG1="HCPMSG045E"    # messages returning for users not logged on 
 ERRORMSG2="DMTRGX334I"    # looping error message flushed        
 ERRORMSG3="HCPMFS057I"    # RSCS not receiving message          
@@ -142,6 +147,22 @@ for row in "${onlineusers[@]}";do
 done 
 }
 
+is_loop () {
+# this function finds out if there is a message loop
+# a message loop has 3 messages with the same content of beginning of previous msg
+# in the last part of the newer message
+newmsg=$INCOMINGMSG
+if [[ $newmsg == *"$LASTMESSAGE1"* ]] && [[ $newmsg == *"$LASTMESSAGE2"* ]] && [[ $newmsg == *"$LASTMESSAGE3"* ]]; then
+    # ok possible loop 
+    echo "${red}CHAT600S MESSAGE LOOP DETECT. IGNORING $newmsg ${reset}"
+    loopflag="true"
+fi
+LASTMESSAGE1=$newmsg
+LASTMESSAGE2=$LASTMESSAGE1
+LASTMESSAGE3=$LASTMESSAGE2
+}
+
+
 remove_old() {
 # remove expired users from associative array
 # set -xT
@@ -228,6 +249,28 @@ INCOMINGSENDER=`sed 's/}.*//' <<< "$1"`
 let NUMBERMSGS++
 }
 
+do_throttle () {
+# in this function we throttle depending on message/sec rate
+#time message now ($1) - time since last message= time elapsed
+#lastbfore variable contains message tstamp of message before last
+let receivedmsgnumber++ # update number of incoming messages
+last=$1
+elapsed=$((last - lastbefore))
+if (($receivedmsgnumber == 0 )); then
+  receivedmsgnumber = 1 # avoid division by zero
+fi
+watermark=$((elapsed / receivedmsgnumber))
+if ((watermark > 50 )); then
+  echo "CHAT800S 50 / SEC WATERMARK REACHED. PAUSING 0.5S"
+
+  sleep 0.5s
+fi
+if ((watermark >> 100 )); then
+  echo "CHAT801S 100  / SEC WATERMARK REACHED. PAUSING 1S"
+  sleep 1s
+fi
+lastbefore=`date +%s` # reset laste before message tdate
+}
 
 update_user () {
 datenow=`date +%s`
@@ -316,11 +359,15 @@ if [[ $uppermsg == "/HELP" ]]; then
 fi
 
 # must be a pure chat message... send it now
-if [[ ${uppermsg:0:1} != "/" ]] ; then send_chatmsg "$1" "$2"; fi
+if [[ ${uppermsg:0:1} != "/" ]] ; then
+   send_chatmsg "$1" "$2"
+else 
+   uppermsg="=/="
+ fi
 #set -v -x +e
 }
 
-# start of program, le'ts load users list from file
+# start of program, lets load users list from file
 init_system
 # MAINLOOP  to make editor search easy
 #load_users
@@ -333,28 +380,35 @@ while true
 do
 if read line < /root/chat/chat.pipe; then
 
-    if [[ $line == "SHUTDOWN" ]]; then
-            break
-    fi
     echo "incoming raw message: $line"
+    # do we need to throttle?
+    if (( lastbefore == 0 )); then 
+       lastbefore=`date +%s`
+    fi
+    messagetstamp=`date +%s`
+    do_throttle "$messagetstamp"
+    
     # process incoming message now
     # search if sender is in onlineusers, and if so adjust last seen time
     # if not, then look for message payload and then process it in a select structure
-#     set -xT
-    parse_incoming $line
-    update_user "$INCOMINGSENDER" # update last seen timestamp if user exists
-    remove_old  #remove expired users before we send messages
-    if [[ "$INCOMINGMSG" == *"$ERRORMSG1"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG2"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG3"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG4"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG5"* ]] ; then 
-        # yes there is at at least one error message
-       echo "${red} ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG ${reset}"
-    else
-        handle_msg "$INCOMINGSENDER" "$INCOMINGMSG"
-    fi
-fi
+
+    parse_incoming "$line"
+    is_loop "$INCOMINGMSG"  
+
+       update_user "$INCOMINGSENDER"
+       remove_old
+       if [[ "$INCOMINGMSG" == *"$ERRORMSG1"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG2"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG3"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG4"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG5"* ]]; then 
+            echo "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "
+       else
+           if [[ "$loopflag" != "true" ]]; then
+             handle_msg "$INCOMINGSENDER" "$INCOMINGMSG"
+             loopflag="false"
+           fi
+       fi
+  fi
+
 done
 
-
 # time to shutdown 
-
 save_users
 exit
