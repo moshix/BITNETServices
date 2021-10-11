@@ -84,7 +84,14 @@ FUTURE FEATURES
 - system benchmarking for user reference and flagellation [DONE]<br>
 <br><br>
 
+relay.bash for Linux
+====================
+<br>
+This is an implementation of relay chat for funetnje, or #unixnje or Sine Nomine Associates NJE NJE serves on Linux. 
+<br>
+It does all the things that RELAY CHAT on MVS 3.8 does, including throttling, loop detection and user to user direct messagging. 
 
+<br><br>
 RELAY CHAT History
 ------------------
 
