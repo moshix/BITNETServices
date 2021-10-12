@@ -30,12 +30,13 @@
 # Ver 0.24 - Fix some corner cases of funny formed non-command messages
 # Ver 0.30 - Thottling and fixes
 # Ver 0.40 - Message loop detection
+# Ver 0.50 - Better logging
 # TODO !!  - Last n users history /command
 
 # Global Variables
-VERSION="0.40"
+VERSION="0.50"
 MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="1T3989898"  # any user with this passwd shuts down rver
+SHUTDOWNPSWD="1T8889989"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7  "      # OS version for enquries and stats       
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                     
 HOSTLOC="TIMBUKTU    "    # where is this machine                
@@ -114,6 +115,13 @@ if [ $LOG2FILE == "1" ]; then
 fi
 }
 
+log_error () {
+# log to file all traffic and error messages
+  logdate=`date`
+  echo "$logdate:$1" >> RELAY.ERROR
+}
+
+
 dm_user ()  {
 # send direct message from one user to another
 # first let's make sure we have a from user in $1
@@ -155,6 +163,7 @@ newmsg=$INCOMINGMSG
 if [[ $newmsg == *"$LASTMESSAGE1"* ]] && [[ $newmsg == *"$LASTMESSAGE2"* ]] && [[ $newmsg == *"$LASTMESSAGE3"* ]]; then
     # ok possible loop 
     echo "${red}CHAT600S MESSAGE LOOP DETECT. IGNORING $newmsg ${reset}"
+    log_error "CHAT600S MESSAGE LOOP DETECT. IGNORING $newmsg "
     loopflag="true"
 fi
 LASTMESSAGE1=$newmsg
@@ -173,6 +182,7 @@ for row in "${!onlineusers[@]}";do
   echo "for user $row resident time is: $compvalue in seconds"
   if (( $compvalue > $EXPIRESECONDS )) ; then
     echo "user $row has exceeded their welcome.."
+    log_error "user $row has exceeded no activity time limit and has been logged out. "
     remove_user "$row"
    send_msg "$row" "You have been logged out due to inactivity"  
   fi
@@ -262,11 +272,13 @@ fi
 watermark=$((elapsed / receivedmsgnumber))
 if ((watermark > 50 )); then
   echo "CHAT800S 50 / SEC WATERMARK REACHED. PAUSING 0.5S"
+  log_error "CHAT800S 50 / SEC WATERMARK REACHED. PAUSING 0.5S"
 
   sleep 0.5s
 fi
 if ((watermark >> 100 )); then
   echo "CHAT801S 100  / SEC WATERMARK REACHED. PAUSING 1S"
+  log_error "CHAT801S 100  / SEC WATERMARK REACHED. PAUSING 1S"
   sleep 1s
 fi
 lastbefore=`date +%s` # reset laste before message tdate
@@ -285,6 +297,7 @@ if [ "$2" != "" ]; then
    logit "$1" "$2"
 else
    echo "CHAT500E General send_msg formatting error. Message is empty"
+   log_error "CHAT500E General send_msg formatting error. Message is empty"
 fi
 }
 
@@ -399,6 +412,7 @@ if read line < /root/chat/chat.pipe; then
        remove_old
        if [[ "$INCOMINGMSG" == *"$ERRORMSG1"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG2"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG3"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG4"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG5"* ]]; then 
             echo "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "
+            log_error "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "
        else
            if [[ "$loopflag" != "true" ]]; then
              handle_msg "$INCOMINGSENDER" "$INCOMINGMSG"
