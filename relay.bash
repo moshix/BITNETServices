@@ -30,13 +30,14 @@
 # Ver 0.24 - Fix some corner cases of funny formed non-command messages
 # Ver 0.30 - Thottling and fixes
 # Ver 0.40 - Message loop detection
-# Ver 0.50 - Better logging
+# Ver 0.50 - better logging
+# Ver 0.51 - splah screens / more color options
 # TODO !!  - Last n users history /command
 
 # Global Variables
-VERSION="0.50"
+VERSION="0.51"
 MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="1T8889989"  # any user with this passwd shuts down rver
+SHUTDOWNPSWD="777777777"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7  "      # OS version for enquries and stats       
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                     
 HOSTLOC="TIMBUKTU    "    # where is this machine                
@@ -68,6 +69,11 @@ ERRORMSG5="DMTPAF210E"    # RSCS DMTPAF210E Invalid location
 
 red=`tput setaf 1`
 green=`tput setaf 2`
+yellow=`tput setaf 3`
+blue=`tput setaf 4`
+magenta=`tput setaf 5`
+cyan=`tput setaf 6`
+white=`tput setaf 7`
 reset=`tput sgr0`
 # echo "${red}red text ${green}green text${reset}"
 
@@ -87,17 +93,24 @@ MAXUSERS=0                 # maximum number of users seen online
 # in VIM search for MAINLOOP to get there
 
 init_system() {
-echo " " 
-echo " " 
-echo " " 
+clear
+echo " ${cyan}" 
+echo "   ____  ____  __      __   _  _     ___  _   _    __   ____     "
+echo "  (  _ \( ___)(  )    /__\ ( \/ )   / __)( )_( )  /__\ (_  _)    " 
+echo "   )   / )__)  )(__  /(__)\ \  /   ( (__  ) _ (  /(__)\  )(      "  
+echo "  (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)     "  
+echo "${reset}"
+echo "${yellow}Welcome to RELAY CHAT NJE for funetnje, SNA NJE on Linux  ${reset}"
 echo " " 
 echo " " 
 echo  "${red}RELAY CHAT ${green}v$VERSION ${red}SERVER BASH VERSION STARTING...${reset}"
+echo  "${red}This is the chat server console.${reset}"
 echo " " 
 echo "Start time registered: $STARTTIME"
-echo " " 
+echo "${magenta} " 
 echo "ENVIRONMENT: "
 echo "-------------"
+echo "${reset}"
 scpu=$(cat /proc/stat | awk '/cpu/{printf("%.2f%\n"), ($2+$4)*100/($2+$4+$5)}' |  awk '{print $0}' | head -1)
 echo "CPU load currently at ${green}$scpu ${reset}"
 echo "Users expire after ${green}$EXPIRE ${reset} minutes"
@@ -105,6 +118,10 @@ echo "Users expire after ${green}$EXPIRESECONDS ${reset} in seconds"
 echo "This user and host: ${green}$MYNODENAME ${reset}"
 echo "This password can shutdown remotely: ${green}$SHUTDOWNPSWD ${reset}"
 echo "|____________________________________________________________|"
+echo " "
+echo " "
+echo "Console messages below: "
+echo " "
 }
 
 logit () {
@@ -316,8 +333,7 @@ fi
 
 if [[ $uppermsg == "/SYSTEM" ]]; then
 scpu=$(cat /proc/stat | awk '/cpu/{printf("%.2f%\n"), ($2+$4)*100/($2+$4+$5)}' |  awk '{print $0}' | head -1)
-   send_msg "$1" "RELAY CHAT SYSTEM INFO"
-   send_msg "$1" "======================"
+   send_msg "$1" "Welcome to RELAY CHAT NJE for funetnje, SNA NJE on Linux         "
    send_msg "$1" "Chat Server version:..............$VERSION"
    send_msg "$1" "This chat server up since:........$STARTTIME"
    send_msg "$1" "Contact SYSOP at:.................$SYSOPEMAIL"
