@@ -31,7 +31,7 @@
 # Ver 0.30 - Thottling and fixes
 # Ver 0.40 - Message loop detection
 # Ver 0.50 - better logging
-# Ver 0.51 - splah screens / more color options
+# Ver 0.51 - splash screens / more color options / cosmetics
 # TODO !!  - Last n users history /command
 
 # Global Variables
@@ -82,7 +82,7 @@ reset=`tput sgr0`
 declare -A onlineusers    # importnat associative array ! structure:
                           # onliners[MAINT@SEVMM1]=TIME_OF_LAST_INTERACTION+"%ROOM"
 #STARTTIME=`date +%s`
-STARTTIME=`date +%m-%d-%Y`
+STARTTIME=`date`
 
 INCOMINGSENDER=""          # sender of currently incoming message
 INCOMINGMSG=""             # this incoming message in handling
@@ -102,21 +102,17 @@ echo "  (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)     "
 echo "${reset}"
 echo "${yellow}Welcome to RELAY CHAT NJE for funetnje, SNA NJE on Linux  ${reset}"
 echo " " 
-echo " " 
 echo  "${red}RELAY CHAT ${green}v$VERSION ${red}SERVER BASH VERSION STARTING...${reset}"
 echo  "${red}This is the chat server console.${reset}"
-echo " " 
 echo "Start time registered: $STARTTIME"
 echo "${magenta} " 
-echo "ENVIRONMENT: "
-echo "-------------"
-echo "${reset}"
+echo "ENVIRONMENT:${reset} "
 scpu=$(cat /proc/stat | awk '/cpu/{printf("%.2f%\n"), ($2+$4)*100/($2+$4+$5)}' |  awk '{print $0}' | head -1)
-echo "CPU load currently at ${green}$scpu ${reset}"
-echo "Users expire after ${green}$EXPIRE ${reset} minutes"
-echo "Users expire after ${green}$EXPIRESECONDS ${reset} in seconds"
-echo "This user and host: ${green}$MYNODENAME ${reset}"
-echo "This password can shutdown remotely: ${green}$SHUTDOWNPSWD ${reset}"
+echo "CPU load currently at.................${green}$scpu ${reset}"
+echo "Users expire after minutes............${green}$EXPIRE ${reset}"
+echo "Users expire after seconds............${green}$EXPIRESECONDS ${reset}"
+echo "This user and host................... ${green}$MYNODENAME ${reset}"
+echo "This password can shutdown remotely.. ${green}$SHUTDOWNPSWD ${reset}"
 echo "|____________________________________________________________|"
 echo " "
 echo " "
