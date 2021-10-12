@@ -89,7 +89,8 @@ relay.bash for Linux
 <br>
 This is an implementation of relay chat for funetnje, or #unixnje or Sine Nomine Associates NJE NJE serves on Linux. 
 <br>
-It does all the things that RELAY CHAT on MVS 3.8 does, including throttling, loop detection and user to user direct messagging. 
+It does all the things that RELAY CHAT on MVS 3.8 does, including throttling, loop detection and user to user direct messagging. <br>
+It requires bash v4.2 or greater. In this source code I use bash v5.10 but it's equivalen to v4.2.69 for the purposes of this program. 
 
 <br><br>
 RELAY CHAT History
