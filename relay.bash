@@ -1,8 +1,12 @@
-#!/bin/bash
+#!/bin/bash510
 # RELAY CHAT SERVER WITH FEDERATION
 # COPYRIGHT 2021 BY MOSHIX
 # This script is loaded at boot time and stays residdent reading from a named pipe
 # This requires bash > 4.2.0
+# best start this program like this:
+# nohup ./relay.bash 0<&- &> my.log.file &
+# this way the program runs in background and detaches from tty
+# .. or use tmux/screen
 #
 # Ver 0.01 - Start to create skeleton
 # Ver 0.02 - Added main persistence functions
@@ -33,7 +37,7 @@
 # Ver 0.50 - better logging
 # Ver 0.51 - splash screens / more color options / cosmetics
 # Ver 0.60 - Beginning of federation - announce to other systems
-# Ver 0.61 - History reporting
+# Ver 0.61 - History reporting / more cosmetics and USR1 signal catching
 # TODO !!  - Last n users history /command
 
 # Global Variables
@@ -417,7 +421,12 @@ else
  fi
 #set -v -x +e
 }
+trap process_USR1 SIGUSR1
 
+process_USR1() {
+    echo 'Got signal USR1'
+    exit 0
+}
 # start of program, lets load users list from file
 init_system
 
