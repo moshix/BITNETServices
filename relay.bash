@@ -42,10 +42,11 @@
 # Ver 0.60 - Beginning of federation - announce to other systems
 # Ver 0.61 - more cosmetics and USR1 signal catching
 # Ver 0.65 - trap exit and cleanup
+# Ver 0.66 - fix CPU busy calculation
 # TODO !!  - Last n users history /command
 
 # Global Variables
-VERSION="0.61"
+VERSION="0.66"
 MYNODENAME="ROOT@RELAY"
 SHUTDOWNPSWD="777777777"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7 "       # OS version for enquries and stats       
@@ -70,6 +71,7 @@ LASTMESSAGETIME=0         # for throttling purposes
 LASTMESSAGE1=""
 LASTMESSAGE2=""
 
+PIPE="/root/chat/chat.pipe" # location of pipe
 
 loopflag="false"          # for loop detection purposes 
 ERRORMSG1="HCPMSG045E"    # messages returning for users not logged on 
@@ -118,7 +120,7 @@ echo "  (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)     "
 echo "${reset}"
 echo "${yellow}Welcome to RELAY CHAT NJE for funetnje, SNA NJE on Linux  ${reset}"
 echo " " 
-echo  "${red}RELAY CHAT ${green}v$VERSION ${red}SERVER BASH VERSION STARTING...${reset}" ; tput sgr0
+echo  "${red}RELAY CHAT ${green}v$VERSION ${red}SERVER BASH VERSION STARTING...${reset}" 
 result=`check_pipe`
 echo "result: $result"
 if [[ $result != "true" ]]; then
@@ -128,7 +130,8 @@ echo  "${red}This is the chat server console.${reset}"
 echo "Start time registered: $STARTTIME"
 echo "${magenta} " 
 echo "ENVIRONMENT:${reset} "
-scpu=$(cat /proc/stat | awk '/cpu/{printf("%.2f%\n"), ($2+$4)*100/($2+$4+$5)}' |  awk '{print $0}' | head -1)
+scpu=`awk '{u=$2+$4; t=$2+$4+$5; if (NR==1){u1=u; t1=t;} else print ($2+$4-u1) * 100 / (t-t1) "%"; }' \
+<(grep 'cpu ' /proc/stat) <(sleep 1;grep 'cpu ' /proc/stat)`
 echo "CPU load currently at.................${green}$scpu ${reset}"
 echo "Users expire after minutes............${green}$EXPIRE ${reset}"
 echo "Users expire after seconds............${green}$EXPIRESECONDS ${reset}"
@@ -137,22 +140,29 @@ echo "This password can shutdown remotely.. ${green}$SHUTDOWNPSWD ${reset}"
 echo "|____________________________________________________________|"
 echo " "
 echo " "
-echo "RELAY CHAT is now running. Console messages below: " ; tput sgr0
+echo "RELAY CHAT is now running. Console messages below: ${reset} " 
 echo " "
 }
 
 cleanup () {
 # clean up and notify user before exiting
-tput rev 
-echo "${red}         RELAY CHAT exiting gracefully now. Wait... " ; tput sgr0
+echo "${rev}${red}         RELAY CHAT exiting gracefully now. Wait...       ${reset} "
 # announce to federated nodes that I am exiting
 # announce_exit
 # handle any last incoming messages before quitting to flush pipe
 # this will wait for 1 seconds if there is anything coming in, then shutdown 
-sleep 2s
-#now exit
-echo "Nothing in pipeline. Exiting now."
-echo "RELAY CHAT: good bye"
+exec 7<>$PIPE
+read -t 2 <&7; echo "RELAY CHAT emptying the NJE pipe now..."
+echo " "
+local content=$?
+if [[ $content != *"@"* ]]; then
+  # whatever is in pipe is not an NJE message
+  echo "Nothing else in the NJE pipe."
+  echo "RELAY CHAT: good bye"
+else
+  echo "${yellow} This NJE message will be lost: $content ${reset}"
+  echo "RELAY CHAT: good bye"
+fi
 exit
 }
 
@@ -381,7 +391,8 @@ if [[ $uppermsg == "/STATS" ]]; then
 fi
 
 if [[ $uppermsg == "/SYSTEM" ]]; then
-scpu=$(cat /proc/stat | awk '/cpu/{printf("%.2f%\n"), ($2+$4)*100/($2+$4+$5)}' |  awk '{print $0}' | head -1)
+scpu=`awk '{u=$2+$4; t=$2+$4+$5; if (NR==1){u1=u; t1=t;} else print ($2+$4-u1) * 100 / (t-t1) "%"; }' \
+<(grep 'cpu ' /proc/stat) <(sleep 1;grep 'cpu ' /proc/stat)`
    send_msg "$1" "Welcome to RELAY CHAT NJE for funetnje, SNA NJE on Linux         "
    send_msg "$1" "Chat Server version:..............$VERSION"
    send_msg "$1" "This chat server up since:........$STARTTIME"
@@ -481,7 +492,7 @@ if read line < /root/chat/chat.pipe; then
        update_user "$INCOMINGSENDER"
        remove_old
  if [[ "$INCOMINGMSG" == *"$ERRORMSG1"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG2"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG3"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG4"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG5"* ]]; then 
-          tpu blink; tput rev;  echo "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "; tput sgr0
+          echo "${blink} ${rev} ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG ${reset}"
             log_error "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "
        else
            if [[ "$loopflag" != "true" ]]; then
