@@ -107,7 +107,12 @@ echo "  (_)\_)(____)(____)(__)(__)(__)    \___)(_) (_)(__)(__)(__)     "
 echo "${reset}"
 echo "${yellow}Welcome to RELAY CHAT NJE for funetnje, SNA NJE on Linux  ${reset}"
 echo " " 
-echo  "${red}RELAY CHAT ${green}v$VERSION ${red}SERVER BASH VERSION STARTING...${reset}"
+echo  "${red}RELAY CHAT ${green}v$VERSION ${red}SERVER BASH VERSION STARTING...${reset}" ; tput sgr0
+result=`check_pipe`
+echo "result: $result"
+if [[ $result != "true" ]]; then
+ tput blink; tput rev;  echo -e  "\033[33;5mNamed pipe /root/chat/chat.pipe does not exist!! RELAY CHAT shutting down now !!\033[0m" ; tput sgr0 
+fi
 echo  "${red}This is the chat server console.${reset}"
 echo "Start time registered: $STARTTIME"
 echo "${magenta} " 
@@ -120,10 +125,22 @@ echo "This user and host................... ${green}$MYNODENAME ${reset}"
 echo "This password can shutdown remotely.. ${green}$SHUTDOWNPSWD ${reset}"
 echo "|____________________________________________________________|"
 echo " "
-echo " "
-echo "Console messages below: "
+echo " "; tput blink
+echo "RELAY CHAT is now running. Console messages below: " ; tput sgr0
 echo " "
 }
+
+check_pipe () {
+# this function checks if the named pipe exists
+# -p checks for named pipe, -f for regular file
+local FILE=/root/chat/chat.pipe
+if test -p "$FILE"; then
+    echo "true"
+else
+    echo "false"
+fi
+}
+
 
 logit () {
 # log to file all traffic and error messages
@@ -430,8 +447,8 @@ if read line < /root/chat/chat.pipe; then
 
        update_user "$INCOMINGSENDER"
        remove_old
-       if [[ "$INCOMINGMSG" == *"$ERRORMSG1"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG2"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG3"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG4"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG5"* ]]; then 
-            echo "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "
+ if [[ "$INCOMINGMSG" == *"$ERRORMSG1"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG2"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG3"* ]] || [[ "$INCOMINGMSG" == *"$ERRORMSG4"* ]]  || [[ "$INCOMINGMSG" == *"$ERRORMSG5"* ]]; then 
+          tpu blink; tput rev;  echo "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "; tput sgr0
             log_error "ATTENTION NJE ERROR MESSAGE DETECTED. IGNORING INCOMING MESSAGE: $INCOMINGMSG "
        else
            if [[ "$loopflag" != "true" ]]; then
