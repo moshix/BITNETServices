@@ -1,7 +1,7 @@
-#!/bin/bash510
+#!/bin/bash
 # RELAY CHAT SERVER WITH FEDERATION
 # COPYRIGHT 2021 BY MOSHIX
-# This script is loaded at boot time and stays residdent
+# This script is loaded at boot time and stays residdent reading from a named pipe
 # This requires bash > 4.2.0
 #
 # Ver 0.01 - Start to create skeleton
@@ -19,7 +19,7 @@
 # Ver 0.13 - handle color for RELAY console and start up messages
 # Ver 0.14 - handle logoff
 # Ver 0.15 - expire users after > $EXPIRE
-# Ver 0.16 - changed associative array onlineusers to just key(user) and value(time alast active)
+# Ver 0.16 - associative array onlineusers now  just key(user) and value(time last active)
 # Ver 0.17 - fixed bugs in handling of send_msg where recipient was not formatted correctly
 # Ver 0.18 - fixed expiry of old users, add new user and count of logged on users for /STATS
 # Ver 0.19 - fixed count of max users
@@ -32,13 +32,15 @@
 # Ver 0.40 - Message loop detection
 # Ver 0.50 - better logging
 # Ver 0.51 - splash screens / more color options / cosmetics
+# Ver 0.60 - Beginning of federation - announce to other systems
+# Ver 0.61 - History reporting
 # TODO !!  - Last n users history /command
 
 # Global Variables
-VERSION="0.51"
+VERSION="0.61"
 MYNODENAME="ROOT@RELAY"
 SHUTDOWNPSWD="777777777"  # any user with this passwd shuts down rver
-OSVERSION="RHEL 7  "      # OS version for enquries and stats       
+OSVERSION="RHEL 7 "       # OS version for enquries and stats       
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                     
 HOSTLOC="TIMBUKTU    "    # where is this machine                
 SYSOPNAME="MOSHIX  "      # who is the sysop for this chat server 
@@ -50,6 +52,7 @@ SEND2ALL=1                #  0 send chat msgs to users in same room
                           #  1 send chat msgs to all logged-in users
 LOG2FILE=1                #  all calls to log also in RELAY LOG A 
                           #  make sure to not run out of space !!!
+FEDERATION=0              #  Do we want federation? =1 yes, =0 no
 HISTORY=15                #  history goes back n  last chat lines 
 USHISTORY=15              #  user logon/logff history n entries  
 SILENTLOGOFF=0            #  silently logg off user by 1/min wakeup call 
@@ -77,6 +80,8 @@ white=`tput setaf 7`
 reset=`tput sgr0`
 # echo "${red}red text ${green}green text${reset}"
 
+# list of nodes to federate with
+declare -A federationnodes
 
 # users array here!! 
 declare -A onlineusers    # importnat associative array ! structure:
@@ -132,6 +137,10 @@ log_error () {
 # log to file all traffic and error messages
   logdate=`date`
   echo "$logdate:$1" >> RELAY.ERROR
+}
+
+announce_nodes () {
+log_error "DMPTY announce_nodes() "
 }
 
 
@@ -394,12 +403,11 @@ else
 
 # start of program, lets load users list from file
 init_system
+
 # MAINLOOP  to make editor search easy
 #load_users
-#remove_old # remove users older than EXPIRE minutes 
 
 # process incoming message
-# BIGDO big do looop
 
 while true
 do
