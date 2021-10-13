@@ -8,6 +8,9 @@
 # this way the program runs in background and detaches from tty
 # .. or use tmux/screen
 #
+# DEPENDENCIES:
+# - bash > 4.20 
+#
 # Ver 0.01 - Start to create skeleton
 # Ver 0.02 - Added main persistence functions
 # Ver 0.03 - Read from named pipe
@@ -37,7 +40,8 @@
 # Ver 0.50 - better logging
 # Ver 0.51 - splash screens / more color options / cosmetics
 # Ver 0.60 - Beginning of federation - announce to other systems
-# Ver 0.61 - History reporting / more cosmetics and USR1 signal catching
+# Ver 0.61 - more cosmetics and USR1 signal catching
+# Ver 0.65 - trap exit and cleanup
 # TODO !!  - Last n users history /command
 
 # Global Variables
@@ -74,6 +78,7 @@ ERRORMSG3="HCPMFS057I"    # RSCS not receiving message
 ERRORMSG4="DMTPAF208E"    # Invalid user ID message            
 ERRORMSG5="DMTPAF210E"    # RSCS DMTPAF210E Invalid location  
 
+# terminal handling globals
 red=`tput setaf 1`
 green=`tput setaf 2`
 yellow=`tput setaf 3`
@@ -81,6 +86,8 @@ blue=`tput setaf 4`
 magenta=`tput setaf 5`
 cyan=`tput setaf 6`
 white=`tput setaf 7`
+blink=`tput blink`
+rev=`tput rev`
 reset=`tput sgr0`
 # echo "${red}red text ${green}green text${reset}"
 
@@ -129,10 +136,26 @@ echo "This user and host................... ${green}$MYNODENAME ${reset}"
 echo "This password can shutdown remotely.. ${green}$SHUTDOWNPSWD ${reset}"
 echo "|____________________________________________________________|"
 echo " "
-echo " "; tput blink
+echo " "
 echo "RELAY CHAT is now running. Console messages below: " ; tput sgr0
 echo " "
 }
+
+cleanup () {
+# clean up and notify user before exiting
+tput rev 
+echo "${red}         RELAY CHAT exiting gracefully now. Wait... " ; tput sgr0
+# announce to federated nodes that I am exiting
+# announce_exit
+# handle any last incoming messages before quitting to flush pipe
+# this will wait for 1 seconds if there is anything coming in, then shutdown 
+sleep 2s
+#now exit
+echo "Nothing in pipeline. Exiting now."
+echo "RELAY CHAT: good bye"
+exit
+}
+
 
 check_pipe () {
 # this function checks if the named pipe exists
@@ -428,6 +451,7 @@ process_USR1() {
     exit 0
 }
 # start of program, lets load users list from file
+trap cleanup EXIT
 init_system
 
 # MAINLOOP  to make editor search easy
