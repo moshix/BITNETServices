@@ -43,10 +43,11 @@
 # Ver 0.61 - more cosmetics and USR1 signal catching
 # Ver 0.65 - trap exit and cleanup
 # Ver 0.66 - fix CPU busy calculation
-# TODO !!  - Last n users history /command
+# Ver 0.70 - History of last n users
+# TODO !!  - 
 
 # Global Variables
-VERSION="0.66"
+VERSION="0.70"
 MYNODENAME="ROOT@RELAY"
 SHUTDOWNPSWD="777777777"  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7 "       # OS version for enquries and stats       
@@ -95,6 +96,9 @@ reset=`tput sgr0`
 
 # list of nodes to federate with
 declare -A federationnodes
+
+# last N users seen online
+declare -A lastusers
 
 # users array here!! 
 declare -A onlineusers    # importnat associative array ! structure:
@@ -152,7 +156,7 @@ echo "${rev}${red}         RELAY CHAT exiting gracefully now. Wait...       ${re
 # handle any last incoming messages before quitting to flush pipe
 # this will wait for 1 seconds if there is anything coming in, then shutdown 
 exec 7<>$PIPE
-read -t 2 <&7; echo "RELAY CHAT emptying the NJE pipe now..."
+read -t 1 <&7; echo "RELAY CHAT emptying the NJE pipe now..."
 echo " "
 local content=$?
 if [[ $content != *"@"* ]]; then
@@ -163,6 +167,8 @@ else
   echo "${yellow} This NJE message will be lost: $content ${reset}"
   echo "RELAY CHAT: good bye"
 fi
+rm recent.tmp
+rm sorted.recent.tmp # clean up old files from last_seen function
 exit
 }
 
@@ -255,7 +261,7 @@ for row in "${!onlineusers[@]}";do
   value=${onlineusers[$row]}
   retimenow=`date +%s` # date in seconds
   compvalue=$(( retimenow - value ))
-  echo "for user $row resident time is: $compvalue in seconds"
+  #echo "for user $row resident time is: $compvalue in seconds"
   if (( $compvalue > $EXPIRESECONDS )) ; then
     echo "user $row has exceeded their welcome.."
     log_error "user $row has exceeded no activity time limit and has been logged out. "
@@ -273,6 +279,37 @@ remove_old #first remove expired users
 printf "%s\n" "${onlineusers[*]}"  > users.txt
 }
 
+printarr() { 
+declare -n __p="$1"
+for k in "${!__p[@]}"; do
+   printf "%s %s\n" "$k" "${__p[$k]}" > recent.tmp
+ done  
+}  
+
+
+last_seen () {
+# send list of last seen $HISTORY users to $1
+printarr onlineusers # print to recent.tmp
+head "-$HISTORY" recent.tmp | sort -k2 -n  > sorted.recent.tmp
+readarray -t lines < sorted.recent.tmp
+ltnow=`date +%s` # now now in seconds
+for line in "${lines[@]}"; do
+   key=${line%% *}  # they key, ie maint@sevmm1
+   if [[ "$1" == "$key" ]]; then   
+      #this user is the same as $1 so makes no sense to show
+      send_msg "$1" ">> Yourself.... just now" 
+      continue
+   fi
+   value=${line#* } # they value, last time seen online in sec
+   lseen=$(( ltnow - value ))
+   lseenmin=$(( lseen / 60 ))
+   #echo "lseen - lseemin: $lseen - $lseemin"
+   
+   send_msg "$1" "User $key seen last $lseemin ago"
+done
+rm sorted.recent.tmp
+rm recent.tmp
+}
 
 add_user() {
 # add new user and time of login - we deal with rooms later
@@ -425,8 +462,12 @@ if [[ $uppermsg == "/DM" ]]; then
    dm_user "$1" "$2" "$3"
 fi
 
+if [[ $uppermsg == "/USERS" ]]; then
+   last_seen "$1"
+fi
+
 if [[ $uppermsg == "/WHO" ]]; then
-for row in "${!onlineusers[@]}";do
+  for row in "${!onlineusers[@]}";do
     send_msg "$1" "User: $row    .......is ONLINE"
   done
   if [[ ${#onlineusers[@]} < 1 ]]; then
@@ -443,6 +484,7 @@ if [[ $uppermsg == "/HELP" ]]; then
    send_msg "$1" "To see details about this chat server:.............../SYSTEM"
    send_msg "$1" "To see statistics about this chat server:............/STATS"
    send_msg "$1" "To see who is online now:............................/WHO"
+   send_msg "$1" "To see list of recently seen users..................../USERS"
    send_msg "$1" "To send a direct message to another user............./DM" 
    send_msg "$1" "To see this help menu:.............................../HELP"
 fi
@@ -487,7 +529,7 @@ if read line < /root/chat/chat.pipe; then
     # if not, then look for message payload and then process it in a select structure
 
     parse_incoming "$line"
-    is_loop "$INCOMINGMSG"  
+#    is_loop "$INCOMINGMSG"  
 
        update_user "$INCOMINGSENDER"
        remove_old
