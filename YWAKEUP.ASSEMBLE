@@ -1,0 +1,1147 @@
+         PRINT NOGEN                                                    00010000
+         REGEQU ,                                                       00020000
+         SHVBLOCK                                                       00030000
+         EJECT ,                                                        00040000
+         NUCON ,                                                        00050000
+         COPY  VMCBLOKS                                                 00060000
+         COPY  IPARML                                                   00070000
+IPXMASK  EQU   X'0002'                                                  00080000
+IPXCODE  EQU   X'4000'                                                  00090000
+         PRINT GEN                                                      00100000
+         EJECT ,                                                        00110000
+YWAKEUP  CSECT ,                                                        00120000
+         USING YWAKEUP,R12                                              00130000
+         SPACE 2                                                        00140000
+         USING NUCON,0                                                  00150000
+         STM   R0,R1,20(R13)           SAVE SOME REGISTERS              00160000
+         DMSFREE DWORDS=LWW,ERR=NOSTOR,TYPE=USER GET MEMORY FOR NUCEXT  00170000
+         ST    R1,NUCXADDR             SAVE IT'S ADDRESS                00180000
+         ST    R1,NUCXORG              AND AGAIN                        00190000
+         L     R7,=F'4096'                                              00200000
+         ALR   R7,R1                                                    00210000
+         LR    R8,R1                                                    00220000
+         SPACE ,                                                        00230000
+         LR    R0,R1                   COPY ADDRESS                     00240000
+         L     R1,NUCXLEN              GET LENGTH                       00250000
+         LA    R2,SWW                  WHERE TO COPY FROM               00260000
+         LR    R3,R1                   SAME LENGTH                      00270000
+         MVCL  R0,R2                   MOVE IN NUCLEUS EXTENSION        00280000
+         SPACE ,                                                        00290000
+         LA    R1,NUCEXT               PREPARE TO DECLARE IT            00300000
+         SVC   202                     CALL CMS                         00310000
+         DC    AL4(1)                  ERRORS INLINE                    00320000
+         LTR   R15,R15                 ANY ERRORS?                      00330000
+         BZ    GOCALL                  NO, GO CALL IT                   00340000
+         SPACE ,                                                        00350000
+         LINEDIT TEXT='SLAYWA001E ERROR .. FROM NUCEXT',               X00360000
+               SUB=(DEC,(R15)),DISP=ERRMSG                              00370000
+         L     R1,NUCXADDR             PREPARE TO FREE UP THE NUCEXT    00380000
+         DMSFRET DWORDS=LWW,LOC=(1)    FREE THE MEMORY IN CASE OF ERROR 00390000
+         LA    R15,43                  RETURN CODE                      00400000
+         BR    R14                     RETURN                           00410000
+         SPACE ,                                                        00420000
+NOSTOR   LINEDIT TEXT='SLAYWA002E ERROR .. FROM DMSFREE',              X00430000
+               SUB=(DEC,(R15)),DISP=ERRMSG                              00440000
+         LA    R15,104                 RETURN CODE                      00450000
+         BR    R14                     RETURN                           00460000
+         SPACE ,                                                        00470000
+GOCALL   DC    S(X'00'(8),*-1)                                          00480000
+*                                                                       00490000
+* ADDRESSABILITY OF NEW NUCEXT, SAVE THE BASE REGISTERS FOR LATER USE   00500000
+*                                                                       00510000
+         USING SWW,R8,R7                                                00520000
+         STM   R7,R8,BASEREGS          WILL BE MOVED WITH EVERYTHING    00530000
+*                                                                       00540000
+* PLACE VARIABLE NAME ADDRESSES IN SHVBLOCK'S                           00550000
+*                                                                       00560000
+         LA    R3,VARNAME0                                              00570000
+         ST    R3,SHVNAMA-SHVBLOCK+SHV0                                 00580000
+         LA    R3,VARVAL0                                               00590000
+         ST    R3,SHVVALA-SHVBLOCK+SHV0                                 00600000
+         LA    R3,SHV1                                                  00610000
+         ST    R3,SHVNEXT-SHVBLOCK+SHV0                                 00620000
+         LA    R3,VARNAME1                                              00630000
+         ST    R3,SHVNAMA-SHVBLOCK+SHV1                                 00640000
+         LA    R3,SHV2                                                  00650000
+         ST    R3,SHVNEXT-SHVBLOCK+SHV1                                 00660000
+         LA    R3,VARNAME2                                              00670000
+         ST    R3,SHVNAMA-SHVBLOCK+SHV2                                 00680000
+         LA    R3,VARVAL2                                               00690000
+         ST    R3,SHVVALA-SHVBLOCK+SHV2                                 00700000
+         LA    R3,VARNAME3                                              00710000
+         ST    R3,SHVNAMA-SHVBLOCK+SHV3                                 00720000
+         LA    R3,VARNAME4                                              00730000
+         ST    R3,SHVNAMA-SHVBLOCK+SHV4                                 00740000
+         LA    R3,VARNAME5                                              00750000
+         ST    R3,SHVNAMA-SHVBLOCK+SHV5                                 00760000
+*                                                                       00770000
+* PLACE ADDRESSES OF RELOCATED PROGRAM CONSTANTS                        00780000
+*                                                                       00790000
+         LA    R3,RESUME                                                00800000
+         STCM  R3,B'0111',WAITPSW+5                                     00810000
+         LA    R3,WWXT                 EXTERNAL HANDLER                 00820000
+         STCM  R3,B'0111',WWXTN+5      SAVE IN PSW                      00830000
+         LA    R3,WWIO                 IO HANDLER                       00840000
+         STCM  R3,B'0111',WWION+5      SAVE IN PSW                      00850000
+         MVC   WWXTO(8),EXTNPSW        COPY EXTERNAL PSW                00860000
+         MVC   WWIOO(8),IONPSW         COPY IO PSW                      00870000
+         DMSEXS MVC,EXTNPSW,WWXTN      REPLACE EXTERNAL PSW             00880000
+         DMSEXS MVC,IONPSW,WWION       REPLACE IO PSW                   00890000
+         DC    S(X'FF'(8),*-1)                                          00900000
+         SPACE ,                                                        00910000
+         LM    R0,R1,20(R13)           RESTORE REGISTERS AT ENTRY       00920000
+         SVC   202                     CALL US                          00930000
+         DC    AL4(1)                  ERRORS INLINE                    00940000
+         BR    R14                     PASS ERROR BACK TO CALLER        00950000
+         EJECT ,                                                        00960000
+         DS    0D                                                       00970000
+NUCEXT   DC    CL8'NUCEXT'                                              00980000
+         DC    CL8'YWAKEUP'                                             00990000
+         DC    X'00004000'                                              01000000
+NUCXADDR DS    A                                                        01010000
+         DC    F'0'                                                     01020000
+NUCXORG  DS    A                                                        01030000
+NUCXLEN  DC    A(LWW*8)                                                 01040000
+WWXTN    DC    X'00',XL.4'0',BL.4'0000',AL2(*-*),X'00',AL3(*-*)         01050000
+WWION    DC    X'00',XL.4'0',BL.4'0000',AL2(*-*),X'00',AL3(*-*)         01060000
+         SPACE ,                                                        01070000
+         LTORG ,                                                        01080000
+         SPACE ,                                                        01090000
+         DROP  R12,R8,R7                                                01100000
+         EJECT ,                                                        01110000
+SWW      DS    0D                                                       01120000
+         USING SWW,R15                                                  01130000
+         AL    R15,BASEOFST                                             01140000
+         DROP  R15                                                      01150000
+         LM    R11,R12,0(R15)                                           01160000
+         USING SWW,R12,R11                                              01170000
+         B     SKIPBASE                                                 01180000
+         DC    CL8'YWAKEUP'                                             01190000
+         DC    CL9'&SYSDATE'                                            01200000
+         DC    CL6'&SYSTIME'                                            01210000
+         DC    C' WRITTEN BY YOSSIE SILVERMAN, SLAC'                    01220000
+BASEOFST DC    A(BASEREGS-SWW)                                          01230000
+SKIPBASE DS    0H                                                       01240000
+         STCM  R1,B'1000',R1BYTE                                        01250000
+         ST    R14,RETADDR                                              01260000
+         XC    RETCODE,RETCODE                                          01270000
+         LA    R9,8(,R1)                                                01280000
+         MVI   FLAG1,0                                                  01290000
+         MVI   FLAG2,0                                                  01300000
+         SPACE 2                                                        01310000
+         LA    R4,SCAN1S                                                01320000
+         LA    R2,SCAN1L                                                01330000
+         LA    R3,SCAN1E                                                01340000
+SCAN1C   CLC   0(8,R9),0(R4)                                            01350000
+         BE    SCAN1G                                                   01360000
+         BXLE  R4,R2,SCAN1C                                             01370000
+         B     TIME                                                     01380000
+         SPACE ,                                                        01390000
+SCAN1G   LH    R1,8(,R4)                                                01400000
+         B     SWW(R1)                                                  01410000
+         SPACE 2                                                        01420000
+SCAN1S   DS    0C                                                       01430000
+         DC    CL8'BEGIN',AL2(BEGIN-SWW)                                01440000
+SCAN1L   EQU   *-SCAN1S                                                 01450000
+         DC    CL8'END',AL2(END-SWW)                                    01460000
+         DC    CL8'AT',AL2(AT-SWW)                                      01470000
+LPAREN   DC    CL8'(',AL2(OPTIONS-SWW)                                  01480000
+FENCE    DC    8X'FF',AL2(HELP-SWW)                                     01490000
+         DC    CL8'?',AL2(HELP-SWW)                                     01500000
+         DC    CL8'RESET',AL2(RESET-SWW)                                01510000
+         DC    CL8'PURGE',AL2(PURGE-SWW)                                01520000
+SCAN1E   EQU   *-SCAN1L                                                 01530000
+         EJECT ,                                                        01540000
+AT       DS    0H                                                       01550000
+         LA    R9,8(,R9)                                                01560000
+         OI    FLAG1,$AT                                                01570000
+*        B     TIME                                                     01580000
+         SPACE 2                                                        01590000
+TIME     DS    0H                                                       01600000
+         OI    FLAG2,$TIME                                              01610000
+         CLI   0(R9),C'+'                                               01620000
+         BNE   COL0                                                     01630000
+         B     INCR0                                                    01640000
+         SPACE 2                                                        01650000
+CHKTIME  BAL   R10,GETTIME             HERE WITH TIME OF DAY            01660000
+         SR    R4,R0                   GET DIFFERENCE                   01670000
+         SPACE ,                                                        01680000
+CHKTIME1 C     R4,=F'86400'            HERE WITH OFFSET IN SECONDS      01690000
+         BNL   BADTIME1                OFFSET MORE THEN A DAY           01700000
+         ST    R4,SECONDS              SAVE THE VALUE                   01710000
+         LA    R9,8(,R9)               SKIP THE TOKEN                   01720000
+         SPACE 2                                                        01730000
+         CLC   0(8,R9),FENCE           AT END?                          01740000
+         BE    GODOIT                  YES, GO EXECUTE                  01750000
+         CLC   0(8,R9),LPAREN          START OF OPTIONS?                01760000
+         BNE   BADPARM                 NO, ERROR                        01770000
+         B     OPTIONS                 YES, GO HANDLE 'EM               01780000
+         EJECT ,                                                        01790000
+INCR0    LA    R1,1(,R9)                                                01800000
+         LA    R0,7                                                     01810000
+GETMINS  CLI   0(R1),C'0'                                               01820000
+         BL    GOTMINS                                                  01830000
+         CLI   0(R1),C'9'                                               01840000
+         BH    GOTMINS                                                  01850000
+         LA    R1,1(,R1)                                                01860000
+         BCT   R0,GETMINS                                               01870000
+GOTMINS  LA    R4,6                                                     01880000
+         SR    R4,R0                                                    01890000
+         BM    BADTIME                                                  01900000
+         EX    R4,PACKMIN D,1(*-*,R9)                                   01910000
+         CVB   R4,D                                                     01920000
+         MH    R4,=H'60'                                                01930000
+         LTR   R0,R0                                                    01940000
+         BZ    CHKTIME1                                                 01950000
+         CLI   0(R1),C' '                                               01960000
+         BE    CHKTIME1                                                 01970000
+         CLI   0(R1),C':'                                               01980000
+         BNE   BADTIME                                                  01990000
+         BCT   R0,SKIPCOL                                               02000000
+         B     BADTIME                                                  02010000
+SKIPCOL  LA    R1,1(,R1)                                                02020000
+         LR    R15,R1                                                   02030000
+GETSECS  CLI   0(R1),C'0'                                               02040000
+         BL    GOTSECS                                                  02050000
+         CLI   0(R1),C'9'                                               02060000
+         BH    GOTSECS                                                  02070000
+         LA    R1,1(,R1)                                                02080000
+         BCT   R0,GETSECS                                               02090000
+         B     GOTSECS1                                                 02100000
+GOTSECS  CLI   0(R1),C' '                                               02110000
+         BNE   BADTIME                                                  02120000
+GOTSECS1 SR    R1,R15                                                   02130000
+         BCTR  R1,0                                                     02140000
+         EX    R1,PACKSEC D,0(*-*,R15)                                  02150000
+         CVB   R0,D                                                     02160000
+         CH    R0,=H'60'                                                02170000
+         BNL   BADTIME                                                  02180000
+         AR    R4,R0                                                    02190000
+         B     CHKTIME1                                                 02200000
+         SPACE ,                                                        02210000
+PACKMIN  PACK  D,1(*-*,R9)                                              02220000
+PACKSEC  PACK  D,0(*-*,R15)                                             02230000
+         EJECT ,                                                        02240000
+COL0     LR    R1,R9                   COPY START OF FIELD              02250000
+         LA    R15,24                  MAXIMUM VALUE + 1                02260000
+         BAL   R10,GETDIGS             GO GET HOURS                     02270000
+COL1     MH    R0,=H'3600'             GET HOURS IN SECONDS             02280000
+         LR    R4,R0                   SAVE IN TEMP                     02290000
+         BAL   R10,GETCOL              CHECK FOR ':' OR END OF FIELD    02300000
+         LA    R15,60                  MAXIMUM VALUE + 1                02310000
+         BAL   R10,GETDIGS             GO GET MINUTES                   02320000
+COL2     MH    R0,=H'60'               GET MINUTES IN SECONDS           02330000
+         AR    R4,R0                   ADD TO TEMP                      02340000
+         BAL   R10,GETCOL              CHECK FOR ':' OR END OF FIELD    02350000
+*        LA    R15,60                  MAXIMUM VALUE + 1                02360000
+         BAL   R10,GETDIGS             GO GET SECONDS                   02370000
+COL3     AR    R4,R0                   ADD TO TEMP                      02380000
+         LA    R0,8(,R9)               POINT PAST FIELD                 02390000
+         CR    R1,R0                   ARE WE THERE?                    02400000
+         BE    CHKTIME                 YES,                             02410000
+         CLI   0(R1),C' '              ARE WE AT END OF FIELD?          02420000
+         BNE   BADTIME                 NO, ERROR                        02430000
+         B     CHKTIME                                                  02440000
+         SPACE ,                                                        02450000
+GETDIGS  CLI   0(R1),C'0'                                               02460000
+         BL    BADTIME                                                  02470000
+         CLI   0(R1),C'9'                                               02480000
+         BH    BADTIME                                                  02490000
+         CLI   1(R1),C'0'                                               02500000
+         BL    GETDIGS1                                                 02510000
+         CLI   1(R1),C'9'                                               02520000
+         BH    GETDIGS1                                                 02530000
+         PACK  D,0(2,R1)                                                02540000
+         LA    R1,1(,R1)                                                02550000
+GETDIGS2 LA    R1,1(,R1)                                                02560000
+         CVB   R0,D                                                     02570000
+         BR    R10                                                      02580000
+GETDIGS1 PACK  D,0(1,R1)                                                02590000
+         B     GETDIGS2                                                 02600000
+         SPACE ,                                                        02610000
+GETCOL   CLI   0(R1),C' '                                               02620000
+         BE    CHKTIME                                                  02630000
+         CLI   0(R1),C':'                                               02640000
+         BNE   BADTIME                                                  02650000
+         LA    R1,1(,R1)                                                02660000
+         BR    R10                                                      02670000
+         EJECT ,                                                        02680000
+BADTIME  TM    FLAG1,$AT                                                02690000
+         BZ    BADPARM                                                  02700000
+         SPACE ,                                                        02710000
+BADTIME1 LINEDIT TEXT='SLAYWA003E ILLEGAL TIME ''........''',          X02720000
+               SUB=(CHARA,(R9))                                         02730000
+         LA    R15,24                                                   02740000
+         B     RETSYS                                                   02750000
+         SPACE ,                                                        02760000
+BADPARM  LINEDIT TEXT='SLAYWA004E ILLEGAL OPTION ''........''',        X02770000
+               SUB=(CHARA,(R9))                                         02780000
+         LA    R15,24                                                   02790000
+         B     RETSYS                                                   02800000
+         EJECT ,                                                        02810000
+OPTIONS  LA    R9,8(,R9)                                                02820000
+         TM    FLAG1,$BEGIN+$END                                        02830000
+         BNZ   SCAN3B                                                   02840000
+         SPACE ,                                                        02850000
+         LA    R4,SCAN2S                                                02860000
+         LA    R2,SCAN2L                                                02870000
+         LA    R3,SCAN2E                                                02880000
+         B     SCAN2C                                                   02890000
+         SPACE ,                                                        02900000
+SCAN3B   LA    R4,SCAN3S                                                02910000
+         LA    R2,SCAN3L                                                02920000
+         LA    R3,SCAN3E                                                02930000
+*        B     SCAN2C                                                   02940000
+         SPACE ,                                                        02950000
+SCAN2C   CLC   0(8,R9),0(R4)                                            02960000
+         BE    SCAN2G                                                   02970000
+         BXLE  R4,R2,SCAN2C                                             02980000
+         B     BADPARM                                                  02990000
+         SPACE 2                                                        03000000
+SCAN2G   XR    R1,R1                                                    03010000
+         ICM   R1,B'0011',8(R4)                                         03020000
+         BZ    GODOIT                                                   03030000
+         LA    R1,SWW(R1)                                               03040000
+         OC    0(1,R1),10(R4)                                           03050000
+         B     OPTIONS                                                  03060000
+         SPACE 2                                                        03070000
+SCAN2S   DS    0C                                                       03080000
+         DC    CL8')',AL2(0),AL1(0)                                     03090000
+SCAN2L   EQU   *-SCAN2S                                                 03100000
+         DC    CL8'RDR',AL2(FLAG2-SWW),AL1($RDR)                        03110000
+         DC    CL8'NOREAD',AL2(FLAG1-SWW),AL1($NOREAD)                  03120000
+         DC    CL8'NOWAIT',AL2(FLAG1-SWW),AL1($NOWAIT)                  03130000
+         DC    CL8'CC',AL2(FLAG1-SWW),AL1($CC)                          03140000
+SCAN3S   DS    0C                                                       03150000
+         DC    CL8'SMSG',AL2(FLAG2-SWW),AL1($SMSG)                      03160000
+SCAN3L   EQU   *-SCAN3S                                                 03170000
+         DC    CL8'CONS',AL2(FLAG2-SWW),AL1($CONS)                      03180000
+         DC    CL8'IO',AL2(FLAG2-SWW),AL1($IO)                          03190000
+         DC    CL8'EXT',AL2(FLAG2-SWW),AL1($EXT)                        03200000
+         DC    CL8'*MSG',AL2(FLAG2-SWW),AL1($XMSG)                      03210000
+         DC    8X'FF',AL2(0),AL1(0)                                     03220000
+SCAN2E   EQU   *-SCAN2L                                                 03230000
+SCAN3E   EQU   *-SCAN3L                                                 03240000
+         EJECT ,                                                        03250000
+HELP     DS    0H                                                       03260000
+         LA    R0,HELPMSG                                               03270000
+         STCM  R0,B'0111',TYPLINBA                                      03280000
+         LA    R0,LHELPMSG                                              03290000
+         STH   R0,TYPLINBL                                              03300000
+         MVI   TYPLINFL,X'90'                                           03310000
+         LA    R1,TYPLIN                                                03320000
+         SVC   202                                                      03330000
+         DC    AL4(1)                                                   03340000
+         LA    R15,100                                                  03350000
+         B     RETSYS                                                   03360000
+         SPACE 2                                                        03370000
+HELPMSG  DC    C'YWAKEUP - wait for an event from a list.',2X'15'       03380000
+         DC    C'Syntax -',2X'15'                                       03390000
+         DC    C'  YWAKEUP BEGIN|END <*MSG><SMSG><CONS><IO><EXT>',X'15' 03400000
+         DC    C'          <<AT> time> <(<*MSG><SMSG><CONS>',X'15'      03410000
+         DC    C'  time - HH<:MM<:SS>>   <RDR><EXT><IO><CC>',X'15'      03420000
+         DC    C'  (or)   +MM<:SSSS>     <NOREAD><NOWAIT><)>>',X'15'    03430000
+LHELPMSG EQU   *-HELPMSG                                                03440000
+         EJECT ,                                                        03450000
+BEGIN    DS    0H                                                       03460000
+         OI    FLAG1,$BEGIN                                             03470000
+         LA    R4,SCAN3S                                                03480000
+         B     SCAN3A                                                   03490000
+         SPACE ,                                                        03500000
+END      DS    0H                                                       03510000
+         OI    FLAG1,$END                                               03520000
+         LA    R4,SCAN3S                                                03530000
+*        B     SCAN3A                                                   03540000
+         SPACE 2                                                        03550000
+SCAN3A   CLC   FENCE,8(R9)                                              03560000
+         BE    HELP                                                     03570000
+         B     OPTIONS                                                  03580000
+         EJECT ,                                                        03590000
+PURGE    DS    0H                                                       03600000
+RESET    DS    0H                                                       03610000
+         CLI   R1BYTE,X'FF'                                             03620000
+         BNE   BADPARM                                                  03630000
+         BAL   R10,ESMSG                                                03640000
+         BAL   R10,EXMSG                                                03650000
+         MVC   IONPSW,WWIOO                                             03660000
+         MVC   EXTNPSW,WWXTO                                            03670000
+         L     R2,EVENTS                                                03680000
+FREEEND  LTR   R2,R2                                                    03690000
+         BZ    ENDFREE                                                  03700000
+         LR    R1,R2                                                    03710000
+         ICM   R2,B'0111',1(R1)                                         03720000
+         L     R0,4(,R1)                                                03730000
+         DMSFRET DWORDS=(0),LOC=(1)                                     03740000
+         B     FREEEND                                                  03750000
+ENDFREE  DS    0H                                                       03760000
+         XR    R15,R15                                                  03770000
+         BR    R14                                                      03780000
+         EJECT ,                                                        03790000
+*                                                                       03800000
+* GET HERE WHEN WE ARE DOEN SCANNING, RESULTS OF SCANNING IN FLAGS      03810000
+*                                                                       03820000
+GODOIT   DS    0H                                                       03830000
+         TM    FLAG1,$BEGIN                                             03840000
+         BO    DOBEGIN                                                  03850000
+         TM    FLAG1,$END                                               03860000
+         BO    DOEND                                                    03870000
+         SPACE ,                                                        03880000
+*                                                                       03890000
+* CHECK IF WAITING FOR AN EVENT THAT MUST BE BEGIN AND IS NOT           03900000
+*                                                                       03910000
+         TM    FLAG1,$NOWAIT           IF NOT GOING TO WAIT             03920000
+         BO    NOPROB                  THEN THERE IS NO PROBLEM         03930000
+         IC    R1,MUSTBEG              GET EVENTS WHICH MUST BEGIN      03940000
+         EX    R1,TMWAIT               ANY OF THOSE?                    03950000
+         BZ    NOPROB                  NO, SKIP REST OF TEST            03960000
+         IC    R0,FLAG2                FETCH FLAG                       03970000
+         NR    R1,R0                   GET EVENTS WAITED ON WHICH BEGIN 03980000
+         EX    R1,TMFLAG3              ARE THEY ALL BEGIN?              03990000
+         BO    NOPROB                  YES,                             04000000
+         LINEDIT TEXT='SLAYWA005E SOME OF THE WAITED EVENTS SHOULD FIRSX04010000
+               T BE ''BEGIN''',DISP=ERRMSG                              04020000
+         LA    R15,24                                                   04030000
+         B     RETSYS                                                   04040000
+TMFLAG3  TM    FLAG3,*-*                                                04050000
+NOPROB   CLI   FLAG2,0                                                  04060000
+         BE    RETSYS0                                                  04070000
+         SPACE ,                                                        04080000
+*                                                                       04090000
+* NOW CHECK IF ANY OF THE EVENTS IS ALREADY SATISFIED                   04100000
+*                                                                       04110000
+RESCAN   LA    R9,EVENTS                                                04120000
+         IC    R15,FLAG2                                                04130000
+GODOIT1  LR    R2,R9                                                    04140000
+         ICM   R9,B'0111',1(R2)                                         04150000
+         BZ    SKIP1                                                    04160000
+         EX    R15,TMFLAG 0(R9),*-*                                     04170000
+         BZ    GODOIT1                                                  04180000
+         B     RETURN                  R9 -> BLOCK, R2-> PREVIOUS       04190000
+TMFLAG   TM    0(R9),*-*                                                04200000
+SKIP1    DS    0H                                                       04210000
+         SPACE ,                                                        04220000
+         TM    FLAG2,$RDR                                               04230000
+         BZ    SKIP2                                                    04240000
+         LA    R0,QVC                  Q V C                            04250000
+         LA    R1,CPBUFF               RESULT                           04260000
+         L     R2,=AL1(X'40',0,0,L'QVC) LENGTH                          04270000
+         LA    R3,L'CPBUFF             LENGTH OF RESULT                 04280000
+         DIAG  R0,R2,X'08'             CALL CP                          04290000
+         LTR   R2,R2                   DID IT WORK?                     04300000
+         BNZ   SKIP2                   NO,                              04310000
+         LA    R0,QFCL                 Q F                              04320000
+         LA    R1,CPBUFF               RESULT                           04330000
+         L     R2,=AL1(X'40',0,0,L'QFCL-5) LENGTH (EXCLUDING ' CL *')   04340000
+         LA    R3,L'CPBUFF             LENGTH OF RESULT                 04350000
+         CLI   CPBUFF+12,C'*'          CLASS IS *?                      04360000
+         BE    *+14                    YES, GENERAL 'Q F'               04370000
+         MVC   QFCL+7(1),CPBUFF+12     MOVE CLASS OVER                  04380000
+         L     R2,=AL1(X'40',0,0,L'QFCL) Q F CL ?                       04390000
+         DIAG  R0,R2,X'08'             CALL CP                          04400000
+         CLC   =C' NO',CPBUFF+7        ANY FOUND?                       04410000
+         BE    SKIP2                   YES,                             04420000
+         SPACE ,                                                        04430000
+         DMSFREE DWORDS=2,TYPCALL=BALR,TYPE=USER,ERR=SKIP2              04440000
+         MVI   FLAG4,$RDR                                               04450000
+         B     ADDIMMED                                                 04460000
+SKIP2    DS    0H                                                       04470000
+         SPACE ,                                                        04480000
+         TM    FLAG2,$TIME                                              04490000
+         BZ    SKIP3                                                    04500000
+         SPACE ,                                                        04510000
+         ICM   R0,B'1111',SECONDS                                       04520000
+         BP    SKIP3                                                    04530000
+         SPACE ,                                                        04540000
+         DMSFREE DWORDS=2,TYPCALL=BALR,TYPE=USER,ERR=SKIP3              04550000
+         MVI   FLAG4,$TIME                                              04560000
+         B     ADDIMMED                                                 04570000
+SKIP3    DS    0H                                                       04580000
+         SPACE ,                                                        04590000
+         TM    FLAG1,$NOWAIT                                            04600000
+         BO    DONOWAIT                                                 04610000
+*                                                                       04620000
+* PREPARE TO WAIT, START UP ALL TIMERS ETC..                            04630000
+*                                                                       04640000
+         TM    FLAG2,$TIME                                              04650000
+         BZ    DONTTIME                                                 04660000
+         SPACE ,                                                        04670000
+         TM    FLAG1,$CC                                                04680000
+         BO    USECC                                                    04690000
+         L     R0,SECONDS                                               04700000
+         MH    R0,=H'300'                                               04710000
+         SLL   R0,8                                                     04720000
+         ST    R0,TIMER                                                 04730000
+         B     USETIMER                                                 04740000
+USECC    DS    0H                                                       04750000
+         STCK  D                                                        04760000
+         L     R1,SECONDS                                               04770000
+         M     R0,=F'1000000'                                           04780000
+         SLDL  R0,12                                                    04790000
+         AL    R1,D+4                                                   04800000
+         BC    12,*+8                                                   04810000
+         A     R0,=F'1'                                                 04820000
+         A     R0,D                                                     04830000
+         STM   R0,R1,D                                                  04840000
+         SCKC  D                                                        04850000
+         STCTL C0,C0,CTLREG0                                            04860000
+         OI    CTLREG0+2,X'08'                                          04870000
+         LCTL  C0,C0,CTLREG0                                            04880000
+USETIMER DS    0H                                                       04890000
+DONTTIME DS    0H                                                       04900000
+         OI    FLAG6,$WAIT                                              04910000
+         MVC   FLAG5,FLAG3             SAVE 'BEGIN' FLAGS               04920000
+         OC    FLAG3,FLAG2             ADD IN TEMP FLAGS                04930000
+WAIT     LPSW  WAITPSW                                                  04940000
+RESUME   B     WAIT                                                     04950000
+ENDWAIT  MVC   FLAG3,FLAG5             RESTORE 'BEGIN' FLAGS            04960000
+         NI    FLAG6,X'FF'-$WAIT                                        04970000
+         TM    FLAG2,$TIME             WAS TIMER ON?                    04980000
+         BZ    RESCAN                  NO,                              04990000
+         TM    FLAG1,$CC               WAS IT 'CC' TIMER?               05000000
+         BZ    NOTCCRST                NO,                              05010000
+         STCTL C0,C0,CTLREG0           GET CTRL0                        05020000
+         NI    CTLREG0+2,X'FF'-X'08'   ZAP CC MASK                      05030000
+         LCTL  C0,C0,CTLREG0           PUT CTRL0                        05040000
+         B     RESCAN                  CONTINUE                         05050000
+NOTCCRST MVC   TIMER,=X'7FFFFFFF'      PLACE HIGHEST VALUE IN TIMER     05060000
+         B     RESCAN                  CONTINUE                         05070000
+         SPACE 2                                                        05080000
+DONOWAIT DMSFREE DWORDS=2,TYPCALL=BALR,TYPE=USER                        05090000
+         MVI   FLAG4,0                                                  05100000
+ADDIMMED STCK  D                                                        05110000
+         BAL   R10,CHAIN                                                05120000
+         LR    R9,R1                                                    05130000
+         LR    R2,R15                                                   05140000
+*        B     RETURN                                                   05150000
+         EJECT ,                                                        05160000
+*                                                                       05170000
+* GET HERE WITH R9-> BLOCK, R2-> PREVIOUS BLOCK                         05180000
+*                                                                       05190000
+RETURN   MVC   1(3,R2),1(R9)                                            05200000
+         SPACE ,                                                        05210000
+         LA    R4,XTRTAB                                                05220000
+         XR    R1,R1                                                    05230000
+RETURN1  CLC   0(1,R9),0(R4)                                            05240000
+         IC    R1,2(,R4)                                                05250000
+         BE    RETURN2                                                  05260000
+         LA    R4,5(R1,R4)                                              05270000
+         B     RETURN1                                                  05280000
+*NEVER FALL THROUGH                                                     05290000
+RETURN2  DS    0H                                                       05300000
+         ST    R1,SHVVALL-SHVBLOCK+SHV1                                 05310000
+         LA    R1,5(,R4)                                                05320000
+         ST    R1,SHVVALA-SHVBLOCK+SHV1                                 05330000
+         MVC   VARVAL0(1),1(R4)                                         05340000
+         SPACE ,                                                        05350000
+         LA    R0,SHV3                                                  05360000
+         ST    R0,SHV2+SHVNEXT-SHVBLOCK                                 05370000
+         LA    R0,SHV4                                                  05380000
+         ST    R0,SHV3+SHVNEXT-SHVBLOCK                                 05390000
+         LA    R0,SHV5                                                  05400000
+         ST    R0,SHV4+SHVNEXT-SHVBLOCK                                 05410000
+         SPACE ,                                                        05420000
+         MVC   D,8(R9)                 MOVE IN TIME OF INTERRUPT        05430000
+         BAL   R10,GETTIME1            GET SECONDS SINCE EPOCH          05440000
+         LR    R1,R0                                                    05450000
+         XR    R0,R0                                                    05460000
+         D     R0,=F'60'                                                05470000
+         CVD   R0,D                                                     05480000
+         UNPK  VARVAL2+6(2),D+6(2)                                      05490000
+         OI    VARVAL2+7,C'0'                                           05500000
+         MVI   VARVAL2+5,C':'                                           05510000
+         XR    R0,R0                                                    05520000
+         D     R0,=F'60'                                                05530000
+         CVD   R0,D                                                     05540000
+         UNPK  VARVAL2+3(2),D+6(2)                                      05550000
+         OI    VARVAL2+4,C'0'                                           05560000
+         MVI   VARVAL2+2,C':'                                           05570000
+         CVD   R1,D                                                     05580000
+         UNPK  VARVAL2+0(2),D+6(2)                                      05590000
+         OI    VARVAL2+1,C'0'                                           05600000
+         SPACE ,                                                        05610000
+         LH    R1,3(,R4)                                                05620000
+         B     SWW(R1)                                                  05630000
+         SPACE 2                                                        05640000
+XTRTAB   EQU   *,8                                                      05650000
+         DC    AL1($CONS,C'3',4),AL2(DOCONS-SWW),C'CONS'                05660000
+         DC    AL1($RDR,C'2',3),AL2(CALLEXEC-SWW),C'RDR'                05670000
+         DC    AL1($EXT,C'3',3),AL2(DOEXT-SWW),C'EXT'                   05680000
+         DC    AL1($IO,C'4',2),AL2(DOIO-SWW),C'IO'                      05690000
+         DC    AL1($TIME,C'2',4),AL2(CALLEXEC-SWW),C'TIME'              05700000
+         DC    AL1($XMSG,C'5',4),AL2(DOXMSG-SWW),C'*MSG'                05710000
+         DC    AL1($SMSG,C'4',4),AL2(DOSMSG-SWW),C'SMSG'                05720000
+         DC    AL1(0,C'2',6),AL2(CALLEXEC-SWW),C'NOWAIT'                05730000
+         EJECT ,                                                        05740000
+DOCONS   TM    FLAG1,$NOREAD                                            05750000
+         BZ    CONSREAD                                                 05760000
+         MVI   VARVAL0,C'2'                                             05770000
+         B     CALLEXEC                                                 05780000
+CONSREAD LA    R0,CPBUFF                                                05790000
+         STCM  R0,B'0111',WAITRDBA                                      05800000
+         ST    R0,SHVVALA-SHVBLOCK+SHV3                                 05810000
+         LA    R1,WAITRD                                                05820000
+         SVC   202                                                      05830000
+         DC    AL4(1)                                                   05840000
+         LH    R0,WAITRDBL                                              05850000
+         ST    R0,SHVVALL-SHVBLOCK+SHV3                                 05860000
+         B     CALLEXEC                                                 05870000
+         EJECT ,                                                        05880000
+DOIO     UNPK  CPBUFF(4),16+2(3,R9)                                     05890000
+         LA    R0,CPBUFF                                                05900000
+         ST    R0,SHVVALA-SHVBLOCK+SHV3                                 05910000
+         MVC   SHVVALL-SHVBLOCK+SHV3(L'SHVVALL),=F'3'                   05920000
+         UNPK  CPBUFF+3(9),24+0(5,R9)                                   05930000
+         UNPK  CPBUFF+11(9),24+4(5,R9)                                  05940000
+         LA    R0,CPBUFF+3                                              05950000
+         ST    R0,SHVVALA-SHVBLOCK+SHV4                                 05960000
+         MVC   SHVVALL-SHVBLOCK+SHV4(L'SHVVALL),=F'16'                  05970000
+         TR    CPBUFF(3+16),HEXTAB-C'0'                                 05980000
+         B     CALLEXEC                                                 05990000
+         EJECT ,                                                        06000000
+DOEXT    UNPK  CPBUFF(5),16+2(3,R9)                                     06010000
+         LA    R0,CPBUFF                                                06020000
+         ST    R0,SHVVALA-SHVBLOCK+SHV3                                 06030000
+         MVC   SHVVALL-SHVBLOCK+SHV3(L'SHVVALL),=F'4'                   06040000
+         TR    CPBUFF(4),HEXTAB-C'0'                                    06050000
+         B     CALLEXEC                                                 06060000
+         EJECT ,                                                        06070000
+DOXMSG   L     R2,16(,R9)                                               06080000
+         SLA   R2,3                                                     06090000
+         LA    R2,IUCVTYPE-8(R2)                                        06100000
+         XR    R1,R1                                                    06110000
+         IC    R1,0(,R2)                                                06120000
+         ST    R1,SHVVALL-SHVBLOCK+SHV5                                 06130000
+         LA    R1,1(,R2)                                                06140000
+         ST    R1,SHVVALA-SHVBLOCK+SHV5                                 06150000
+         B     DOSMSG                                                   06160000
+         SPACE ,                                                        06170000
+IUCVTYPE DC    AL1(3),CL7'MSG'                                          06180000
+         DC    AL1(3),CL7'WNG'                                          06190000
+         DC    AL1(7),CL7'CPCONIO'                                      06200000
+         DC    AL1(4),CL7'SMSG'                                         06210000
+         DC    AL1(7),CL7'VMCONIO'                                      06220000
+         DC    AL1(4),CL7'EMSG'                                         06230000
+         DC    AL1(4),CL7'IMSG'                                         06240000
+         DC    AL1(4),CL7'SCIF'                                         06250000
+         EJECT ,                                                        06260000
+DOSMSG   MVC   SHVVALL-SHVBLOCK+SHV4(L'SHVVALL),20(R9)                  06270000
+         LA    R1,32(,R9)                                               06280000
+         ST    R1,SHVVALA-SHVBLOCK+SHV4                                 06290000
+         LA    R1,31(,R9)                                               06300000
+         CLI   0(R1),C' '                                               06310000
+         BNE   *+8                                                      06320000
+         BCT   R1,*-8                                                   06330000
+         LA    R2,24(,R9)                                               06340000
+         SLR   R1,R2                                                    06350000
+         LA    R1,1(,R1)                                                06360000
+         ST    R1,SHVVALL-SHVBLOCK+SHV3                                 06370000
+         ST    R2,SHVVALA-SHVBLOCK+SHV3                                 06380000
+*        B     CALLEXEC                                                 06390000
+         EJECT ,                                                        06400000
+CALLEXEC IC    R0,VARVAL0                                               06410000
+         N     R0,=X'0000000F'                                          06420000
+         LA    R1,SHV0                                                  06430000
+         ST    R1,PLIST+12                                              06440000
+         L     R1,SHVNEXT-SHVBLOCK(R1)                                  06450000
+         BCT   R0,*-4                                                   06460000
+         XC    SHVNEXT-SHVBLOCK(L'SHVNEXT,R1),SHVNEXT-SHVBLOCK(R1)      06470000
+         LA    R0,PLIST                                                 06480000
+         LA    R1,=CL8'EXECCOMM'                                        06490000
+         ST    R1,PLIST                                                 06500000
+         ICM   R1,B'1000',=X'02'                                        06510000
+         SVC   202                                                      06520000
+         DC    AL4(1)                                                   06530000
+         SPACE ,                                                        06540000
+         L     R0,4(,R9)                                                06550000
+         LR    R1,R9                                                    06560000
+         DMSFRET DWORDS=(0),LOC=(1),TYPCALL=BALR                        06570000
+         SPACE ,                                                        06580000
+RETSYS0  L     R15,RETCODE                                              06590000
+RETSYS   L     R14,RETADDR                                              06600000
+         BR    R14                                                      06610000
+         EJECT ,                                                        06620000
+DOBEGIN  LA    R2,1                                                     06630000
+         B     DOBEGEND                                                 06640000
+         SPACE 2                                                        06650000
+DOEND    LA    R2,3                                                     06660000
+*        B     DOBEGEND                                                 06670000
+         SPACE 2                                                        06680000
+DOBEGEND DS    0H                                                       06690000
+         LA    R4,BEGENDTB                                              06700000
+DOBE2    ICM   R1,B'0001',0(R4)                                         06710000
+         BZ    RETSYS0                                                  06720000
+         EX    R1,TMWAIT                                                06730000
+         BO    DOBE4                                                    06740000
+DOBE3    LA    R4,5(,R4)                                                06750000
+         B     DOBE2                                                    06760000
+         SPACE ,                                                        06770000
+DOBE4    LH    R1,0(R2,R4)                                              06780000
+         BAL   R10,SWW(R1)                                              06790000
+         B     DOBE3                                                    06800000
+         SPACE 2                                                        06810000
+BEGENDTB DC    AL1($CONS),AL2(BCONS-SWW,ECONS-SWW)                      06820000
+         DC    AL1($XMSG),AL2(BXMSG-SWW,EXMSG-SWW)                      06830000
+         DC    AL1($SMSG),AL2(BSMSG-SWW,ESMSG-SWW)                      06840000
+         DC    AL1($IO),AL2(BIO-SWW,EIO-SWW)                            06850000
+         DC    AL1($EXT),AL2(BEXT-SWW,EEXT-SWW)                         06860000
+         DC    X'00'                                                    06870000
+         EJECT ,                                                        06880000
+BCONS    DS    0H                                                       06890000
+         OI    FLAG3,$CONS                                              06900000
+         BR    R10                                                      06910000
+         SPACE 2                                                        06920000
+ECONS    DS    0H                                                       06930000
+         NI    FLAG3,X'FF'-$CONS                                        06940000
+         BR    R10                                                      06950000
+         SPACE 3                                                        06960000
+BIO      DS    0H                                                       06970000
+         OI    FLAG3,$IO                                                06980000
+         BR    R10                                                      06990000
+         SPACE 2                                                        07000000
+EIO      DS    0H                                                       07010000
+         NI    FLAG3,X'FF'-$IO                                          07020000
+         BR    R10                                                      07030000
+         SPACE 3                                                        07040000
+BEXT     DS    0H                                                       07050000
+         OI    FLAG3,$EXT                                               07060000
+         BR    R10                                                      07070000
+         SPACE 2                                                        07080000
+EEXT     DS    0H                                                       07090000
+         NI    FLAG3,X'FF'-$EXT                                         07100000
+         BR    R10                                                      07110000
+         EJECT ,                                                        07120000
+BXMSG    DS    0H                                                       07130000
+         TM    FLAG3,$XMSG                                              07140000
+         BOR   R10                                                      07150000
+         SPACE ,                                                        07160000
+         STCTL C0,C0,CTLREG0                                            07170000
+         OC    CTLREG0,=A(IPXMASK)                                      07180000
+         LCTL  C0,C0,CTLREG0                                            07190000
+         LA    R9,IUCVPARM                                              07200000
+         USING IPARML,R9                                                07210000
+         XC    0(8*IPSIZE,R9),0(R9)                                     07220000
+         IUCV  DCLBFR,PRMLIST=(R9),BUFFER=(R9)                          07230000
+         BZ    BXMSG1                                                   07240000
+BXMSG0   BALR  R2,0                                                     07250000
+         SLL   R2,2                                                     07260000
+         SRL   R2,30                                                    07270000
+         LINEDIT TEXT='IUCV ERROR, CC=.., IPRCODE=..',DISP=SIO,        X07280000
+               SUB=(DEC,(R2),HEX4A,IPRCODE),RENT=NO                     07290000
+         MVC   RETCODE,=F'44'                                           07300000
+         BR    R10                                                      07310000
+BXMSG1   XC    0(8*IPSIZE,R9),0(R9)                                     07320000
+         IUCV  CONNECT,PRMLIST=(R9),USERID=MSGSYS                       07330000
+         BNZ   BXMSG0                                                   07340000
+         OI    FLAG3,$XMSG                                              07350000
+         BR    R10                                                      07360000
+         DROP  R9                                                       07370000
+         SPACE 2                                                        07380000
+EXMSG    DS    0H                                                       07390000
+         TM    FLAG3,$XMSG                                              07400000
+         BZR   R10                                                      07410000
+         LA    R9,IUCVPARM                                              07420000
+         USING IPARML,R9                                                07430000
+         IUCV  SEVER,PRMLIST=(R9),ALL=YES                               07440000
+         IUCV  RTRVBFR                                                  07450000
+         STCTL C0,C0,CTLREG0                                            07460000
+         NC    CTLREG0,=A(X'FFFFFFFF'-IPXMASK)                          07470000
+         LCTL  C0,C0,CTLREG0                                            07480000
+         NI    FLAG3,X'FF'-$XMSG                                        07490000
+         BR    R10                                                      07500000
+         EJECT ,                                                        07510000
+BSMSG    DS    0H                                                       07520000
+         TM    FLAG3,$SMSG                                              07530000
+         BOR   R10                                                      07540000
+         STCTL C0,C0,CTLREG0                                            07550000
+         OC    CTLREG0,=A(VMCXMASK)                                     07560000
+         LCTL  C0,C0,CTLREG0                                            07570000
+         LA    R9,VMCFPARM                                              07580000
+         USING VMCPARM,R9                                               07590000
+         MVC   VMCPFUNC,=Y(VMCPAUTH)                                    07600000
+         MVC   VMCPUSER,SYSTEM                                          07610000
+         MVI   VMCPFLG1,VMCPAUTS                                        07620000
+         MVC   VMCPLENA,VMCFXLEN                                        07630000
+         LA    R1,VMCFMHDR                                              07640000
+         ST    R1,VMCPVADA                                              07650000
+         DIAG  R9,R15,X'68'                                             07660000
+         LTR   R15,R15                                                  07670000
+         BZ    BSMSG1                                                   07680000
+         LINEDIT TEXT='VMCF ERROR, RC=..',SUB=(DEC,(R15)),DISP=SIO      07690000
+         MVC   RETCODE,=F'44'                                           07700000
+         BR    R10                                                      07710000
+BSMSG1   OI    FLAG3,$SMSG                                              07720000
+         BR    R10                                                      07730000
+         DROP  R9                                                       07740000
+         SPACE 2                                                        07750000
+ESMSG    DS    0H                                                       07760000
+         TM    FLAG3,$SMSG                                              07770000
+         BZR   R10                                                      07780000
+         LA    R9,VMCFPARM                                              07790000
+         USING VMCPARM,R9                                               07800000
+         MVC   VMCPFUNC,=Y(VMCPUAUT)                                    07810000
+         DIAG  R9,R15,X'68'                                             07820000
+         DROP  R9                                                       07830000
+         STCTL C0,C0,CTLREG0                                            07840000
+         NC    CTLREG0,=A(X'FFFFFFFF'-VMCXMASK)                         07850000
+         LCTL  C0,C0,CTLREG0                                            07860000
+         NI    FLAG3,X'FF'-$SMSG                                        07870000
+         BR    R10                                                      07880000
+         EJECT ,                                                        07890000
+*                                                                       07900000
+* RETURN SECONDS SINCE EPOCH IN R0/R1                                   07910000
+*                                                                       07920000
+GETTIME  STCK  D                                                        07930000
+GETTIME1 LM    R0,R1,D                                                  07940000
+         SRDL  R0,12                                                    07950000
+         D     R0,=F'8000000'                                           07960000
+         LR    R3,R0                                                    07970000
+         XR    R2,R2                                                    07980000
+         D     R2,=F'1000000'                                           07990000
+         XR    R0,R0                                                    08000000
+         SLDL  R0,3                                                     08010000
+         ALR   R1,R3                                                    08020000
+         BC    12,*+8                                                   08030000
+         A     R1,=F'1'                                                 08040000
+         D     R0,=F'86400'                                             08050000
+         BR    R10                                                      08060000
+         EJECT ,                                                        08070000
+*                                                                       08080000
+* POSSIBLE INTERRUPTS:                                                  08090000
+*   1004,XX80 ARE FOR TIME                                              08100000
+*   4000      IS FOR IUCV/*MSG                                          08110000
+*   4001      IS FOR VMCF/SMSG                                          08120000
+*   ALL OTHERS PASSED ON TO CMS UNLESS 'EXT' SPECIFIED                  08130000
+*                                                                       08140000
+WWXT     DS    0H                                                       08150000
+         STCK  8                       SAVE CLOCK AT INTERRUPT TIME     08160000
+         STM   R11,R12,0               SAVE TEMP REG                    08170000
+         BALR  R12,0                   SET UP A BASE                    08180000
+         PUSH  USING                                                    08190000
+         USING *,R12                                                    08200000
+         LM    R11,R12,BASEREGS        CORRECT BASE                     08210000
+         POP   USING                                                    08220000
+         STM   R13,R10,SAVEREGS        SAVE REST OF REGISTERS           08230000
+         MVC   SAVEREGS+14*4(8),0      AND COMPLETE SAVE AREA           08240000
+         MVC   D,8                                                      08250000
+         SPACE ,                                                        08260000
+         TM    FLAG1,$CC               CLOCK COMPARITOR IN USE?         08270000
+         BZ    NOTCC                   NO,                              08280000
+         CLC   =X'1004',EXTOPSW+2      IS IT HIM?                       08290000
+         BNE   NOTTIMER                NO, (IGNORE INTERVAL TIMER)      08300000
+         B     ISTIMER                 YES, HANDLE AS TIMER INT         08310000
+         SPACE ,                                                        08320000
+NOTCC    CLI   EXTOPSW+2+1,X'80'       INTERVAL TIMER?                  08330000
+         BNE   NOTTIMER                NO, (IGNORE CC)                  08340000
+*        B     ISTIMER                                                  08350000
+         SPACE ,                                                        08360000
+ISTIMER  DS    0H                                                       08370000
+         TM    FLAG3,$TIME             WAITING FOR TIMER?               08380000
+         BZ    NOTTIMER                NO, IGNORE THIS INTERRUPT        08390000
+         DMSFREE DWORDS=2,TYPCALL=BALR,TYPE=USER,ERR=ENDXT              08400000
+         MVI   FLAG4,$TIME                                              08410000
+         BAL   R10,CHAIN                                                08420000
+         B     ENDXT                                                    08430000
+NOTTIMER DS    0H                                                       08440000
+         SPACE ,                                                        08450000
+         TM    FLAG3,$SMSG                                              08460000
+         BZ    NOTSMSG                                                  08470000
+         CLC   =Y(VMCXCODE),EXTOPSW+2                                   08480000
+         BNE   NOTSMSG                                                  08490000
+         SPACE ,                                                        08500000
+         LA    R9,VMCFMHDR                                              08510000
+         USING VMCMHDR,R9                                               08520000
+         L     R2,VMCMLENA             FETCH LENGTH OF                  08530000
+         LA    R0,32+7(,R2)                                             08540000
+         SRA   R0,3                                                     08550000
+         DMSFREE DWORDS=(0),TYPCALL=BALR,TYPE=USER,ERR=ENDXT            08560000
+         ST    R2,20(,R1)                                               08570000
+         LA    R2,7(,R2)                                                08580000
+         EX    R2,MVCSMSG 24(*-*,R1),VMCMUSE MOVE USER/MSG IN AS ONE    08590000
+         MVI   FLAG4,$SMSG                                              08600000
+         BAL   R10,CHAIN                                                08610000
+         B     ENDXT                                                    08620000
+MVCSMSG  MVC   24(*-*,R1),VMCMUSE                                       08630000
+         DROP  R9                                                       08640000
+NOTSMSG  DS    0H                                                       08650000
+         SPACE ,                                                        08660000
+         TM    FLAG3,$XMSG                                              08670000
+         BZ    NOTXMSG                                                  08680000
+         CLC   =Y(IPXCODE),EXTOPSW+2                                    08690000
+         BNE   NOTXMSG                                                  08700000
+         LA    R9,IUCVPARM                                              08710000
+         USING IPARML,R9                                                08720000
+         SPACE ,                                                        08730000
+         CLI   IPTYPE,IPTYPSV          HAVE WE BEEN SEVERED?            08740000
+         BE    XMSGOFF                 YES, THIS IS REAL BAD            08750000
+         CLI   IPTYPE,IPTYPMP          PRIORITY MESSAGE?                08760000
+         BE    XMSGRCV                 YES,                             08770000
+         CLI   IPTYPE,IPTYPMNP         REGULAR MESSAGE?                 08780000
+         BNE   ENDXT1                  NO,                              08790000
+XMSGRCV  L     R2,IPBFLN1F             GET LENGTH OF MESSAGE            08800000
+         LA    R0,7+24(,R2)            ADD HEADER, ROUND TO DWORDS      08810000
+         SRA   R0,3                    IN DWORDS                        08820000
+         DMSFREE DWORDS=(0),TYPCALL=BALR,TYPE=USER,ERR=ENDXT            08830000
+         STM   R0,R1,0(R1)             SAVE FOR A WHILE                 08840000
+         SH    R2,=H'8'                GET REAL LENGTH OF MESSAGE       08850000
+         ST    R2,20(,R1)              SAVE IT IN HEADER                08860000
+         LR    R2,R1                   COPY HEADER ADDRESS              08870000
+         IUCV  RECEIVE,BUFFER=24(,R2),PRMLIST=(R9) PICK UP MESSAGE      08880000
+         MVC   16(4,R2),IPTRGCLS       MOVE THE MESSAGE CLASS           08890000
+         LM    R0,R1,0(R2)             RESTORE R0/R1 FROM DMSFREE       08900000
+         MVI   FLAG4,$XMSG             INDICATE THIS GUY *MSG           08910000
+         BAL   R10,CHAIN               ADD TO CHAIN OF EVENTS           08920000
+         B     ENDXT                   AND WE ARE DONE                  08930000
+XMSGOFF  LINEDIT TEXT='IUCV PATH TO *MSG HAS BEEN SEVERED',DISP=SIO     08940000
+         BAL   R10,EXMSG               IF SEVERED, TERMINATE ALL        08950000
+         B     ENDXT                   AND WE ARE DONE                  08960000
+         DROP  R9                                                       08970000
+NOTXMSG  DS    0H                                                       08980000
+         SPACE ,                                                        08990000
+         TM    FLAG3,$EXT                                               09000000
+         BZ    NOTEXT                                                   09010000
+         SPACE ,                                                        09020000
+         DMSFREE DWORDS=3,TYPCALL=BALR,TYPE=USER,ERR=ENDXT              09030000
+         MVI   FLAG4,$EXT                                               09040000
+         MVC   16(8,R1),EXTOPSW                                         09050000
+         BAL   R10,CHAIN                                                09060000
+         B     ENDXT                                                    09070000
+NOTEXT   DS    0H                                                       09080000
+         B     CMSXT                                                    09090000
+         SPACE ,                                                        09100000
+ENDXT    TM    FLAG6,$WAIT                                              09110000
+         BZ    ENDXT1                                                   09120000
+         IC    R1,FLAG4                                                 09130000
+         EX    R1,TMWAIT FLAG2,*-*                                      09140000
+         BZ    ENDXT1                                                   09150000
+         SPACE ,                                                        09160000
+ENDXT0   LM    R13,R12,SAVEREGS                                         09170000
+         B     ENDWAIT                                                  09180000
+TMWAIT   TM    FLAG2,*-*                                                09190000
+         SPACE ,                                                        09200000
+ENDXT1   LM    R13,R12,SAVEREGS                                         09210000
+         LPSW  EXTOPSW                                                  09220000
+         SPACE ,                                                        09230000
+CMSXT    MVC   0(8,0),WWXTO                                             09240000
+         LM    R13,R12,SAVEREGS                                         09250000
+         LPSW  0                                                        09260000
+         EJECT ,                                                        09270000
+*                                                                       09280000
+* POSSIBLE INTERRUPTS:                                                  09290000
+*   000C IS FOR RDR                                                     09300000
+*   000X IS FOR CONSOLE   (000X FROM DIAG X'24' WITH '-1' IN RX)        09310000
+*   ALL ELSE PASSED BACK TO CMS (UNLESS 'IO' SPECIFIED)                 09320000
+*                                                                       09330000
+WWIO     DS    0H                                                       09340000
+         STCK  8                       SAVE CLOCK AT INTERRUPT TIME     09350000
+         STM   R11,R12,0               SAVE TEMP REG                    09360000
+         BALR  R12,0                   SET UP A BASE                    09370000
+         PUSH  USING                                                    09380000
+         USING *,R12                                                    09390000
+         LM    R11,R12,BASEREGS        CORRECT BASE                     09400000
+         POP   USING                                                    09410000
+         STM   R13,R11,SAVEREGS        SAVE REST OF REGISTERS           09420000
+         MVC   SAVEREGS+14*4(8),0      AND COMPLETE SAVE AREA           09430000
+         MVC   D,8                                                      09440000
+         SPACE ,                                                        09450000
+         TM    FLAG3,$RDR              WAITING FOR 'RDR'?               09460000
+         BZ    NOTRDR                  NO,                              09470000
+         SPACE ,                                                        09480000
+         CLC   =X'000C',IOOPSW+2       IS THAT IT?                      09490000
+         BNE   NOTRDR                  NO,                              09500000
+         SPACE ,                                                        09510000
+         DMSFREE DWORDS=2,TYPCALL=BALR,TYPE=USER,ERR=ENDIO              09520000
+         MVI   FLAG4,$RDR              SATISFY RDR EVENT                09530000
+         BAL   R10,CHAIN                                                09540000
+         B     ENDIO0                  EXIT NOW                         09550000
+NOTRDR   DS    0H                                                       09560000
+         SPACE ,                                                        09570000
+         TM    FLAG3,$CONS                                              09580000
+         BZ    NOTCONS                                                  09590000
+         SPACE ,                                                        09600000
+         LH    R0,=H'-1'               GET                              09610000
+         DIAG  R0,R1,X'24'               CONSOLE ADDRESS                09620000
+         CLM   R0,B'0011',IOOPSW+2         SAME GUY?                    09630000
+         BNE   NOTCONS                 NO,                              09640000
+         TM    CSW+4,X'80'             ATTN?                            09650000
+         BZ    NOTCONS                 NO                               09660000
+         SPACE ,                                                        09670000
+         DMSFREE DWORDS=2,TYPCALL=BALR,TYPE=USER,ERR=ENDIO              09680000
+         MVI   FLAG4,$CONS             SATISFY EVENT                    09690000
+         BAL   R10,CHAIN               REMEMBER THAT WE HAD ONE         09700000
+         B     ENDIO                   EXIT TO CMS                      09710000
+NOTCONS  DS    0H                                                       09720000
+         SPACE ,                                                        09730000
+         TM    FLAG3,$IO                                                09740000
+         BZ    NOTIO                   NO,                              09750000
+         SPACE ,                                                        09760000
+         DMSFREE DWORDS=4,TYPCALL=BALR,TYPE=USER,ERR=ENDIO              09770000
+         MVI   FLAG4,$IO               YES, SATISFY EVENT               09780000
+         MVC   16(8,R1),IOOPSW                                          09790000
+         MVC   24(8,R1),CSW                                             09800000
+         BAL   R10,CHAIN                                                09810000
+         B     ENDIO                                                    09820000
+NOTIO    DS    0H                                                       09830000
+         B     CMSIO                                                    09840000
+         SPACE ,                                                        09850000
+ENDIO    TM    FLAG6,$WAIT             ARE WE WAITING?                  09860000
+         BZ    ENDIO1                  NO,                              09870000
+         IC    R1,FLAG4                GET SATISFIED EVENT FLAG         09880000
+         EX    R1,TMWAIT FLAG2,*-*     ANY BEING WAITED FOR?            09890000
+         BZ    ENDIO1                  NO,                              09900000
+         SPACE ,                                                        09910000
+ENDIO0   LM    R13,R12,SAVEREGS        RESTORE REGISTERS                09920000
+         B     ENDWAIT                 CONTINUE WITH PROGRAM            09930000
+         SPACE ,                                                        09940000
+ENDIO1   LM    R13,R12,SAVEREGS        RESTORE REGISTERS                09950000
+         LPSW  IOOPSW                  CONTINUE WITH WHOEVER            09960000
+         SPACE ,                                                        09970000
+CMSIO    MVC   0(8,0),WWIOO            GET TEMP COPY OF PSW             09980000
+         LM    R13,R12,SAVEREGS        RESTORE REGISTERS                09990000
+         LPSW  0                       CALL CMS I/O HANDLER             10000000
+         EJECT ,                                                        10010000
+*                                                                       10020000
+* ENTER WITH FLAG4 = EVENT BIT, R1 -> EVENT BLOCK                       10030000
+*                                                                       10040000
+CHAIN    MVC   0(1,R1),FLAG4                                            10050000
+         ST    R0,4(,R1)                                                10060000
+         MVC   8(8,R1),D                                                10070000
+         LA    R15,EVENTS                                               10080000
+CHAINLP  ICM   R0,B'0111',1(R15)                                        10090000
+         BZ    CHAINIT                                                  10100000
+         LR    R15,R0                                                   10110000
+         B     CHAINLP                                                  10120000
+CHAINIT  STCM  R1,B'0111',1(R15)                                        10130000
+         STCM  R0,B'0111',1(R1)                                         10140000
+         BR    R10                                                      10150000
+         EJECT ,                                                        10160000
+D        DS    D                                                        10170000
+WWXTO    DS    D                                                        10180000
+WWIOO    DS    D                                                        10190000
+WAITPSW  DC    X'FF',XL.4'0',BL.4'0110',AL2(*-*),X'00',AL3(*-*)         10200000
+         SPACE ,                                                        10210000
+TYPLIN   DC    CL8'TYPLIN'                                              10220000
+         DC    X'00'                                                    10230000
+TYPLINBA DS    AL3                                                      10240000
+         DC    C'B'                                                     10250000
+TYPLINFL DS    X                                                        10260000
+TYPLINBL DS    H                                                        10270000
+         SPACE ,                                                        10280000
+WAITRD   DC    CL8'WAITRD'                                              10290000
+         DC    X'00'                                                    10300000
+WAITRDBA DS    AL3                                                      10310000
+         DC    C'T',X'00'                                               10320000
+WAITRDBL DS    H                                                        10330000
+         SPACE ,                                                        10340000
+PLIST    DS    A                                                        10350000
+         DC    2A(0)                                                    10360000
+         DS    A                                                        10370000
+         SPACE ,                                                        10380000
+BASEREGS DS    2A                                                       10390000
+SECONDS  DS    F                                                        10400000
+CTLREG0  DS    F                                                        10410000
+RETADDR  DS    A                                                        10420000
+RETCODE  DS    A                                                        10430000
+EVENTS   DC    A(0)                                                     10440000
+SAVEREGS DS    16F                                                      10450000
+         SPACE ,                                                        10460000
+SHV0     DC    0D'0',XL(SHVBLEN)'00'                                    10470000
+         ORG   SHV0+SHVCODE-SHVBLOCK                                    10480000
+         DC    AL1(SHVSTORE)                                            10490000
+         ORG   SHV0+SHVNAML-SHVBLOCK                                    10500000
+         DC    A(L'VARNAME0)                                            10510000
+         ORG   SHV0+SHVVALL-SHVBLOCK                                    10520000
+         DC    F'1'                                                     10530000
+         ORG   ,                                                        10540000
+VARNAME0 DC    C'YWAKEUP.0'                                             10550000
+VARVAL0  DS    C                       WILL HOLD COUNT                  10560000
+SHV1     DC    0D'0',XL(SHVBLEN)'00'                                    10570000
+         ORG   SHV1+SHVCODE-SHVBLOCK                                    10580000
+         DC    AL1(SHVSTORE)                                            10590000
+         ORG   SHV1+SHVNAML-SHVBLOCK                                    10600000
+         DC    A(L'VARNAME1)                                            10610000
+         ORG   ,                                                        10620000
+VARNAME1 DC    C'YWAKEUP.1'                                             10630000
+SHV2     DC    0D'0',XL(SHVBLEN)'00'                                    10640000
+         ORG   SHV2+SHVCODE-SHVBLOCK                                    10650000
+         DC    AL1(SHVSTORE)                                            10660000
+         ORG   SHV2+SHVNAML-SHVBLOCK                                    10670000
+         DC    A(L'VARNAME2)                                            10680000
+         ORG   SHV2+SHVVALL-SHVBLOCK                                    10690000
+         DC    F'8'                                                     10700000
+         ORG   ,                                                        10710000
+VARNAME2 DC    C'YWAKEUP.2'                                             10720000
+VARVAL2  DS    CL8                                                      10730000
+SHV3     DC    0D'0',XL(SHVBLEN)'00'                                    10740000
+         ORG   SHV3+SHVCODE-SHVBLOCK                                    10750000
+         DC    AL1(SHVSTORE)                                            10760000
+         ORG   SHV3+SHVNAML-SHVBLOCK                                    10770000
+         DC    A(L'VARNAME3)                                            10780000
+         ORG   ,                                                        10790000
+VARNAME3 DC    C'YWAKEUP.3'                                             10800000
+SHV4     DC    0D'0',XL(SHVBLEN)'00'                                    10810000
+         ORG   SHV4+SHVCODE-SHVBLOCK                                    10820000
+         DC    AL1(SHVSTORE)                                            10830000
+         ORG   SHV4+SHVNAML-SHVBLOCK                                    10840000
+         DC    A(L'VARNAME4)                                            10850000
+         ORG   ,                                                        10860000
+VARNAME4 DC    C'YWAKEUP.4'                                             10870000
+SHV5     DC    0D'0',XL(SHVBLEN)'00'                                    10880000
+         ORG   SHV5+SHVCODE-SHVBLOCK                                    10890000
+         DC    AL1(SHVSTORE)                                            10900000
+         ORG   SHV5+SHVNAML-SHVBLOCK                                    10910000
+         DC    A(L'VARNAME5)                                            10920000
+         ORG   ,                                                        10930000
+VARNAME5 DC    C'YWAKEUP.5'                                             10940000
+         SPACE ,                                                        10950000
+IUCVPARM DS    (IPSIZE)D                                                10960000
+MSGSYS   DC    CL8'*MSG'                                                10970000
+         SPACE ,                                                        10980000
+         DS    0D                                                       10990000
+VMCFPARM DS    XL(VMCPLEN)                                              11000000
+SYSTEM   DC    CL8'SYSTEM'                                              11010000
+         SPACE ,                                                        11020000
+         DS    0D                                                       11030000
+VMCFMHDR DS    XL(VMCMLEN)                                              11040000
+         DS    CL129                                                    11050000
+VMCFXLEN DC    AL4(*-VMCFMHDR)                                          11060000
+         SPACE ,                                                        11070000
+FLAG1    DS    X                                                        11080000
+$AT      EQU   X'80'                                                    11090000
+$NOWAIT  EQU   X'40'                                                    11100000
+$NOREAD  EQU   X'20'                                                    11110000
+$CC      EQU   X'10'                                                    11120000
+$BEGIN   EQU   X'08'                                                    11130000
+$END     EQU   X'04'                                                    11140000
+         SPACE ,                                                        11150000
+FLAG2    DS    X                       SYNCH EVENT FLAG                 11160000
+$TIME    EQU   X'80'                                                    11170000
+$RDR     EQU   X'40'                                                    11180000
+$SMSG    EQU   X'20'                                                    11190000
+$XMSG    EQU   X'10'                                                    11200000
+$IO      EQU   X'08'                                                    11210000
+$EXT     EQU   X'04'                                                    11220000
+$CONS    EQU   X'02'                                                    11230000
+         SPACE ,                                                        11240000
+FLAG3    DC    X'00'                   HOLDS EVENTS BEING WAITED ON     11250000
+FLAG5    DS    X                       COPY OF ASYNCH EVNTES            11260000
+         SPACE ,                                                        11270000
+FLAG4    DS    X                                                        11280000
+         SPACE ,                                                        11290000
+MUSTBEG  DC    AL1($XMSG+$SMSG)                                         11300000
+         SPACE ,                                                        11310000
+FLAG6    DC    X'00'                                                    11320000
+$WAIT    EQU   X'80'                   IN WAIT STATE                    11330000
+         SPACE ,                                                        11340000
+R1BYTE   DS    X                                                        11350000
+         SPACE ,                                                        11360000
+QVC      DC    C'Q V C'                                                 11370000
+QFCL     DC    C'Q F CL ?'                                              11380000
+         SPACE ,                                                        11390000
+HEXTAB   DC    C'0123456789ABCDEF'                                      11400000
+         SPACE ,                                                        11410000
+CPBUFF   DS    CL256                                                    11420000
+         EJECT ,                                                        11430000
+         LTORG ,                                                        11440000
+         SPACE 2                                                        11450000
+LWW      EQU   (*-SWW+7)/8                                              11460000
+         END   YWAKEUP                                                  11470000
