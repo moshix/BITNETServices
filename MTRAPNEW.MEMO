@@ -1,0 +1,51 @@
+New options in MTRAP:
+ 
+   MTRAP LOADEXIT exitname <parms>
+ 
+   Will load the RELOCATABLE MODULE exitname into freestorage and call it
+   with the following PLIST
+ 
+     R1-> CL8'exitname',CL8'INIT'<,parms>,8X'FF'
+ 
+   MTRAP DROPEXIT exitname <parms>
+ 
+   Will call the exitname with the following PLIST
+ 
+     R1-> CL8'exitname',CL8'TERM'<,parms>,8X'FF'
+ 
+   MTRAP CALLEXIT exitname <parms>
+ 
+   Will call the exitname with the following PLIST
+ 
+     R1-> CL8'exitname',CL8'CALL'<,parms>,8X'FF'
+ 
+   Whenever a message is received the exit is called with the following
+   PLIST
+ 
+     R1-> CL8'exitname',cl8'MSG',AL4(msg,length,identify,names),8X'FF'
+ 
+   Where:  msg is the address of the message text with all leading junk
+                   truncated, like DMT and FROM and timestamp.
+           length is the length of the text in characters.
+           identify is the address of the following data:
+                   CL8'myuserid',CL8'mynodeid',CL8'rscsid'
+           names is the address of the following data:
+                   CL8'nickname',CL8'fromuser',CL8'fromnode'
+                   (possibly some other data, not yet decided on)
+ 
+   the exit should return in R15 the following:
+ 
+   -1 means that the message was not processed, MTRAP should try
+      any further exit and if none are found just output it normally.
+   =0 means that no further processing for this message is required.
+   >0 is the address of a string al1(length),cl(length)'string' which
+      should be output to the terminal using the MTRAP CPCONIO output
+      facility.
+   x'80',al3(address) is same as '>0' except that MTRAP will call
+      the exit once more after output is complete to possibly generate
+      more output.
+ 
+Possibly MTRAP will require a filetype of MTRAP rather then MODULE for
+its exits. MTRAP will DROP all exits when it is itself dropped.
+ 
+Any suggestions are more then welcome.
