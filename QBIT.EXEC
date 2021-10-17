@@ -1,0 +1,191 @@
+/* QBIT - Query local or remote system for some information */
+/*
+Syntax - QBIT <FOR/AT> SYstem|Users|Time|INDicate|LOGmsg <FOR/AT>
+         QBIT <Users> userlist
+
+Notes - FOR/AT can appear but once per command, FOR userlist/AT node.
+        if the second form a search is made through the names file.
+*/
+/* Written by Yossie Silverman, WICC, last update 11/25/92 */
+
+parse upper arg argstring
+argstring = "STRIP"(argstring,'L')
+address command
+
+if argstring = '?' then signal help
+
+if "LEFT"(argstring,1) = '@' then
+  argstring = 'AT' "SUBSTR"(argstring,2)
+
+for = "WORD"(argstring,1) = 'FOR'
+at = "WORD"(argstring,1) = 'AT'
+
+if at then do
+  if "WORDS"(argstring) = 1 then
+    call error '001E Missing Node for AT operand.',24
+  parse var argstring . atlist args
+end
+else if for then
+  parse value nscan("SUBWORD"(argstring,2),',') with forlist args
+else args = argstring
+
+if args = '' then
+  call error '003E missing command verb or userlist',24
+
+'IDENTIFY ( STACK LIFO'
+parse pull userid . nodeid . rscsid .
+
+parse upper var args verb rest
+it = ^ (at | for)
+
+select
+  when "ABBREV"('INDICATE',verb,3) then verb = 'INDICATE'
+  when "ABBREV"('TIME',verb,1) then verb = 'TIME'
+  when "ABBREV"('NAMES',verb,1) then verb = 'NAMES'
+  when "ABBREV"('LOGMSG',verb,3) then verb = 'LOGMSG'
+  when "ABBREV"('SYSTEM',verb,2) then verb = 'SYSTEM'
+  when "ABBREV"('USERS',verb,1) then do
+    verb = 'USERS'
+    args = "SUBWORD"(args,2)
+    if it then do
+      if "LEFT"(args,1) = '@' then args = 'AT' "SUBSTR"(args,2)
+      at = "WORD"(args,1) = 'AT'
+      for = "WORD"(args,1) = 'FOR'
+      if ^ (at | for) then do
+        it = 0
+        parse value nscan(args,',') with forlist rest
+        for = 1
+        verb = 'USER'
+      end
+    end
+  end
+  otherwise do
+    verb = 'USER'
+    if for then
+      call error '005E ''FOR'' is invalid with ''userlist''.',24
+    else if at then
+      if "WORDS"(args) > 1 then
+        call error '006E must have one userid after ''AT node''.',24
+      else do
+        for = 1
+        at = 0
+        forlist = args'@'atlist
+        rest = ''
+      end
+    else do
+      it = 0
+      parse value nscan(args,',') with forlist rest
+      for = 1
+    end
+  end
+end
+
+if it then do
+  if "LEFT"(rest,1) = '@' then
+    rest = 'AT' "SUBSTR"(rest,2)
+  at = "WORD"(rest,1) = 'AT'
+  for = "WORD"(rest,1) = 'FOR'
+  if at then do
+    parse var rest . atlist rest
+    if atlist = '' then
+      call error '001E Missing Node for AT operand.',24
+  end
+  else if for then
+    parse value nscan("SUBWORD"(rest,2),',') with forlist rest
+end
+
+if rest /= '' then
+  call error '004E '''rest''' is invalid.',24
+
+select
+  when verb = 'INDICATE' then do
+    rscscmd = 'CPQ' verb
+    cpcmd = verb
+  end
+  when verb = 'LOGMSG' | verb = 'TIME' |,
+       "LEFT"(verb,4) = 'USER' then do
+    rscscmd = 'CPQ' verb
+    cpcmd = 'QUERY' verb
+  end
+  when verb = 'SYSTEM' then do
+    rscscmd = 'QUERY SYSTEM'
+    cpcmd = 'SMSG' rscsid 'QUERY SYSTEM'
+  end
+end
+
+src = 0
+
+if for then
+  if forlist = '' then
+    call error '002E No users found for the ''FOR'' value.',24
+
+'GLOBALV SELECT *TELL GET NETUSE NETUSE_LIMIT'
+if netuse_limit = '' then netuse_limit = 100;
+parse var netuse netuse_d netuse_c; nd = "DATE"('o')'/'"LEFT"("TIME"(),2)
+if netuse_d < nd then do; netuse_d = nd; netuse_c = 0; end
+
+do forever
+  if for then do
+    parse var forlist user'@'node','forlist
+    if user = '' then leave
+  end
+  else if at then
+    node = atlist
+  else node = nodeid
+  if verb /= 'USER' then user = ''; else user = ' 'user
+
+  if node = nodeid then
+    'CP' cpcmd||user
+  else
+/* special code to handle arpanet sites */
+    if "TRANSLATE"("RIGHT"(node,5)) = '.ARPA' then
+      select
+        when verb = 'USER' then do
+          parse upper var node node'.ARPA';
+          call netuse 'CP SMSG' rscsid 'CMD CUCHEM FINGER',
+            "STRIP"(user)'@'"STRIP"(node)'@CUCS20'
+        end
+        Otherwise say 'can''t' rscscmd 'on arpanet.'
+      end
+  else
+/* end of special code to handle arpanet sites */
+  do
+    cmds = ''
+    if "POS"('!',node) > 0 then do while "POS"('!',node) > 0
+      parse var node route '!' node
+            cmds = cmds 'CMD' route
+    end
+    call netuse 'CP SMSG' rscsid || cmds 'CMD' node rscscmd||user
+  end
+  src = "MAX"(src,rc)
+  if ^ for then leave
+end
+
+'GLOBALV SELECT *TELL SETL NETUSE' netuse_d netuse_c
+
+exit src
+
+netuse:
+  parse arg netuse_cmd
+  netuse_c = netuse_c + 1
+  if netuse_c > netuse_limit then do
+    say 'You have issued more then' netuse_limit,
+        'net-commands over the past hour.'
+    say 'One could say that you are hogging what is commonly believed to'
+    say 'be a public net with equal time for all!'
+  end
+  netuse_cmd
+return
+
+error: procedure
+  parse source fname .
+  parse arg msg,src
+  'EXECIO 1 EMSG ( STRING WIS'||"LEFT"(fname,3)||msg
+exit src
+
+help:
+do i = 3 by 1
+   if "LEFT"("SOURCELINE"(i),2) = '*/' then exit
+   say "SOURCELINE"(i)
+end
+
