@@ -1,0 +1,1307 @@
+*                                                                       00010000
+* MTRAP <ON|OFF|LOAD>                                                   00020000
+*                                                                       00030000
+*   ON - LOADS NAMES TABLE IF NOT LOADED ALREADY AND STARTS UP IUCV     00040000
+*   OFF - STOPS IUCV                                                    00050000
+*   LOAD - RELEASES NAMES TABLE AND RE-LOADS IT                         00060000
+*                                                                       00070000
+* BLANK USER MEANS THIS IS A NODE NICKNAME.                             00080000
+* BLANK NODE MEANS THIS IS A LOCAL NODE.                                00090000
+*                                                                       00100000
+* '!' ROUTING IS STRIPPED IN THE NODE AND ONLY FINAL NODE RETAINED      00110000
+* NODES WITH '.' FOR ALTERNATE NETWORKS ARE NOT INCLUDED IN TABLE       00120000
+*                                                                       00130000
+*                                                                       00140000
+* WRITTEN BY YOSSIE SILVERMAN, CUNY, LAST UPDATE 12/18/86 AT WICC       00150000
+*                                                                       00160000
+         EJECT ,                                                        00170000
+MTRAP    ENTER R10,R11,WORKAREA=WORKAREA,WORKLEN=WORKLEN,              X00180000
+               CR='WRITTEN BY YOSSIE SILVERMAN, CUNY'                   00190000
+         USING NUCON,0                                                  00200000
+         SPACE ,                                                        00210000
+         STM   R0,R1,SAVEARGS           SAVE PARM REGS AT ENTRY         00220000
+         EJECT ,                                                        00230000
+* FIRST FIND OUT WHO WE ARE AND WHERE WE ARE GOING ...                  00240000
+         LA    R1,IDENTIFY                                              00250000
+         SVC   202                                                      00260000
+         DC    AL4(1)                                                   00270000
+         LA    R4,INPUTBUF                                              00280000
+         RDTERM (R4)                                                    00290000
+         MVC   NAMEFSCB+8(8),INPUTBUF+0                                 00300000
+         MVC   NODEID,INPUTBUF+12                                       00310000
+         MVC   RSCSID,INPUTBUF+25                                       00320000
+         EJECT ,                                                        00330000
+* NOW TO LOAD THE NUCLEUS EXTENSION                                     00340000
+         DMSFREE DWORDS=TRAPSIZE,TYPE=NUCLEUS,ERR=MEMERR1 GET MEMORY    00350000
+         LR    R4,R1                    COPY START ADDRESS              00360000
+         SPACE ,                                                        00370000
+         LA    R1,NUCXPLST              BUILD AREA FOR NUCX PLIST       00380000
+         USING NUCX,R1                  ADDRESSABILITY                  00390000
+         MVC   0(NUCXSIZE,R1),NUCXLOAD  MOVE IN THE PLIST               00400000
+         ST    R4,NUCXADDR              SAVE START OF EXTENSION         00410000
+         ST    R4,NUCXORG               SAVE ORG OF EXTENSION           00420000
+         SVC   202                      CALL CMS                        00430000
+         DC    AL4(1)                   ERRORS INLINE                   00440000
+         DROP  R1                                                       00450000
+         LTR   R15,R15                  CHECK ERROR                     00460000
+         BNZ   NUCXERR1                 YES, ERROR IT                   00470000
+         SPACE ,                                                        00480000
+         L     R5,=A(TRAPLEN)           GET LENGTH                      00490000
+         LA    R2,TRAPSTA               AND START                       00500000
+         LR    R3,R5                    SAME LENGTH TO DEST             00510000
+         DMSEXS MVCL,R4,R2              COPY THE EXTENSION              00520000
+         EJECT ,                                                        00530000
+         LM    R0,R1,SAVEARGS           RESTORE ARG REGS                00540000
+         SPACE 2                                                        00550000
+         SVC   202                      RE-CALL US                      00560000
+         DC    AL4(1)                   NO ERRORS                       00570000
+         SPACE 2                                                        00580000
+RETSYS   EXIT  (R15)                    RETURN TO CMS                   00590000
+         EJECT ,                                                        00600000
+MEMERR1  LINEDIT TEXT='CNYTRA001E NOT ENOUGH MEMORY TO LOAD NUCLEUS EXTX00610000
+               ENSION',DISP=ERRMSG                                      00620000
+         LA    R15,104                                                  00630000
+         B     RETSYS                                                   00640000
+         SPACE 2                                                        00650000
+NUCXERR1 LINEDIT TEXT='CNYTRA002E ERROR WHILE LOADING NUCLEUS EXTENSIONX00660000
+               ',DISP=ERRMSG                                            00670000
+         SPACE ,                                                        00680000
+         LR    R1,R4                                                    00690000
+         DMSFRET DWORDS=TRAPSIZE,LOC=(1)                                00700000
+         LA    R15,104                                                  00710000
+         B     RETSYS                                                   00720000
+         EJECT ,                                                        00730000
+         DS    0D                                                       00740000
+IDENTIFY DC    CL8'IDENTIFY',CL8'(',CL8'STACK',CL8'LIFO',8X'FF'         00750000
+         SPACE ,                                                        00760000
+NUCXLOAD DC    CL8'NUCEXT',CL8'MTRAP',XL4'0000D000'                     00770000
+         DC    A(*-*,0,*-*,TRAPLEN)                                     00780000
+         SPACE 2                                                        00790000
+         LTORG ,                                                        00800000
+         EJECT ,                                                        00810000
+WORKAREA DSECT ,                                                        00820000
+NUCXPLST DS    0D,XL(NUCXSIZE)                                          00830000
+SAVEARGS DS    2A                                                       00840000
+INPUTBUF DS    CL130                                                    00850000
+WORKLEN  EQU   *-WORKAREA                                               00860000
+MTRAP    CSECT ,                                                        00870000
+         EJECT ,                                                        00880000
+TRAPSTA  ENTER CSECT=NO,WORKAREA=TRAPWORK,WORKLEN=TRAPWLEN              00890000
+         ICM   R11,B'1111',TRAPBASE                                     00900000
+         BNZ   *+16                                                     00910000
+         LA    R11,2048(,R12)                                           00920000
+         LA    R11,2048(,R11)                                           00930000
+         USING TRAPSTA+4096,R11                                         00940000
+         STM   R11,R12,TRAPBASE                                         00950000
+         SPACE 2                                                        00960000
+         CLM   R1,B'1000',=X'FE'                                        00970000
+         BE    ENDCMD                                                   00980000
+         CLM   R1,B'1000',=X'FF'                                        00990000
+         BE    SERVICE                                                  01000000
+         CLC   8(8,R1),=8X'FF'                                          01010000
+         BE    RET0                                                     01020000
+         CLC   =C'SET ',8(R1)                                           01030000
+         BE    SET                                                      01040000
+         CLC   =C'NAMEFIND',8(R1)                                       01050000
+         BE    NAMEFIND                                                 01060000
+         CLC   16(8,R1),=8X'FF'                                         01070000
+         BNE   PARMERR                                                  01080000
+         CLC   =C'ON ',8(R1)                                            01090000
+         BE    ON                                                       01100000
+         CLC   =C'OFF ',8(R1)                                           01110000
+         BE    OFF                                                      01120000
+         CLC   =C'LOAD ',8(R1)                                          01130000
+         BE    LOAD                                                     01140000
+         CLC   =C'SLEEP ',8(R1)                                         01150000
+         BE    SLEEP                                                    01160000
+         SPACE 2                                                        01170000
+PARMERR  LINEDIT TEXT='CNYTRA003E INVALID PARAMETER',DISP=ERRMSG        01180000
+         SPACE 2                                                        01190000
+SYNTAX   LA    R15,24                                                   01200000
+         B     RETURN                                                   01210000
+         EJECT ,                                                        01220000
+RETURN   EXIT  (R15)                                                    01230000
+         SPACE 2                                                        01240000
+RET0     XR    R15,R15                                                  01250000
+         B     RETURN                                                   01260000
+         EJECT ,                                                        01270000
+ENDCMD   DS    0H                                                       01280000
+         TM    FLAG,$ALOAD                                              01290000
+         BZ    NOTALOAD                                                 01300000
+         TM    FLAG,$TREE+$IUCV        ANYTHING TO CHECK?               01310000
+         BNO   NOTALOAD                NO,                              01320000
+         FSSTATE FSCB=NAMEFSCB,FORM=E,TYPCALL=BALR,ERROR=NONAMES        01330000
+         LR    R2,R1                                                    01340000
+         USING FSTD,R2                                                  01350000
+         CLC   FSTCOPY+FSTFNAME-FSTD(L'FSTFNAME),FSTFNAME               01360000
+         BNE   RELOAD                                                   01370000
+         CLC   FSTCOPY+FSTFMODE-FSTD(L'FSTFMODE+L'FSTRECCT),FSTFMODE    01380000
+         BNE   RELOAD                                                   01390000
+         CLC   FSTCOPY+FSTLRECL-FSTD(L'FSTLRECL+L'FSTBLKCT),FSTLRECL    01400000
+         BNE   RELOAD                                                   01410000
+         L     R15,AADTLKP                                              01420000
+         LA    R1,NAMEFSCB                                              01430000
+         BALR  R14,R15                                                  01440000
+         USING ADTSECT,R1                                               01450000
+         TM    ADTFLG4,ADTEDF                                           01460000
+         BZ    NOTEDF                                                   01470000
+         DROP  R1                                                       01480000
+         CLC   FSTCOPY+FSTADATI-FSTD(L'FSTADATI),FSTADATI               01490000
+         BNE   RELOAD                                                   01500000
+         B     NOTALOAD                                                 01510000
+NOTEDF   DS    0H                                                       01520000
+         CLC   FSTCOPY+FSTADATI-FSTD(5),FSTADATI                        01530000
+         BNE   RELOAD                                                   01540000
+         B     NOTALOAD                                                 01550000
+         SPACE ,                                                        01560000
+NONAMES  BAL   R10,DROPTREE                                             01570000
+         B     NOTALOAD                                                 01580000
+         DROP  R2                                                       01590000
+         SPACE ,                                                        01600000
+RELOAD   LINEDIT TEXT='MTRAP: RELOADING NAMES FILE',DISP=SIO            01610000
+         BAL   R10,DROPTREE                                             01620000
+         BAL   R10,LOADTREE                                             01630000
+         SPACE ,                                                        01640000
+NOTALOAD DS    0H                                                       01650000
+         TM    FLAG,$ASLEEP                                             01660000
+         BO    SLEEP                                                    01670000
+         B     RET0                                                     01680000
+         EJECT ,                                                        01690000
+SERVICE  DS    0H                                                       01700000
+         CLC   =C'RESET ',8(R1)                                         01710000
+         BNE   RET0                                                     01720000
+         BAL   R10,DROPIUCV                                             01730000
+         BAL   R10,DROPTREE                                             01740000
+         LA    R0,MSGPURGE                                              01750000
+         LA    R1,CPBUFF                                                01760000
+         L     R2,=AL1(X'40',0,0,L'MSGPURGE)                            01770000
+         LA    R3,1                                                     01780000
+         DIAG  R0,R2,X'08'                                              01790000
+         B     RET0                                                     01800000
+         SPACE 2                                                        01810000
+ON       DS    0H                                                       01820000
+         BAL   R10,LOADTREE                                             01830000
+         BAL   R10,LOADIUCV                                             01840000
+         LA    R0,MSGON                                                 01850000
+         LA    R1,L'MSGON                                               01860000
+         DIAG  R0,R1,X'08'                                              01870000
+         B     RET0                                                     01880000
+         SPACE 2                                                        01890000
+OFF      DS    0H                                                       01900000
+         BAL   R10,DROPIUCV                                             01910000
+         B     RET0                                                     01920000
+         SPACE 2                                                        01930000
+LOAD     DS    0H                                                       01940000
+         BAL   R10,DROPTREE                                             01950000
+         BAL   R10,LOADTREE                                             01960000
+         B     RET0                                                     01970000
+         EJECT ,                                                        01980000
+SLEEP    DS    0H                                                       01990000
+         MVC   SPSW,IONPSW             SAVE FROM I/O OLD PSW            02000000
+         SPACE ,                                                        02010000
+         XR    R0,R0                   MASK=X'00', NOTHING ELSE         02020000
+         LA    R1,SLEEP1               ADDRESS OF FLIH                  02030000
+         STM   R0,R1,IONPSW            SAVE INTO I/O NEW PSW            02040000
+         SPACE ,                                                        02050000
+         LA    R0,SLEEP0               ADDRESS OF RETURN TO WAIT        02060000
+         ST    R0,SLEEPPSW+4           SAVE IT TOO                      02070000
+         SPACE ,                                                        02080000
+         L     R1,ADEVTAB              ADDRESS OF DEVTAB                02090000
+         SPACE ,                                                        02100000
+SLEEP0   LPSW  SLEEPPSW                LOAD A WAIT STATE PSW            02110000
+         SPACE ,                                                        02120000
+SLEEP1   TM    CSW+4,X'80'             FLIH: IS IT ATTN?                02130000
+         BZ    SLEEP2                  NO, PASS ON TO CMS               02140000
+         CLC   0(2,R1),IOOPSW+2        IS IT CONSOLE?                   02150000
+         BE    SLEEP3                  YES, EXIT SLEEP                  02160000
+         SPACE ,                                                        02170000
+SLEEP2   LPSW  SPSW                    NO, CHAIN TO CMS                 02180000
+         SPACE ,                                                        02190000
+SLEEP3   MVC   IONPSW,SPSW             RESTORE IOOPSW                   02200000
+         B     RET0                    RETURN                           02210000
+         EJECT ,                                                        02220000
+SET      DS    0H                                                       02230000
+         CLC   =8X'FF',32(R1)                                           02240000
+         BNE   PARMERR                                                  02250000
+         LA    R2,$ALOAD                                                02260000
+         CLC   =C'AUTOLOAD',16(R1)     IS IT 'SET AUTOLOAD'?            02270000
+         BE    ONOFF                                                    02280000
+         LA    R2,$ASLEEP                                               02290000
+         CLC   =C'AUTOSLEE',16(R1)     IS IT 'SET AUTOSLEEP'?           02300000
+         BNE   PARMERR                                                  02310000
+         SPACE 2                                                        02320000
+ONOFF    LA    R3,SETOI                                                 02330000
+         CLC   =C'ON ',24(R1)                                           02340000
+         BE    SETIT                                                    02350000
+         CLC   =C'OFF ',24(R1)                                          02360000
+         BNE   PARMERR                                                  02370000
+         LA    R3,SETNI                                                 02380000
+         X     R2,=X'000000FF'                                          02390000
+         SPACE ,                                                        02400000
+SETIT    EX    R2,0(,R3)                                                02410000
+         B     RET0                                                     02420000
+         SPACE ,                                                        02430000
+SETOI    OI    FLAG,*-*                                                 02440000
+SETNI    NI    FLAG,*-*                                                 02450000
+         EJECT ,                                                        02460000
+NAMEFIND DS    0H                                                       02470000
+         CLI   16(R1),X'FF'                                             02480000
+         BE    SYNTAX                                                   02490000
+         MVC   NODE,16(R1)                                              02500000
+         MVC   USER,=CL8' '                                             02510000
+         CLI   24(R1),X'FF'                                             02520000
+         BE    *+10                                                     02530000
+         MVC   USER,24(R1)                                              02540000
+         SPACE ,                                                        02550000
+         ICM   R1,B'1111',TREEHEAD+LINK+RIGHT HEAD OF CHAIN             02560000
+         BZ    NAMEF2                  NOTHING THERE                    02570000
+         USING NAM,R1                                                   02580000
+NAMEF1   LR    R15,R1                  ADDRESS OF BLOCK                 02590000
+         BAL   R9,TREECLC              LEFT/RIGHT/EQUAL?                02600000
+         BE    NAMEF2                  EQUAL -> FOUND                   02610000
+         L     R1,NAMLINK(R15)         FETCH LINK...                    02620000
+         LTR   R1,R1                   IS IT THERE?                     02630000
+         BNZ   NAMEF1                  YES, CONTINUE SEARCH             02640000
+NAMEFE1  LA    R15,28                                                   02650000
+         B     RETURN                                                   02660000
+NAMEF2   DS    0H                                                       02670000
+         LA    R1,NAMNICK                                               02680000
+         DROP  R1                                                       02690000
+         ICM   R1,B'1000',=X'08'                                        02700000
+         ST    R1,ATTN+12                                               02710000
+         LA    R1,ATTN                                                  02720000
+         SVC   202                                                      02730000
+         DC    AL4(1)                                                   02740000
+         B     RETURN                                                   02750000
+         EJECT ,                                                        02760000
+*                                                                       02770000
+* LOADIUCV: START UP THE IUCV ENVIRONMENT                               02780000
+*                                                                       02790000
+LOADIUCV TM    FLAG,$IUCV                                               02800000
+         BOR   R10                                                      02810000
+         SPACE ,                                                        02820000
+         STCTL C0,C0,CTLREG0                                            02830000
+         OC    CTLREG0,=A(IPXMASK)                                      02840000
+         LCTL  C0,C0,CTLREG0                                            02850000
+         LA    R9,IUCVPARM                                              02860000
+         USING IPARML,R9                                                02870000
+         XC    0(8*IPSIZE,R9),0(R9)                                     02880000
+         IUCV  DCLBFR,PRMLIST=(R9),BUFFER=(R9)                          02890000
+         BZ    BXMSG1                                                   02900000
+         SPACE ,                                                        02910000
+BXMSG0   BALR  R2,0                                                     02920000
+         SLL   R2,2                                                     02930000
+         SRL   R2,30                                                    02940000
+         LINEDIT TEXT='CNYTRA004E IUCV ERROR, CC=.., IPRCODE=..',      X02950000
+               SUB=(DEC,(R2),HEX4A,IPRCODE),DISP=ERRMSG,RENT=NO         02960000
+         LA    R15,44                                                   02970000
+         B     RETURN                                                   02980000
+         SPACE ,                                                        02990000
+BXMSG1   XC    0(8*IPSIZE,R9),0(R9)                                     03000000
+         IUCV  CONNECT,PRMLIST=(R9),USERID=MSGSYS                       03010000
+         BNZ   BXMSG0                                                   03020000
+         SPACE ,                                                        03030000
+         MVC   SAVEXPSW,EXTNPSW                                         03040000
+         XR    R0,R0                                                    03050000
+         LA    R1,TRAPEXT                                               03060000
+         STM   R0,R1,EXTNPSW                                            03070000
+         OI    FLAG,$IUCV                                               03080000
+         BR    R10                                                      03090000
+         DROP  R9                                                       03100000
+         EJECT ,                                                        03110000
+*                                                                       03120000
+* DROPIUCV: TERMINATE IUCV ENVORONMENT                                  03130000
+*                                                                       03140000
+DROPIUCV TM    FLAG,$IUCV                                               03150000
+         BZR   R10                                                      03160000
+         SPACE ,                                                        03170000
+         LA    R9,IUCVPARM                                              03180000
+         USING IPARML,R9                                                03190000
+         IUCV  SEVER,PRMLIST=(R9),ALL=YES                               03200000
+         IUCV  RTRVBFR                                                  03210000
+         STCTL C0,C0,CTLREG0                                            03220000
+         NC    CTLREG0,=A(X'FFFFFFFF'-IPXMASK)                          03230000
+         LCTL  C0,C0,CTLREG0                                            03240000
+         MVC   EXTNPSW,SAVEXPSW                                         03250000
+         NI    FLAG,X'FF'-$IUCV                                         03260000
+         BR    R10                                                      03270000
+         DROP  R9                                                       03280000
+         EJECT ,                                                        03290000
+*                                                                       03300000
+* LOADTREE: LOAD A NAMES FILE INTO A BALANCED TREE                      03310000
+*                                                                       03320000
+LOADTREE DS    0H                                                       03330000
+         TM    FLAG,$TREE                                               03340000
+         BOR   R10                                                      03350000
+         SPACE ,                                                        03360000
+         LA    R2,NAMEFSCB                                              03370000
+         USING FSCBD,R2                                                 03380000
+         FSSTATE FSCB=(R2),ERROR=0(R10),FORM=E,TYPCALL=BALR             03390000
+         NI    FSTFLAGS-FSTD(R1),X'FF'-FSTFILEA                         03400000
+         USING FSTD,R1                                                  03410000
+         MVC   FSTCOPY,0(R1)                                            03420000
+         SPACE ,                                                        03430000
+         MVC   FSCBFV,FSTRECFM                                          03440000
+         MVC   FSCBFM,FSTFMODE                                          03450000
+         MVC   FSCBSIZE,FSTLRECL                                        03460000
+         MVI   FSCBFLG,0                                                03470000
+         MVC   FSCBAITN,=F'1'                                           03480000
+         LA    R0,NAMESIO                                               03490000
+         ST    R0,FSCBBUFF                                              03500000
+         SPACE ,                                                        03510000
+         DROP  R1,R2                                                    03520000
+         SPACE ,                                                        03530000
+         NI    FLAG2,X'FF'-$EOF        HAVEN'T EVEN TRIED TO READ YET.. 03540000
+         MVI   NAMESPAD,C' '                                            03550000
+         NI    FLAG2,X'FF'-$NICK       NO NICKNAME YET...               03560000
+         XR    R7,R7                   REMAINING CURRENT LINE IS NULL   03570000
+         SPACE ,                                                        03580000
+         BAL   R14,FINDNUCX                                             03590000
+         ST    R15,EXITINFO                                             03600000
+         SPACE ,                                                        03610000
+TREELOOP BAL   R9,GETTAG               RETURN WITH R6 = LENGTH          03620000
+         LA    R2,TAGTAB-4                                              03630000
+         XR    R3,R3                                                    03640000
+         NI    FLAG2,X'FF'-$EXITTAB                                     03650000
+TREELP2  ICM   R3,B'0001',4(R2)                                         03660000
+         BNZ   TREES0                                                   03670000
+         TM    FLAG2,$EXITTAB          IN EXIT TABLE?                   03680000
+         BO    TREELOOP                YES, END OF SCAN                 03690000
+         OI    FLAG2,$EXITTAB          REMEMBER WE ARE IN EXIT TABLE    03700000
+         XR    R4,R4                   THIS WILL BE OFFSET IN NAMESVAR  03710000
+         ICM   R2,B'1111',EXITINFO     FETCH EXIT INFO STUFF            03720000
+         BZ    TREELOOP                OH OH...                         03730000
+         ICM   R2,B'1111',4(R2)        0(R2) IS CODE, 4(R2) IS TABLE    03740000
+         BZ    TREELOOP                OH OH...                         03750000
+         ICM   R0,B'1111',0(R2)        CHECK COUNT OF VALUES            03760000
+         BZ    TREELOOP                                                 03770000
+         B     TREELP2                                                  03780000
+TREES0   LA    R2,5(,R2)               SKIP PREVIOUS ADDRESS AND LENGTH 03790000
+         CR    R3,R6                   SAME LENGTH?                     03800000
+         BNE   TREES1                  NO, JUST SKIP ENTRY              03810000
+         LA    R0,NAMESBUF             START OF TAG                     03820000
+         LR    R1,R6                   COPY LENGTH                      03830000
+         CLCL  R0,R2                   COMPARE THE TWO                  03840000
+         BE    TREEFND1                FOUND IN TABLE                   03850000
+TREES1   ALR   R2,R3                                                    03860000
+         LA    R4,4(,R4)               NEXT SLOT IN NAMESVAR            03870000
+         B     TREELP2                                                  03880000
+         SPACE ,                                                        03890000
+TREEFND1 ICM   R1,B'1111',0(R2)                                         03900000
+         BZ    SAVEVAL                                                  03910000
+         B     TRAPSTA(R1)                                              03920000
+         SPACE 2                                                        03930000
+TAGTAB   DC    AL1(4),C'NICK',AL4(#NICK-TRAPSTA)                        03940000
+         DC    AL1(6),C'USERID',AL4(#USERID-TRAPSTA)                    03950000
+         DC    AL1(4),C'NODE',AL4(#NODE-TRAPSTA)                        03960000
+         DC    AL1(0)                                                   03970000
+         EJECT ,                                                        03980000
+#NICK    DS    0H                                                       03990000
+#NICK0   TM    FLAG2,$NICK                                              04000000
+         BZ    #NICK1                                                   04010000
+         TM    FLAG2,$USERID+$NODE                                      04020000
+         BZ    #NICK1                  USER OR NODE NOT SPECIFIED       04030000
+         SPACE ,                                                        04040000
+         MVC   USER,NEWBLOCK+NAMUSER-NAM MOVE FOR TREECLC               04050000
+         MVC   NODE,NEWBLOCK+NAMNODE-NAM MOVE FOR TREECLC               04060000
+         L     R2,NAMESADR             ADDRESS OF END OF STRINGS        04070000
+         LA    R0,NEWBLOCK             START OF VAR-LENGTH BLOCK        04080000
+         SLR   R2,R0                   LENGTH IN BYTES                  04090000
+         LA    R0,7(,R2)               ROUND UP                         04100000
+         SRL   R0,3                    R0 = DWORDS FOR NEW BLOCK        04110000
+         LA    R1,TREEHEAD             R1 = HEAD OF TREE                04120000
+         B     TREEADD                 GO ADD IT IN                     04130000
+         SPACE 2                                                        04140000
+*                                                                       04150000
+* HANDLE THE ':NICK' TAG: INITIALIZE THE NEWBLOCK AND PICK UP THE VALUE 04160000
+*                                                                       04170000
+#NICK1   DS    0H                                                       04180000
+         TM    FLAG2,$EOF              EOF?                             04190000
+         BZ    NOTDONE                 NO, NOT DONE YET...              04200000
+         SPACE ,                                                        04210000
+         OI    FLAG,$TREE                                               04220000
+         FSCLOSE FSCB=NAMEFSCB,TYPCALL=BALR                             04230000
+         BR    R10                                                      04240000
+         SPACE ,                                                        04250000
+NOTDONE  DS    0H                                                       04260000
+         MVC   NEWBLOCK(NAMLEN),DEFAULT                                 04270000
+         ICM   R1,B'1111',EXITINFO     ADDRESS OF 2-WORDS               04280000
+         BZ    NOTDONE1                                                 04290000
+         ICM   R1,B'1111',4(R1)        GET ADDRESS OF TABLE             04300000
+         BZ    NOTDONE1                                                 04310000
+         ICM   R1,B'1111',0(R1)        GET LENGTH OF TABLE              04320000
+         BZ    NOTDONE1                                                 04330000
+         SLA   R1,2                    *4 (WORD PER ENTRY)              04340000
+         BCTR  R1,0                                                     04350000
+         EX    R1,XCVAR NEWBLOCK+NAMVAR-NAM(*-*),NEWBLOCK+NAMVAR-NAM    04360000
+         LA    R1,1(,R1)                                                04370000
+NOTDONE1 LA    R1,NEWBLOCK+NAMVAR-NAM(R1)                               04380000
+         ST    R1,NAMESADR             INIT NAMESADR = NEWBLOCK.NAMVAR  04390000
+         MVI   FLAG2,0                                                  04400000
+         SPACE ,                                                        04410000
+         BAL   R9,GETVAL                                                04420000
+         CH    R6,=H'8'                                                 04430000
+         BH    TREELOOP                                                 04440000
+         TR    NAMESBUF(8),LOWERTAB                                     04450000
+         L     R9,NUCUPPER                                              04460000
+         TR    NAMESBUF(1),0(R9)                                        04470000
+         LA    R0,NEWBLOCK+NAMNICK-NAM                                  04480000
+         BAL   R9,TREEMV1                                               04490000
+         MVI   FLAG2,$NICK                                              04500000
+         B     TREELOOP                                                 04510000
+         SPACE 2                                                        04520000
+XCVAR    XC    NEWBLOCK+NAMVAR-NAM(*-*),NEWBLOCK+NAMVAR-NAM             04530000
+         EJECT ,                                                        04540000
+NEWEXIT  STM   R0,R3,STACK             SAVE SOME REGS                   04550000
+         STH   R0,NEWBLOCK+NAMDWRDS-NAM SAVE LENGTH IN DWORDS           04560000
+         A     R0,NUCXFRES             UPDATE NUCLEUS                   04570000
+         ST    R0,NUCXFRES               MEMORY ACCOUNTING              04580000
+         SPACE ,                                                        04590000
+         LA    R0,NEWBLOCK             ADDRESS TO RELOCATE FROM         04600000
+         LA    R2,NEWBLOCK+NAMVAR-NAM  ADDRESS TO RELOCATE AT           04610000
+         ICM   R3,B'1111',EXITINFO                                      04620000
+         BZ    ENDADJ                                                   04630000
+         ICM   R3,B'1111',4(R3)                                         04640000
+         BZ    ENDADJ                                                   04650000
+         ICM   R3,B'1111',0(R3)                                         04660000
+         BZ    ENDADJ                                                   04670000
+         SPACE ,                                                        04680000
+PTRADJST ICM   R15,B'1111',0(R2)       FETCH ADDRESS                    04690000
+         BZ    NOADJ                   NIL, LEAVE ALONE                 04700000
+         SLR   R15,R0                  GET OFFSET FROM SOURCE           04710000
+         ALR   R15,R1                  ADD ADDRESS OF DEST              04720000
+         ST    R15,0(,R2)              AND SAVE BACK                    04730000
+NOADJ    LA    R2,4(,R2)               SKIP IT                          04740000
+         BCT   R3,PTRADJST             LOOP ON THEM ALL                 04750000
+         SPACE ,                                                        04760000
+ENDADJ   LR    R2,R1                   COPY TO (R1)                     04770000
+         L     R1,NAMESADR             GET END OF SOURCE                04780000
+         SLR   R1,R0                   LESS START OF SOURCE             04790000
+         LR    R3,R1                   SAME FOR DEST LENGTH             04800000
+         MVCL  R2,R0                   MOVE IT                          04810000
+         SPACE ,                                                        04820000
+         LM    R0,R3,STACK                                              04830000
+         BR    R9                                                       04840000
+         SPACE 2                                                        04850000
+OLDEXIT  B     #NICK1                                                   04860000
+         EJECT ,                                                        04870000
+#USERID  DS    0H                                                       04880000
+         TM    FLAG2,$USERID                                            04890000
+         BO    TREELOOP                                                 04900000
+         NI    FLAG2,X'FF'-$NICK                                        04910000
+         BAL   R9,GETVAL                                                04920000
+         CH    R6,=H'8'                                                 04930000
+         BH    TREELOOP                                                 04940000
+         LA    R0,NEWBLOCK+NAMUSER-NAM                                  04950000
+         BAL   R9,TREEMV1              MOVE FROM NAMESBUF TO (R0)       04960000
+         OC    NEWBLOCK+NAMUSER-NAM(8),=CL8' '                          04970000
+         OI    FLAG2,$NICK+$USERID                                      04980000
+         B     TREELOOP                                                 04990000
+         SPACE 2                                                        05000000
+#NODE    DS    0H                                                       05010000
+         TM    FLAG2,$NODE                                              05020000
+         BO    TREELOOP                                                 05030000
+         NI    FLAG2,X'FF'-$NICK                                        05040000
+         BAL   R9,GETVAL                                                05050000
+         LA    R1,NAMESBUF            IS THERE A '.' IN THE NODE?       05060000
+         LR    R0,R6                                                    05070000
+         CLI   0(R1),C'.'                                               05080000
+         BE    TREELOOP               YES, THIS IS BAD                  05090000
+         LA    R1,1(,R1)                                                05100000
+         BCT   R0,*-12                                                  05110000
+         LA    R1,NAMESBUF(R6)        IS THERE A LAST '!'?              05120000
+         LR    R0,R6                                                    05130000
+         BCTR  R1,0                                                     05140000
+         CLI   0(R1),C'!'                                               05150000
+         BE    *+10                    YES, TRUNCATE ALL PRECEEDING     05160000
+         BCT   R0,*-10                                                  05170000
+         BCTR  R1,0                                                     05180000
+         SR    R6,R0                   LESS THEN 0?                     05190000
+         BZ    TREELOOP                                                 05200000
+         CH    R6,=H'8'                MORE THEN 8?                     05210000
+         BH    TREELOOP                                                 05220000
+         LA    R2,1(,R1)               START OF NODE                    05230000
+         LA    R0,NEWBLOCK+NAMNODE-NAM                                  05240000
+         BAL   R9,TREEMV2              MOVE FROM (R2) TO (R0)           05250000
+         OC    NEWBLOCK+NAMNODE-NAM(8),=CL8' '                          05260000
+         OI    FLAG2,$NICK+$NODE                                        05270000
+         B     TREELOOP                                                 05280000
+         EJECT ,                                                        05290000
+* SAVE A GENERAL VALUE...  (ENTER WITH R4=OFFSET IN NAMESVAR)           05300000
+SAVEVAL  DS    0H                                                       05310000
+         LA    R3,NEWBLOCK+NAMVAR-NAM(R4) ADDRESS OF SLOT FOR @VALUE    05320000
+         TM    FLAG2,$NICK             HAD A NICK YET?                  05330000
+         BZ    TREELOOP                NO, OH OH...                     05340000
+         ICM   R0,B'1111',0(R3)        FETCH CURRENT VALUE              05350000
+         BNZ   TREELOOP                IF SET, SKIP THIS ONE            05360000
+         MVC   0(4,R3),NAMESADR        MOVE NAMESADR                    05370000
+         BAL   R9,GETVAL               GET THE VALUE                    05380000
+         L     R2,NAMESADR             GET CURRENT ADDRESS              05390000
+         STC   R6,0(,R2)               SAVE LENGTH BYTE                 05400000
+         LR    R1,R6                   COPY LENGTH                      05410000
+         LR    R3,R6                   COPY LENGTH                      05420000
+         LA    R2,1(,R2)               GET START OF DEST                05430000
+         LA    R0,NAMESBUF             START OF VALUE                   05440000
+         MVCL  R2,R0                   MOVE IT TO NAMESVAR              05450000
+         ST    R2,NAMESADR             AND UPDATE ADDRESS               05460000
+         B     TREELOOP                                                 05470000
+         EJECT ,                                                        05480000
+TREEMV1  LA    R2,NAMESBUF                                              05490000
+TREEMV2  LR    R3,R6                                                    05500000
+         ICM   R3,B'1000',=X'40'                                        05510000
+         LA    R1,8                                                     05520000
+         MVCL  R0,R2                                                    05530000
+         BR    R9                                                       05540000
+         EJECT ,                                                        05550000
+*                                                                       05560000
+* GETTAG - RETURN THE NEXT AVAILABLE TAG FROM THE NAMES FILE.           05570000
+*          TAG IS UPPERCASED PRIOR TO RETURN.                           05580000
+*                                                                       05590000
+* ENTRY R7/R8 FOR GETCHAR                                               05600000
+* EXIT  NAMESBUF(R6) SET TO TAG AND IT'S LENGTH                         05610000
+*    EXIT TO #NICK0 IF NO TAG FOUND                                     05620000
+*                                                                       05630000
+GETTAG   DS    0H                                                       05640000
+         BAL   R2,GETCHAR                                               05650000
+         BNZ   #NICK0                                                   05660000
+         CLI   0(R15),C' '                                              05670000
+         BNE   GETTAG                                                   05680000
+         BAL   R2,GETCHAR                                               05690000
+         BNZ   #NICK0                                                   05700000
+         CLI   0(R15),C':'                                              05710000
+         BNE   GETTAG                                                   05720000
+         LA    R6,NAMESBUF                                              05730000
+         LA    R3,L'NAMESBUF                                            05740000
+GETTAG1  BAL   R2,GETCHAR                                               05750000
+         BNZ   GETTAG3                                                  05760000
+         CLI   0(R15),C' '                                              05770000
+         BE    GETTAG2                                                  05780000
+         CLI   0(R15),C'.'                                              05790000
+         BE    GETTAG3                                                  05800000
+         MVC   0(1,R6),0(R15)                                           05810000
+         OI    0(R6),C' '                                               05820000
+         LA    R6,1(,R6)                                                05830000
+         BCT   R3,GETTAG1                                               05840000
+GETTAG2  BAL   R2,GETCHAR                                               05850000
+         BNZ   GETTAG3                                                  05860000
+         CLI   0(R15),C'.'                                              05870000
+         BNE   GETTAG2                                                  05880000
+GETTAG3  LA    R2,NAMESBUF                                              05890000
+         SLR   R6,R2                                                    05900000
+         BR    R9                                                       05910000
+         EJECT ,                                                        05920000
+*                                                                       05930000
+* GETVAL - RETURN THE VALUE OF THE LAST READ TAG. ALL CHARACTERS UP     05940000
+*          TO NEXT TAG OR EOF ARE RETURNED IN MIXED CASE.  LEADING/     05950000
+*          TRAILING BLANKS ARE SUPPRESSED.                              05960000
+*                                                                       05970000
+* ENTRY  R7/R8 FOR GETCHAR                                              05980000
+* EXIT   NAMESBUF(R6) SET TO THE TAG AND IT'S LENGTH.                   05990000
+*                                                                       06000000
+GETVAL   DS    0H                                                       06010000
+         LA    R6,NAMESBUF             SET (R6) FOR ERROR CASES         06020000
+         BAL   R2,GETCHAR              GET A CHAR                       06030000
+         BNZ   GETVAL6                 EOF: RETURN NULL VALUE           06040000
+         LA    R3,L'NAMESBUF           GET LENGTH OF NAMESBUF           06050000
+         NI    FLAG2,X'FF'-$BBLANK                                      06060000
+         CLI   0(R15),C' '             LEADING BLANKS?                  06070000
+         BNE   GETVAL2                 NO, JUST MOVE THE CHAR           06080000
+GETVAL1  BAL   R2,GETCHAR              GET ANOTHER CHAR                 06090000
+         BNZ   GETVAL6                 EOF-> CALC LENGTH                06100000
+         CLI   0(R15),C':'             IS IT A ':'?                     06110000
+         BE    GETVAL5                 YES, WE BUMPED INTO THE ' :'     06120000
+GETVAL2  TM    FLAG2,$BBLANK           PREVIOUS BLANK?                  06130000
+         BZ    GETVAL3                 NO,                              06140000
+         NI    FLAG2,X'FF'-$BBLANK     FORGET IT                        06150000
+         LTR   R3,R3                   ROOM FOR INSERTING BLANK?        06160000
+         BZ    GETVAL4                 NO, NEVER MIND                   06170000
+         MVI   0(R6),C' '              MOVE IN A BLANK                  06180000
+         LA    R6,1(,R6)               SKIP IT                          06190000
+         BCTR  R3,0                    DECR LENGTH                      06200000
+GETVAL3  LTR   R3,R3                   ROOM FOR INSERTING CHAR?         06210000
+         BZ    GETVAL4                 NO, NEVER MIND                   06220000
+         MVC   0(1,R6),0(R15)          MOVE IT                          06230000
+         LA    R6,1(,R6)               SKIP IT                          06240000
+         BCTR  R3,0                    DECR LENGTH                      06250000
+GETVAL4  BAL   R2,GETCHAR              GET ANOTHER CHAR                 06260000
+         BNZ   GETVAL6                 EOF-> CALC LENGTH                06270000
+         CLI   0(R15),C' '             BLANK?                           06280000
+         BNE   GETVAL3                 NO, MOVE IT                      06290000
+         OI    FLAG2,$BBLANK           YES, REMEMBER THAT               06300000
+         B     GETVAL1                 AND LOOK FOR POSSIBLE ':'        06310000
+GETVAL5  SH    R8,=H'2'                BACKUP OVER ' :'                 06320000
+         AH    R7,=H'2'                                                 06330000
+GETVAL6  LA    R2,NAMESBUF             GET START OF BUFFER              06340000
+         SLR   R6,R2                   GET LENGTH OF VALUE              06350000
+         BR    R9                      RETURN TO CALLER                 06360000
+         EJECT ,                                                        06370000
+*                                                                       06380000
+* GETCHAR - RETURN THE NEXT CHARACTER FROM THE NAMES FILE.  AT START    06390000
+*           OF EVERY LINE IS A AUTOMATIC BLANK CHARACTER.  MULTIPLE     06400000
+*           BLANKS ARE RETURNED AS ONE.                                 06410000
+*                                                                       06420000
+* INIT  $EOF=0, R7=0, NAMESIO-1=' '                                     06430000
+* ENTRY R7/R8 SET FOR GETCHAR                                           06440000
+* EXIT  R15 POINTING TO NEXT CHARACTER OR CC=NZ MEANING EOF.            06450000
+*                                                                       06460000
+GETCHAR  DS    0H                                                       06470000
+         TM    FLAG2,$EOF              EOF FROM BEFORE?                 06480000
+         BOR   R2                      YES, RETURN WITH CC /= 0         06490000
+         NI    FLAG2,X'FF'-$BLANK      RESET BLANK INDICATOR            06500000
+         LTR   R7,R7                   ANYTHING IN INPUT?               06510000
+         BP    GETCHAR1                YES, GO CHECK IT                 06520000
+GETCHAR0 LA    R8,NAMESIO              BUFFER ADDRESS                   06530000
+         FSREAD FSCB=NAMEFSCB,ERROR=GETCHARE,FORM=E,                   X06540000
+               TYPCALL=BALR                                             06550000
+         USING FSCBD,R1                                                 06560000
+         XC    FSCBAITN,FSCBAITN                                        06570000
+         DROP  R1                                                       06580000
+         BCTR  R8,0                    DECR BUFFER ADDRESS              06590000
+         LA    R7,1                    ADDITIONAL LENGTH FOR ' '        06600000
+         AR    R7,R0                   GET LENGTH OF INPUT (WITH ' ')   06610000
+GETCHAR1 CLI   0(R8),C' '              BLANK?                           06620000
+         BNE   GETCHAR2                NO, GO OUTPUT SOMETHING          06630000
+         OI    FLAG2,$BLANK            REMEMBER WE HAD A BLANK          06640000
+         LA    R8,1(,R8)               SKIP IT                          06650000
+         BCT   R7,GETCHAR1             LOOP ON LINE LENGTH              06660000
+         B     GETCHAR0                OR READ ANOTHER LINE             06670000
+GETCHAR2 LR    R15,R8                  ADDRESS OF CURRENT CHAR          06680000
+         TM    FLAG2,$BLANK            BLANKS?                          06690000
+         BO    GETCHAR3                YES, OUTPUT A BLANK              06700000
+         LA    R8,1(,R8)               ELSE SKIP CURRENT CHAR           06710000
+         BCTR  R7,0                    DECR LENGTH                      06720000
+         BR    R2                      RETURN (CC = 0 FROM 'TM')        06730000
+GETCHAR3 LA    R15,NAMESIO-1           RETURN A BLANK                   06740000
+         XR    R1,R1                   CC = 0                           06750000
+         BR    R2                      RETURN                           06760000
+GETCHARE OI    FLAG2,$EOF                                               06770000
+         BR    R2                                                       06780000
+         EJECT ,                                                        06790000
+*                                                                       06800000
+* TREEADD - SEARCH FOR AND ADD IN A NODE IN A BALANCED TREE.  ALGORITHM 06810000
+*           FROM KNUTH ACP-2.                                           06820000
+*                                                                       06830000
+* ENTRY R1 = ADDRESS OF HEAD OF LIST (2 WORDS)                          06840000
+*       R0 = SIZE TO ALLOCATE IN CASE NEW BLOCK (DWORDS)                06850000
+* EXIT  R1 = NEW/OLD BLOCK                                              06860000
+*       R0 = SAME AS ENTRY                                              06870000
+*          EXIT IS TO OLDEXIT IF MATCHED                                06880000
+*          EXIT IS SUBROUTINE CALL TO NEWEXIT IF NO MATCH               06890000
+*                                                                       06900000
+TREEADD  DS    0H                                                       06910000
+         LR    T,R1                    T <- HEAD                    A1  06920000
+         ICM   S,B'1111',LINK+RIGHT(R1) S <- P <- LINK+RIGHT(HEAD)  A1  06930000
+         BZ    TREENEW1                                             A1  06940000
+         LR    P,S                                                  A1  06950000
+         SPACE ,                                                        06960000
+TREEADD1 LR    R15,P                   COMPARE K,KEY(P)             A2  06970000
+         BAL   R9,TREECLC                                           A2  06980000
+         LR    R1,P                                                 A2  06990000
+         BE    OLDEXIT                 IF K = KEY(P) GOTO SUCCESS   A2  07000000
+         SPACE ,                                                        07010000
+         L     Q,LINK(R15,P)           Q <- LINK(COMP,P)         A3,A4  07020000
+         LTR   Q,Q                     IF Q <> NIL               A3,A4  07030000
+         BNZ   TREESKP                   GOTO LOOP               A3,A4  07040000
+         SPACE ,                                                 A3,A4  07050000
+         LR    R,R15                                             A3,A4  07060000
+         DMSFREE DWORDS=(0),ERR=RETURN,TYPCALL=BALR,             A3,A4 X07070000
+               TYPE=NUCLEUS,MSG=YES                                     07080000
+         XC    0(NAMLEN,R1),0(R1)                                A3,A4  07090000
+         ST    R1,LINK(R,P)             LINK(COMP,P) <- Q        A3,A4  07100000
+         LR    Q,R1                                              A3,A4  07110000
+         B     TREEA5                                            A3,A4  07120000
+         SPACE ,                                                 A3,A4  07130000
+TREESKP  CLI   BAL(Q),0                IF B(Q) = 0               A3,A4  07140000
+         BE    TREESKP2                  GOTO                    A3,A4  07150000
+         LR    T,P                     T <- P                    A3,A4  07160000
+         LR    S,Q                     S <- Q                    A3,A4  07170000
+TREESKP2 LR    P,Q                     P <- Q                    A3,A4  07180000
+         B     TREEADD1                                          A3,A4  07190000
+         EJECT ,                                                        07200000
+TREEA5   DS    0H                                                   A5  07210000
+         LR    R1,Q                                                 A5  07220000
+         BAL   R9,NEWEXIT                                           A5  07230000
+         SPACE ,                                                        07240000
+         LR    R15,S                   COMPARE K,KEY(S)             A6  07250000
+         BAL   R9,TREECLC                                           A6  07260000
+         L     R,LINK(R15,S)           R <- P <- LINK(COMP,S)       A6  07270000
+         LR    P,R                                                  A6  07280000
+         SPACE ,                                                    A6  07290000
+TREELP1  CR    P,Q                     WHILE P <> Q DO BEGIN        A6  07300000
+         BE    TREEPL1                                              A6  07310000
+         LR    R15,P                   COMPARE K,KEY(P)             A6  07320000
+         BAL   R9,TREECLC                                           A6  07330000
+         BAL   R9,TREEBAL                                           A6  07340000
+         STC   R15,BAL(,P)             BAL(P) <- -1|1               A6  07350000
+         LR    R15,P                                                A6  07360000
+         BAL   R9,TREECLC                                           A6  07370000
+         L     P,LINK(R15,P)           P <- LINK(COMP,P)            A6  07380000
+         B     TREELP1                                              A6  07390000
+TREEPL1  DS    0H                                                   A6  07400000
+         SPACE ,                                                        07410000
+         LR    R15,S                                                A7  07420000
+         BAL   R9,TREECLC                                           A7  07430000
+         BAL   R9,TREEBAL                                           A7  07440000
+         LR    ALF,R15                                              A7  07450000
+         CLI   BAL(S),0                IF S@.BALANCE = 0 THEN       A7  07460000
+         BNE   TREEBAL1                                             A7  07470000
+         STC   ALF,BAL(,S)               THEN S@.BALANCE = ALF      A7  07480000
+         B     TREEBAL3                                             A7  07490000
+TREEBAL1 CLM   ALF,B'0001',BAL(S)      ELSE IF S@.BALANCE <> ALF    A7  07500000
+         BE    TREEBAL2                                             A7  07510000
+         MVI   BAL(S),0                  THEN S@.BALANCE = 0        A7  07520000
+         B     TREEBAL3                                             A7  07530000
+         SPACE ,                                                        07540000
+TREEBAL2 STM   R7,R8,TREESAVE                                           07550000
+         SPACE ,                                                        07560000
+         LTR   ALF,ALF                                                  07570000
+         SPACE ,                                                        07580000
+         LA    R7,RIGHT                                                 07590000
+         BP    *+8                                                      07600000
+         LA    R7,LEFT                                                  07610000
+         SPACE ,                                                        07620000
+         LA    R8,RIGHT                                                 07630000
+         BM    *+8                                                      07640000
+         LA    R8,LEFT                                                  07650000
+         SPACE ,                                                        07660000
+         CLM   ALF,B'0001',BAL(R)                                   A7  07670000
+         BNE   TREEA81                                              A7  07680000
+         SPACE ,                                                        07690000
+         LR    P,R                                                  A8  07700000
+         L     R15,LINK(ALFM1,R)                                    A8  07710000
+         ST    R15,LINK(ALFP1,S)                                    A8  07720000
+         ST    S,LINK(ALFM1,R)                                      A8  07730000
+         MVI   BAL(S),0                                             A8  07740000
+         MVI   BAL(R),0                                             A8  07750000
+         B     TREEA10                                              A8  07760000
+         SPACE ,                                                        07770000
+TREEA81  L     P,LINK(ALFM1,R)                                      A9  07780000
+         L     R15,LINK(ALFP1,P)                                    A9  07790000
+         ST    R15,LINK(ALFM1,R)                                    A9  07800000
+         ST    R,LINK(ALFP1,P)                                      A9  07810000
+         L     R15,LINK(ALFM1,P)                                    A9  07820000
+         ST    R15,LINK(ALFP1,S)                                    A9  07830000
+         ST    S,LINK(ALFM1,P)                                      A9  07840000
+         SPACE ,                                                        07850000
+         CLM   ALF,B'0001',BAL(P)                                   A9  07860000
+         BNE   TREEA91                                              A9  07870000
+         LCR   ALF,ALF                                              A9  07880000
+         STC   ALF,BAL(,S)                                          A9  07890000
+         MVI   BAL(R),0                                             A9  07900000
+         B     TREEA93                                              A9  07910000
+TREEA91  CLI   BAL(P),0                                             A9  07920000
+         BNE   TREEA92                                              A9  07930000
+         MVI   BAL(S),0                                             A9  07940000
+         MVI   BAL(R),0                                             A9  07950000
+         B     TREEA93                                              A9  07960000
+TREEA92  MVI   BAL(S),0                                             A9  07970000
+         STC   ALF,BAL(,R)                                          A9  07980000
+TREEA93  MVI   BAL(P),0                                             A9  07990000
+         SPACE ,                                                        08000000
+TREEA10  LM    R7,R8,TREESAVE                                       A10 08010000
+         SPACE ,                                                        08020000
+         LA    R15,RIGHT                                            A10 08030000
+         C     S,LINK+RIGHT(,T)                                     A10 08040000
+         BE    *+8                                                  A10 08050000
+         LA    R15,LEFT                                             A10 08060000
+         ST    P,LINK(R15,T)                                        A10 08070000
+         SPACE ,                                                        08080000
+TREEBAL3 DS    0H                                                       08090000
+         B     OLDEXIT                                                  08100000
+         SPACE 2                                                        08110000
+TREENEW1 DS    0H                                                       08120000
+         DMSFREE DWORDS=(0),ERR=RETURN,TYPCALL=BALR,TYPE=NUCLEUS,      X08130000
+               MSG=YES                                                  08140000
+         XC    0(NAMLEN,R1),0(R1)                                       08150000
+         LR    Q,R1                                                     08160000
+         ST    Q,LINK+RIGHT(,T)        SET RLINK(HEAD) TO NEW BLOCK     08170000
+         LA    R9,OLDEXIT                                               08180000
+         B     NEWEXIT                                                  08190000
+         EJECT ,                                                        08200000
+*                                                                       08210000
+* ENTERED WITH R15=0,4, EXIT WITH R15=-1,1                              08220000
+*                                                                       08230000
+TREEBAL  SRA   R15,1                                                    08240000
+         BCTR  R15,0                                                    08250000
+         BR    R9                                                       08260000
+         SPACE 2                                                        08270000
+*                                                                       08280000
+* LITTLE SUBROUTINE TO COMPARE INPUT PARMS TO BLOCK (@R15)              08290000
+* RETURN R15=0 (USER/NODE > NAM) ELSE R15=4                             08300000
+*                                                                       08310000
+         USING NAM,R15                                                  08320000
+TREECLC  DS    0H                                                       08330000
+         CLC   NODE,NAMNODE            NODE SAME?                       08340000
+         BNE   TREECLC2                NO, GO SET RC                    08350000
+         CLC   USER,NAMUSER            USER SAME?                       08360000
+         BER   R9                      YES, RETURN CC=0                 08370000
+         DROP  R15                                                      08380000
+TREECLC2 LA    R15,RIGHT               FETCH A .TRUE. RC                08390000
+         BHR   R9                      ... IT IS LINE/COL < CLS         08400000
+         LA    R15,LEFT                FETCH A .FALSE. RC               08410000
+         BR    R9                      ... IT IS LINE/COL > CLS         08420000
+         SPACE 2                                                        08430000
+TRAPWORK DSECT ,                                                        08440000
+TREESAVE DS    2F                                                       08450000
+MTRAP    CSECT ,                                                        08460000
+Q        EQU   1                                                        08470000
+T        EQU   2                                                        08480000
+S        EQU   3                                                        08490000
+P        EQU   4                                                        08500000
+R        EQU   5                                                        08510000
+ALF      EQU   0                                                        08520000
+LEFT     EQU   0                                                        08530000
+RIGHT    EQU   4                                                        08540000
+LINK     EQU   0                                                        08550000
+BAL      EQU   8                                                        08560000
+ALFP1    EQU   7                                                        08570000
+ALFM1    EQU   8                                                        08580000
+         EJECT ,                                                        08590000
+*                                                                       08600000
+* DROPTREE: DROP THE TREE OF NAMES.  CALLES FREETREE WHICH CALLS ITSELF 08610000
+*           RECURSIVELY TO ACHIEVE THIS.                                08620000
+*                                                                       08630000
+DROPTREE DS    0H                                                       08640000
+         TM    FLAG,$TREE                                               08650000
+         BZR   R10                                                      08660000
+         NI    FLAG,X'FF'-$TREE                                         08670000
+         LA    R4,STACK-8              TOP OF CHAIN OF CLS'             08680000
+         L     R5,TREEHEAD+LINK+LEFT                                    08690000
+         BAL   R9,FREETREE                                              08700000
+         L     R5,TREEHEAD+LINK+RIGHT                                   08710000
+         BAL   R9,FREETREE                                              08720000
+         XC    TREEHEAD(8),TREEHEAD                                     08730000
+         BR    R10                                                      08740000
+         SPACE 2                                                        08750000
+*                                                                       08760000
+* FREETREE: FREE ALL NODES UNDER NODE POINTED TO BY (R5) AND RETURN     08770000
+*                                                                       08780000
+FREETREE LTR   R5,R5                   END OF BRANCH?                   08790000
+         BZR   R9                      YES,                             08800000
+         LA    R4,8(,R4)                                                08810000
+         ST    R5,0(,R4)                                                08820000
+         ST    R9,4(,R4)                                                08830000
+         L     R5,LINK+LEFT(,R5)                                        08840000
+         BAL   R9,FREETREE                                              08850000
+         L     R5,0(,R4)                                                08860000
+         L     R5,LINK+RIGHT(,R5)                                       08870000
+         BAL   R9,FREETREE                                              08880000
+         L     R1,0(,R4)                                                08890000
+         USING NAM,R1                                                   08900000
+         LH    R0,NAMDWRDS                                              08910000
+         DROP  R1                                                       08920000
+         DMSFRET DWORDS=(0),LOC=(1),TYPCALL=BALR FREE CURRENT           08930000
+         LNR   R0,R0                                                    08940000
+         A     R0,NUCXFRES                                              08950000
+         ST    R0,NUCXFRES                                              08960000
+         L     R9,4(,R4)                                                08970000
+         S     R4,=F'8'                                                 08980000
+         BR    R9                                                       08990000
+         SPACE ,                                                        09000000
+TRAPWORK DSECT ,                                                        09010000
+STACK    DS    (19*2)A                                                  09020000
+MTRAP    CSECT ,                                                        09030000
+         EJECT ,                                                        09040000
+* RETURN IN R15 CONTENTS OF NUCXUSER OR 0 FOR EXIT                      09050000
+FINDNUCX DS    0H                                                       09060000
+         XR    R15,R15                                                  09070000
+         BR    R14                                                      09080000
+         SPACE 2                                                        09090000
+EXITNAME DC    CL8'MTRAPX'                                              09100000
+         EJECT ,                                                        09110000
+*                                                                       09120000
+* TRAPEXT: HANDLES ALL EXTERNAL INTERRUPTS                              09130000
+*                                                                       09140000
+TRAPEXT  DS    0H                                                       09150000
+         STM   R0,R15,ECRLOG                                            09160000
+         BALR  R12,0                                                    09170000
+         PUSH  USING                                                    09180000
+         USING *,R12                                                    09190000
+         LM    R11,R12,TRAPBASE                                         09200000
+         POP   USING                                                    09210000
+         SPACE ,                                                        09220000
+         CLC   =Y(IPXCODE),EXTOPSW+2                                    09230000
+         BNE   NPSW                                                     09240000
+         LA    R9,IUCVPARM                                              09250000
+         USING IPARML,R9                                                09260000
+         SPACE ,                                                        09270000
+         CLI   IPTYPE,IPTYPSV          HAVE WE BEEN SEVERED?            09280000
+         BE    XMSGOFF                 YES, THIS IS REAL BAD            09290000
+         CLI   IPTYPE,IPTYPMP          PRIORITY MESSAGE?                09300000
+         BE    XMSGRCV                 YES,                             09310000
+         CLI   IPTYPE,IPTYPMNP         REGULAR MESSAGE?                 09320000
+         BNE   OPSW                    NO,                              09330000
+XMSGRCV  L     R3,IPBFLN1F             GET LENGTH OF MESSAGE            09340000
+         IUCV  RECEIVE,BUFFER=MSGBUF,PRMLIST=(R9) PICK UP MESSAGE       09350000
+         B     PROCMSG                                                  09360000
+XMSGOFF  LINEDIT TEXT='IUCV PATH TO *MSG HAS BEEN SEVERED',DISP=SIO     09370000
+         BAL   R10,DROPIUCV            IF SEVERED, TERMINATE ALL        09380000
+         B     OPSW                    AND WE ARE DONE                  09390000
+         DROP  R9                                                       09400000
+NPSW     MVC   GPRLOG(8),SAVEXPSW                                       09410000
+         LM    R0,R15,ECRLOG                                            09420000
+         LPSW  GPRLOG                                                   09430000
+OPSW     LM    R0,R15,ECRLOG                                            09440000
+         LPSW  EXTOPSW                                                  09450000
+         SPACE 2                                                        09460000
+TRAPBASE DC    2A(0)                                                    09470000
+         EJECT ,                                                        09480000
+*                                                                       09490000
+* PROCMSG: PARSE MESSAGE FOR USERID/NODE/TEXT AND CONTINUE              09500000
+*                                                                       09510000
+PROCMSG  LA    R2,MSGBUF+8                                              09520000
+         SH    R3,=H'8'                                                 09530000
+         STM   R2,R3,SAVETEXT                                           09540000
+         SPACE 2                                                        09550000
+         L     R1,IUCVPARM+IPTRGCLS-IPARML                              09560000
+         CH    R1,=H'3'                                                 09570000
+         BL    NOTSYS                                                   09580000
+         CH    R1,=H'4'                                                 09590000
+         BE    NOTSYS                                                   09600000
+         MVC   NODE,=CL8' '                                             09610000
+         SLA   R1,3                                                     09620000
+         LA    R1,CLS-8(R1)                                             09630000
+         MVC   USER,0(R1)                                               09640000
+         B     GOTMSG                                                   09650000
+         SPACE ,                                                        09660000
+CLS      DC    CL8'MSG',CL8'WNG',CL8'CPCONIO',CL8'SMSG'                 09670000
+         DC    CL8'VMCONIO',CL8'EMSG',CL8'IMSG',CL8'SCIF'               09680000
+         SPACE ,                                                        09690000
+NOTSYS   DS    0H                                                       09700000
+         SPACE 2                                                        09710000
+         MSGPRS RSCSID,NODEID,MSGBUF,R3,R2,USER,NODE,ERROR=GOTMSG0      09720000
+         B     GOTMSG                                                   09730000
+GOTMSG0  MVC   NODE,NODEID             IF ERROR, USE LOCAL NODE         09740000
+         MVC   USER,MSGBUF                       USE ORIGINAL USER      09750000
+         LM    R2,R3,SAVETEXT                                           09760000
+         EJECT ,                                                        09770000
+*                                                                       09780000
+* GOTMSG: USER IS BLANK OR USERID, NODE IS SET, R2(R3)=TEXT             09790000
+*                                                                       09800000
+GOTMSG   DS    0H                                                       09810000
+         NI    FLAG,X'FF'-$DEFINED                                      09820000
+GOTMSG1  DS    0H                                                       09830000
+         STM   R2,R3,SAVETEXT                                           09840000
+         SPACE ,                                                        09850000
+* LOOK FOR USER/NODE COMBI IN THE NAMES TREE                            09860000
+         ICM   R1,B'1111',TREEHEAD+LINK+RIGHT HEAD OF CHAIN             09870000
+         BZ    ENDNICK                 NOTHING THERE                    09880000
+         USING NAM,R1                                                   09890000
+GETNICK  LR    R15,R1                  ADDRESS OF BLOCK                 09900000
+         BAL   R9,TREECLC              LEFT/RIGHT/EQUAL?                09910000
+         BE    ENDNICK                 EQUAL -> FOUND                   09920000
+         L     R1,NAMLINK(R15)         FETCH LINK...                    09930000
+         LTR   R1,R1                   IS IT THERE?                     09940000
+         BNZ   GETNICK                 YES, CONTINUE SEARCH             09950000
+         DROP  R1                                                       09960000
+ENDNICK  DS    0H                                                       09970000
+* AT THIS STAGE, R1=0 OR @NAM-ENTRY                                     09980000
+         LA    R4,CPBUFF               ADDRESS OF OUTPUT COMMAND        09990000
+         SPACE ,                                                        10000000
+         TM    FLAG,$ERROR                                              10010000
+         BZ    NOERROR                                                  10020000
+         LA    R2,ERRHEAD                                               10030000
+         LA    R3,L'ERRHEAD                                             10040000
+         BAL   R10,MOVE                                                 10050000
+         B     SKIPERR                                                  10060000
+NOERROR  DS    0H                                                       10070000
+         SPACE ,                                                        10080000
+         LA    R2,MSGHEAD              HEADER CP COMMAND                10090000
+         LA    R3,L'MSGHEAD            IT'S LENGTH                      10100000
+         BAL   R10,MOVE                MOVE IN 'TAG FI ....'            10110000
+         SPACE ,                                                        10120000
+SKIPERR  DS    0H                                                       10130000
+         NI    FLAG,X'FF'-$GRAF        WE ARE NOT A GRAF                10140000
+         XR    R0,R0                   ZAP                              10150000
+         BCTR  R0,0                    -1                               10160000
+         DIAG  R0,R14,X'24'            CHECK CONSOLE                    10170000
+         LA    R2,=X'8004800140044001' VALID GRAF TYPES                 10180000
+         LA    R3,4                    COUNT OF THEM                    10190000
+IFGRAF   CLM   R15,B'1100',0(R2)       CHECK                            10200000
+         BE    YESGRAF                 YES, WE ARE A GRAF               10210000
+         LA    R2,2(,R2)               SKIP IT                          10220000
+         BCT   R3,IFGRAF               LOOP BACK                        10230000
+         B     NOTGRAF                 NO, WE AREN'T A GRAF             10240000
+YESGRAF  OI    FLAG,$GRAF              YES, WE ARE A GRAF               10250000
+         LA    R2,=X'1DF8'             MOVE IN HIGHLIGHT                10260000
+         LA    R3,2                    LENGTH                           10270000
+         BAL   R10,MOVE                MOVE IT                          10280000
+NOTGRAF  DS    0H                                                       10290000
+         SPACE ,                                                        10300000
+         LTR   R1,R1                                                    10310000
+         BNZ   GOTNICK                                                  10320000
+         SPACE ,                                                        10330000
+         LA    R2,USER                                                  10340000
+         LA    R3,L'USER                                                10350000
+         BAL   R10,STRIP                                                10360000
+         BZ    NOUSER                                                   10370000
+         SPACE ,                                                        10380000
+         BAL   R10,MOVE                                                 10390000
+         LA    R2,C'@'                                                  10400000
+         BAL   R10,MOVE1                                                10410000
+         SPACE ,                                                        10420000
+NOUSER   LA    R2,NODE                                                  10430000
+         LA    R3,L'NODE                                                10440000
+         BAL   R10,STRIP                                                10450000
+         BZ    GOTTITLE                                                 10460000
+         BAL   R10,MOVE                                                 10470000
+         B     GOTTITLE                                                 10480000
+         SPACE ,                                                        10490000
+GOTNICK  DS    0H                                                       10500000
+         USING NAM,R1                                                   10510000
+         LA    R2,NAMNICK                                               10520000
+         LA    R3,L'NAMNICK                                             10530000
+         DROP  R1                                                       10540000
+         BAL   R10,STRIP                                                10550000
+         BAL   R10,MOVE                                                 10560000
+         SPACE ,                                                        10570000
+GOTTITLE LA    R2,=C': '                                                10580000
+         LA    R3,2                                                     10590000
+         BAL   R10,MOVE                                                 10600000
+         SPACE ,                                                        10610000
+         LM    R2,R3,SAVETEXT                                           10620000
+         BAL   R10,MOVE                                                 10630000
+         SPACE ,                                                        10640000
+         TM    FLAG,$GRAF                                               10650000
+         BZ    *+16                                                     10660000
+         LA    R2,=X'1DF0'                                              10670000
+         LA    R3,2                                                     10680000
+         BAL   R10,MOVE                                                 10690000
+         SPACE ,                                                        10700000
+DOCPCMD  LA    R2,CPBUFF                                                10710000
+         SLR   R4,R2                                                    10720000
+         ICM   R4,B'1000',=X'40'                                        10730000
+         LA    R3,MSGBUF                                                10740000
+         LA    R5,1                                                     10750000
+         DIAG  R2,R4,X'08'                                              10760000
+         SPACE ,                                                        10770000
+         LTR   R4,R4                   CHECK RETURN CODE                10780000
+         BNZ   CPDEFP                  NOT ZERO, NO FILE, DEFINE ONE    10790000
+         SPACE ,                                                        10800000
+         TM    FLAG,$ERROR                                              10810000
+         BO    OPSW                                                     10820000
+         SPACE ,                                                        10830000
+         LA    R2,MSGDISP              DISPLAY THE MESSAGE              10840000
+         LA    R3,L'MSGDISP                                             10850000
+         DIAG  R2,R3,X'08'             DO IT...                         10860000
+         SPACE ,                                                        10870000
+         B     OPSW                    AND FINISH UP NOW                10880000
+         SPACE ,                                                        10890000
+CPDEFP   DS    0H                                                       10900000
+         TM    FLAG,$DEFINED                                            10910000
+         BZ    *+12                                                     10920000
+         OI    FLAG,$ERROR                                              10930000
+         B     GOTMSG1                                                  10940000
+*+12     DS    0H                                                       10950000
+         SPACE ,                                                        10960000
+         XR    R3,R3                                                    10970000
+         DIAG  R3,R4,X'24'                                              10980000
+         BC    1,*+12                                                   10990000
+         LA    R3,1(,R3)                                                11000000
+         B     *-12                                                     11010000
+         SPACE ,                                                        11020000
+         STCM  R3,B'0111',CUU1                                          11030000
+         UNPK  CUU1(4),CUU1+1(3)                                        11040000
+         TR    CUU1,=C'0123456789ABCEDF'-C'0'                           11050000
+         MVI   CUU1+3,X'15'                                             11060000
+         MVC   CUU2,CUU1                                                11070000
+         MVC   CUU3,CUU1                                                11080000
+         SPACE ,                                                        11090000
+         LA    R0,CPCMDS                                                11100000
+         L     R4,=AL1(X'40',0,0,L'CPCMDS)                              11110000
+         LA    R1,CPBUFF                                                11120000
+         LA    R5,L'CPBUFF                                              11130000
+         DIAG  R0,R4,X'08'                                              11140000
+         LTR   R4,R4                                                    11150000
+         BZ    *+6                                                      11160000
+         DC    H'0'                                                     11170000
+         SPACE ,                                                        11180000
+         SH    R5,=H'13'                                                11190000
+         LA    R2,CPBUFF                                                11200000
+         CLC   =C'PRT FILE ',0(R2)                                      11210000
+         BE    *+14                                                     11220000
+         LA    R2,1(,R2)                                                11230000
+         BCT   R5,*-14                                                  11240000
+         DC    H'0'                                                     11250000
+         LA    R2,9(,R2)                                                11260000
+         SPACE ,                                                        11270000
+         MVC   MHSPID,0(R2)                                             11280000
+         MVC   MDSPID,0(R2)                                             11290000
+         MVC   MPSPID,0(R2)            FOR PURGE COMMAND                11300000
+         SPACE ,                                                        11310000
+         LM    R2,R3,SAVETEXT                                           11320000
+         OI    FLAG,$DEFINED                                            11330000
+         B     GOTMSG1                                                  11340000
+         EJECT ,                                                        11350000
+STRIP    DS    0H                                                       11360000
+         LA    R15,0(R3,R2)                                             11370000
+         BCTR  R15,0                                                    11380000
+         CLI   0(R15),C' '                                              11390000
+         BNER  R10                                                      11400000
+         BCT   R3,*-8                                                   11410000
+         BR    R10                                                      11420000
+         SPACE 2                                                        11430000
+MOVE     LR    R5,R3                                                    11440000
+         MVCL  R4,R2                                                    11450000
+         BR    R10                                                      11460000
+         SPACE 2                                                        11470000
+MOVE1    STC   R2,0(,R4)                                                11480000
+         LA    R4,1(,R4)                                                11490000
+         BR    R10                                                      11500000
+         EJECT ,                                                        11510000
+IUCVPARM DS    (IPSIZE)D                                                11520000
+MSGSYS   DC    CL8'*MSG'                                                11530000
+         SPACE ,                                                        11540000
+RSCSID   DS    CL8                                                      11550000
+         SPACE ,                                                        11560000
+NICK     DC    CL8' '                                                   11570000
+USER     DS    CL8                                                      11580000
+NODE     DS    CL8                                                      11590000
+         SPACE ,                                                        11600000
+SAVEXPSW DS    D                                                        11610000
+SPSW     DS    D                                                        11620000
+SLEEPPSW DC    0D'0',X'FF020000',AL4(*-*)                               11630000
+PLIST    DS    A        \                                               11640000
+SAVETEXT DS    2A       | KEEP THESE TOGETHER                           11650000
+         DS    A        /                                               11660000
+EXITSAVE DS    18F                                                      11670000
+         SPACE 2                                                        11680000
+ATTN     DC    CL8'ATTN',CL4'LIFO',AL4(*-*)                             11690000
+         SPACE 2                                                        11700000
+NAMEFSCB FSCB  '* NAMES *',FORM=E                                       11710000
+USERID   EQU   NAMEFSCB+8,8,C'C'                                        11720000
+FSTCOPY  DS    XL(FSTDSIZE)                                             11730000
+         SPACE ,                                                        11740000
+DEFAULT  DS    0D,XL(NAMLEN)                                            11750000
+         ORG   DEFAULT+NAMLINK-NAM                                      11760000
+         DC    2A(0)                                                    11770000
+         ORG   DEFAULT+NAMBAL-NAM                                       11780000
+         DC    X'00'                                                    11790000
+         ORG   DEFAULT+NAMUSER-NAM                                      11800000
+         DC    CL8' '                                                   11810000
+         ORG   DEFAULT+NAMNODE-NAM                                      11820000
+NODEID   DC    CL8' '                                                   11830000
+         ORG   DEFAULT+NAMDWRDS-NAM                                     11840000
+         DC    Y(NAMLEN)                                                11850000
+         ORG   ,                                                        11860000
+         SPACE ,                                                        11870000
+LOWERTAB DC    256AL1(*-LOWERTAB)                                       11880000
+         ORG   LOWERTAB+C'A'                                            11890000
+         DC    C'abcdefghi'                                             11900000
+         ORG   LOWERTAB+C'J'                                            11910000
+         DC    C'jklmnopqr'                                             11920000
+         ORG   LOWERTAB+C'S'                                            11930000
+         DC    C'stuvwxyz'                                              11940000
+         ORG   ,                                                        11950000
+         SPACE ,                                                        11960000
+TRAPWORK DSECT ,                                                        11970000
+CTLREG0  DS    F                                                        11980000
+C0       EQU   0                                                        11990000
+EXITINFO DS    F                                                        12000000
+MTRAP    CSECT ,                                                        12010000
+         SPACE ,                                                        12020000
+TREEHEAD DC    A(0,0)                                                   12030000
+         SPACE ,                                                        12040000
+MSGHEAD  EQU   *,12,C'C'                                                12050000
+MHSPID   EQU   *+7,4,C'C'                                               12060000
+         DC    C'TAG FI .... '                                          12070000
+         SPACE ,                                                        12080000
+ERRHEAD  EQU   *,15,C'C'                                                12090000
+         DC    C'SET MSG ON',X'15',C'M * '                              12100000
+         SPACE ,                                                        12110000
+MSGDISP  EQU   *,14,C'C'                                                12120000
+MDSPID   EQU   *+10,4,C'C'                                              12130000
+         DC    C'TAG QU FI ....'                                        12140000
+         SPACE ,                                                        12150000
+MSGPURGE EQU   *,10,C'C'                                                12160000
+         DC    C'PUR R ....'                                            12170000
+MPSPID   EQU   MSGPURGE+6,4,C'C'                                        12180000
+         SPACE ,                                                        12190000
+MSGON    EQU   *,12,C'C'                                                12200000
+         DC    C'SET MSG IUCV'                                          12210000
+         SPACE ,                                                        12220000
+CPCMDS   EQU   *,71,C'C'                                                12230000
+         DC    C'PUR RDR FORM TRASHCAN',X'15'                           12240000
+CUU1     EQU   *+6,3,C'C'                                               12250000
+         DC    C'DEF P ...',X'15'                                       12260000
+CUU2     EQU   *+3,3,C'C'                                               12270000
+         DC    C'SP ... * FORM TRASHCAN',X'15'                          12280000
+         DC    C'DUMP 0.1',X'15'                                        12290000
+CUU3     EQU   *+4,3,C'C'                                               12300000
+         DC    C'DET ...'                                               12310000
+         SPACE ,                                                        12320000
+FLAG     DC    AL1($ALOAD)                                              12330000
+$IUCV    EQU   X'80'                   IUCV ENABLED                     12340000
+$TREE    EQU   X'40'                   TREE LOADED                      12350000
+$ERROR   EQU   X'10'                   IN ERROR MODE...                 12360000
+$DEFINED EQU   X'08'                                                    12370000
+$GRAF    EQU   X'04'                   WE ARE A GRAF                    12380000
+$ALOAD   EQU   X'02'                   AUTOLOAD AT ENDCMD IF NEED BE    12390000
+$ASLEEP  EQU   X'01'                   GO INTO SLEEP MODE AT ENDCMD     12400000
+         SPACE ,                                                        12410000
+TRAPWORK DSECT ,                                                        12420000
+FLAG2    DC    X'00'                                                    12430000
+$NICK    EQU   X'80'                   GOT A :NICK                      12440000
+$USERID  EQU   X'40'                   GOT A :USERID                    12450000
+$NODE    EQU   X'20'                   GOT A :NODE                      12460000
+$EXITTAB EQU   X'10'                   SCANNING IN EXIT TABLE           12470000
+$EOF     EQU   X'08'                   EOF IN NAMES FILE                12480000
+$BLANK   EQU   X'04'                   BLANK SKIPPING MODE              12490000
+$BBLANK  EQU   X'02'                   LEADING BLANK IN VALUE           12500000
+MTRAP    CSECT ,                                                        12510000
+         SPACE 2                                                        12520000
+         LTORG ,                                                        12530000
+         SPACE 2                                                        12540000
+MSGBUF   DS    CL256                                                    12550000
+CPBUFF   DS    CL240                                                    12560000
+TRAPWORK DSECT ,                                                        12570000
+NAMESPAD DC    C' '                                                     12580000
+NAMESIO  DS    CL512                   INPUT BUFFER FOR NAMES           12590000
+NAMESBUF DS    CL255                   BUFFER FOR CURRENT TAG/VALUE     12600000
+NAMESADR DS    F                       ADDRESS WITHIN NEWBLOCK.NAMVAR   12610000
+         DS    0D                                                       12620000
+NEWBLOCK DS    XL(NAMLEN)                                               12630000
+         ORG   NEWBLOCK+NAMVAR-NAM                                      12640000
+         DS    CL1024                  ROOM FOR VAR DATA                12650000
+         ORG   ,                                                        12660000
+MTRAP    CSECT ,                                                        12670000
+         SPACE 2                                                        12680000
+TRAPLEN  EQU   *-TRAPSTA                                                12690000
+TRAPSIZE EQU   (TRAPLEN+7)/8                                            12700000
+TRAPWORK DSECT ,                                                        12710000
+TRAPWLEN EQU   *-TRAPWORK                                               12720000
+MTRAP    CSECT ,                                                        12730000
+         EJECT ,                                                        12740000
+NAM      DSECT ,                                                        12750000
+NAMLINK  DS    2A                      LINKS (LEFT/RIGHT)               12760000
+NAMBAL   DS    X                       BALANCING VARIABLE               12770000
+NAMDWRDS DS    H                       DWORDS ALLOCATED FOR THIS BLOCK  12780000
+NAMNICK  DS    CL8                     NICK                             12790000
+NAMUSER  DS    CL8                     USERID                           12800000
+NAMNODE  DS    CL8                     NODE                             12810000
+NAMVAR   DS    0F                      VARIABLE INFORMATION             12820000
+NAMLEN   EQU   *-NAM                                                    12830000
+NAMSIZE  EQU   (NAMLEN+7)/8                                             12840000
+         SPACE 2                                                        12850000
+NUCX     DSECT ,                                                        12860000
+         DC    CL8'NUCEXT'                                              12870000
+NUCXNAME DC    CL8'NAME'                                                12880000
+NUCXPSW  DC    XL2'0000',AL2(0)                                         12890000
+NUCXADDR DC    A(*-*)                                                   12900000
+         DC    A(0)                                                     12910000
+NUCXORG  DC    A(*-*)                                                   12920000
+NUCXLEN  DC    A(*-*)                                                   12930000
+NUCXSIZE EQU   *-NUCX                                                   12940000
+         SPACE 2                                                        12950000
+         PRINT NOGEN                                                    12960000
+         NUCON ,                                                        12970000
+         FSTD  ,                                                        12980000
+         FSCBD ,                                                        12990000
+         ADT ,                                                          13000000
+         SCBLOCK ,                                                      13010000
+         SPACE 2                                                        13020000
+         COPY  IPARML                                                   13030000
+IPXMASK  EQU   X'0002'                                                  13040000
+IPXCODE  EQU   X'4000'                                                  13050000
+         SPACE 2                                                        13060000
+         END   MTRAP                                                    13070000
