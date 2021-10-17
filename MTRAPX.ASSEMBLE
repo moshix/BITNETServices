@@ -1,0 +1,391 @@
+&LNICK   SETC  '12'                                                     00010000
+*                                                                       00020000
+* WRITTEN BY YOSSIE SILVERMAN, WICC, LAST UPDATE 04/25/86 AT WICC       00030000
+*                                                                       00040000
+         EJECT ,                                                        00050000
+MTRAPX   ENTER WORKAREA=WORKAREA,WORKLEN=WORKLEN,                      X00060000
+               CR='WRITTEN BY YOSSIE SILVERMAN, WICC'                   00070000
+         USING NUCON,0                                                  00080000
+         SPACE ,                                                        00090000
+         STM   R0,R1,SAVEARGS                                           00100000
+         EJECT ,                                                        00110000
+* NOW TO LOAD THE NUCLEUS EXTENSION                                     00120000
+         DMSFREE DWORDS=TRAPSIZE,TYPE=NUCLEUS,ERR=MEMERR1 GET MEMORY    00130000
+         LR    R4,R1                    COPY START ADDRESS              00140000
+         A     R1,CODE                                                  00150000
+         ST    R1,CODE                                                  00160000
+         LR    R1,R4                                                    00170000
+         A     R1,TABLE                                                 00180000
+         ST    R1,TABLE                                                 00190000
+         SPACE ,                                                        00200000
+         LA    R1,NUCXPLST              BUILD AREA FOR NUCX PLIST       00210000
+         USING NUCX,R1                  ADDRESSABILITY                  00220000
+         MVC   0(NUCXSIZE,R1),NUCXLOAD  MOVE IN THE PLIST               00230000
+         LA    R0,CODE-TRAPSTA(R4)                                      00240000
+         ST    R0,NUCXUSER                                              00250000
+         ST    R4,NUCXADDR              SAVE START OF EXTENSION         00260000
+         ST    R4,NUCXORG               SAVE ORG OF EXTENSION           00270000
+         SVC   202                      CALL CMS                        00280000
+         DC    AL4(1)                   ERRORS INLINE                   00290000
+         DROP  R1                                                       00300000
+         LTR   R15,R15                  CHECK ERROR                     00310000
+         BNZ   NUCXERR1                 YES, ERROR IT                   00320000
+         SPACE ,                                                        00330000
+         L     R5,=A(TRAPLEN)           GET LENGTH                      00340000
+         LA    R2,TRAPSTA               AND START                       00350000
+         LR    R3,R5                    SAME LENGTH TO DEST             00360000
+         DMSEXS MVCL,R4,R2              COPY THE EXTENSION              00370000
+         EJECT ,                                                        00380000
+         LM    R0,R1,SAVEARGS           RESTORE ARG REGS                00390000
+         ICM   R1,B'1000',=X'D2'                                        00400000
+         SPACE 2                                                        00410000
+         SVC   202                      RE-CALL US                      00420000
+         DC    AL4(1)                   NO ERRORS                       00430000
+         SPACE 2                                                        00440000
+RETSYS   EXIT  (R15)                    RETURN TO CMS                   00450000
+         EJECT ,                                                        00460000
+MEMERR1  LINEDIT TEXT='CNYTRA001E NOT ENOUGH MEMORY TO LOAD NUCLEUS EXTX00470000
+               ENSION',DISP=ERRMSG                                      00480000
+         LA    R15,104                                                  00490000
+         B     RETSYS                                                   00500000
+         SPACE 2                                                        00510000
+NUCXERR1 LINEDIT TEXT='CNYTRA002E ERROR WHILE LOADING NUCLEUS EXTENSIONX00520000
+               ',DISP=ERRMSG                                            00530000
+         SPACE ,                                                        00540000
+         LR    R1,R4                                                    00550000
+         DMSFRET DWORDS=TRAPSIZE,LOC=(1)                                00560000
+         LA    R15,104                                                  00570000
+         B     RETSYS                                                   00580000
+         EJECT ,                                                        00590000
+         DS    0D                                                       00600000
+IDENTIFY DC    CL8'IDENTIFY',CL8'(',CL8'STACK',CL8'LIFO',8X'FF'         00610000
+         SPACE ,                                                        00620000
+NUCXLOAD DC    CL8'NUCEXT',CL8'MTRAPX',XL4'0000C000'                    00630000
+         DC    A(*-*,0,*-*,TRAPLEN)                                     00640000
+         SPACE 2                                                        00650000
+         LTORG ,                                                        00660000
+         EJECT ,                                                        00670000
+WORKAREA DSECT ,                                                        00680000
+NUCXPLST DS    0D,XL(NUCXSIZE)                                          00690000
+SAVEARGS DS    2A                                                       00700000
+INPUTBUF DS    CL130                                                    00710000
+WORKLEN  EQU   *-WORKAREA                                               00720000
+MTRAPX   CSECT ,                                                        00730000
+         EJECT ,                                                        00740000
+TRAPSTA  ENTER CSECT=NO ,WORKAREA=TRAPWORK,WORKLEN=TRAPWLEN             00750000
+         SPACE 2                                                        00760000
+         CLM   R1,B'1000',=X'D2'                                        00770000
+         BNE   NOTUS                                                    00780000
+         LA    R1,MTRAPCOM                                              00790000
+         SVC   202                                                      00800000
+         DC    AL4(1)                                                   00810000
+         B     DONE                                                     00820000
+NOTUS    DS    0H                                                       00830000
+         SPACE ,                                                        00840000
+* HERE FOR GENERAL COMMAND PROCESSING                                   00850000
+DONE     EXIT  0                                                        00860000
+         EJECT ,                                                        00870000
+TRAPCODE ENTER CSECT=NO                                                 00880000
+* HERE EACH TIME A MESSAGE IS RECEIVED                                  00890000
+         EJECT ,                                                        00900000
+         L     R4,0(,R1)               GET TAGS POINTER                 00910000
+         MVI   FLAG,0                                                   00920000
+         LM    R2,R3,4(R1)             FETCH TEXT/LENGTH                00930000
+         LA    R5,0(R3,R2)                                              00940000
+         BCTR  R5,0                                                     00950000
+         CLI   0(R5),X'15'                                              00960000
+         BNE   *+6                                                      00970000
+         BCTR  R3,0                                                     00980000
+         CLI   16(R4),C' '                                              00990000
+         BE    NONODE                                                   01000000
+         CLI   0(R4),C' '              ANY NICK?                        01010000
+         BE    NONICK                  NO.                              01020000
+         ICM   R0,B'1111',24(R4)       GET THE RELAY TAG                01030000
+         BZ    NOTRELAY                NO, NO RELAY TAG                 01040000
+         LTR   R3,R3                   ANY LENGTH?                      01050000
+         BZ    IGNORE                  NO, FORGET IT                    01060000
+         CLI   0(R2),C'<'              IS IT A MESSAGE?                 01070000
+         BE    RELAYMSG                YES,                             01080000
+         CLI   0(R2),C'+'              IS IT A CONTINUATION?            01090000
+         BNE   RELAYCTL                NO,                              01100000
+         SPACE 2                                                        01110000
+         LA    R2,2(,R2)               SKIP '+ '                        01120000
+         SH    R3,=H'2'                                                 01130000
+         CLC   LRELAY,8(R4)            SAME USER/NODE?                  01140000
+         BNE   RELAYGOT                NO, MUST USE NICKNAME AGAIN      01150000
+         L     R4,12(,R1)              ADDRESS OF TEXT                  01160000
+*        MVI   0(R4),C'+'                                               01170000
+*        LA    R4,1(,R4)                                                01180000
+*        LA    R0,129                                                   01190000
+         LA    R0,130                  MAX LENGTH                       01200000
+*        B     MOVETEXT                                                 01210000
+         EJECT ,                                                        01220000
+* ENTER R2/R3=TEXT, R4->WHERE TO PUT, R0=MAX LENGTH                     01230000
+MOVETEXT DS    0H                                                       01240000
+         L     R5,0(,R1)                                                01250000
+         CLI   8(R5),C' '              ANY USERID?!                     01260000
+         BNE   NOTNODE                                                  01270000
+         LA    R8,16(R5)                                                01280000
+         LA    R9,7(,R8)                                                01290000
+         CLI   0(R9),C' '                                               01300000
+         BNE   *+8                                                      01310000
+         BCT   R9,*-8                                                   01320000
+         SLR   R9,R8                                                    01330000
+         LA    R9,1(,R9)                                                01340000
+         LR    R5,R9                                                    01350000
+         SR    R0,R9                                                    01360000
+         MVCL  R4,R8                                                    01370000
+         MVC   0(2,R4),=C': '                                           01380000
+         LA    R4,2(,R4)                                                01390000
+         SH    R0,=H'2'                                                 01400000
+NOTNODE  DS    0H                                                       01410000
+         SPACE ,                                                        01420000
+         TM    FLAG,$PRIVATE                                            01430000
+         BZ    NOTPRIV                                                  01440000
+         SH    R0,=H'9'                                                 01450000
+         LA    R8,=C'Private: '                                         01460000
+         LA    R9,9                                                     01470000
+         LR    R5,R9                                                    01480000
+         MVCL  R4,R8                                                    01490000
+NOTPRIV  DS    0H                                                       01500000
+         SPACE ,                                                        01510000
+         LR    R5,R3                   RC = LENGTH TO MOVE              01520000
+         CR    R5,R0                   TOO LONG?                        01530000
+         BNH   *+6                     NO,                              01540000
+         LR    R5,R0                   YES, TRUNCATE                    01550000
+         MVCL  R4,R2                   MOVE IT                          01560000
+         SL    R4,12(,R1)              GET TOTAL LENGTH                 01570000
+         LR    R15,R4                  COPY TO RC REGISTER              01580000
+         L     R4,0(,R1)                                                01590000
+         MVC   LRELAY,8(R4)            MOVE LAST NODE/USER              01600000
+         B     RETURN                  RETURN TO CALLER (WITH POSITIVE) 01610000
+         SPACE 2                                                        01620000
+RELAYMSG LA    R5,1(,R2)               SKIP '<'                         01630000
+         LR    R4,R3                   COPY LENGTH                      01640000
+RELAYGET DS    0H                                                       01650000
+         CLI   0(R5),C'*'                                               01660000
+         BNE   GET0                                                     01670000
+         LA    R5,1(,R5)                                                01680000
+         OI    FLAG,$PRIVATE                                            01690000
+         BCT   R4,*+8                                                   01700000
+         B     NOTRELAY                                                 01710000
+GET0     BCT   R4,*+8                  DECR/TEST LENGTH                 01720000
+         B     NOTRELAY                                                 01730000
+         LA    R5,1(,R5)               SKIP A CHAR                      01740000
+         CLI   0(R5),C'>'              IS IT '>'?                       01750000
+         BNE   GET0                    NO,                              01760000
+         BCTR  R5,0                    WITHOUT '>'                      01770000
+         TM    FLAG,$PRIVATE                                            01780000
+         BZ    GET2                                                     01790000
+         CLI   0(R5),C'*'                                               01800000
+         BNE   NOTRELAY                                                 01810000
+         BCTR  R5,0                                                     01820000
+         LA    R2,1(,R2)                                                01830000
+         BCTR  R3,0                                                     01840000
+GET2     DS    0H                                                       01850000
+         SLR   R5,R2                   GET LENGTH                       01860000
+         LA    R2,1(,R2)               SKIP '<'                         01870000
+         BCTR  R3,0                    DECR LENGTH FOR '<'              01880000
+         LA    R4,LNICK                ADDRESS OF LNICK                 01890000
+         MVC   LNICK,=CL&LNICK' '                                       01900000
+         MVCL  R4,R2                   MOVE LNICK                       01910000
+         LA    R2,2(,R2)               SKIP '> '                        01920000
+         SH    R3,=H'2'                LENGTH TOO                       01930000
+         TM    FLAG,$PRIVATE                                            01940000
+         EJECT ,                                                        01950000
+         BZ    GET3                                                     01960000
+         LA    R2,1(,R2)                                                01970000
+         BCTR  R3,0                                                     01980000
+GET3     DS    0H                                                       01990000
+         SPACE ,                                                        02000000
+RELAYGOT LA    R6,LNICK                USE LAST NICKNAME                02010000
+         LA    R7,10                   WITH THIS LENGTH                 02020000
+*        B     OUTMSG                  GO DO IT                         02030000
+         EJECT ,                                                        02040000
+* ENTER R6/R7=NICK, R2/R3=TEXT                                          02050000
+OUTMSG   L     R4,12(,R1)              GET OUTPUT ADDRESS               02060000
+         LA    R0,130(,R4)                                              02070000
+         MVI   0(R4),C')'                                               02080000
+         LA    R4,1(,R4)                                                02090000
+         SPACE ,                                                        02100000
+         L     R5,0(,R1)                                                02110000
+         ICM   R5,B'1111',24(R5)                                        02120000
+         BZ    SKPRELAY                                                 02130000
+         XR    R9,R9                                                    02140000
+         IC    R9,0(,R5)                                                02150000
+         LA    R8,1(,R5)                                                02160000
+         LR    R5,R9                                                    02170000
+         MVCL  R4,R8                                                    02180000
+SKPRELAY DS    0H                                                       02190000
+         SPACE ,                                                        02200000
+         MVI   0(R4),C'<'              MOVE IN STUFF                    02210000
+         LA    R4,1(,R4)               SKIP '<'                         02220000
+         LA    R5,0(R7,R6)             ADDRESS PAST NICKNAME            02230000
+         BCTR  R5,0                    BACKUP ONE                       02240000
+         CLI   0(R5),C' '              BLANK STILL?                     02250000
+         BE    *-6                     YES, CONTINUE TRUNCATE           02260000
+         SLR   R5,R6                   GET LENGTH OF FIELD (-1)         02270000
+         LA    R5,1(,R5)               GET LENGTH OF FIELD              02280000
+         LR    R7,R5                   COPY LENGTH                      02290000
+         MVCL  R4,R6                   MOVE NICK IN                     02300000
+         MVC   0(2,R4),=C'> '          MOVE IN TERMINATOR AND BLANK     02310000
+         LA    R4,2(,R4)               SKIP BOTH                        02320000
+         SLR   R0,R4                   GET REM LENGTH (TILL 130)        02330000
+         B     MOVETEXT                MOVE IT                          02340000
+         EJECT ,                                                        02350000
+NOTRELAY L     R4,0(,R1)               GET DATA BASE                    02360000
+         SPACE ,                                                        02370000
+         CLI   0(R4),C' '              ANY NICK?                        02380000
+         BE    NONICK                  NO, MAKE ONE                     02390000
+         LA    R6,0(,R4)               ADDRESS OF NICK                  02400000
+         LA    R7,8                    LENGTH                           02410000
+         B     OUTMSG                  GO DO IT                         02420000
+         SPACE ,                                                        02430000
+NONODE   DS   0H                                                        02440000
+         CLC   =C'VMCONIO',8(R4)                                        02450000
+         BNE   NOTVMCON                                                 02460000
+         LR    R0,R3                                                    02470000
+         SH    R0,=H'2'                                                 02480000
+         BM    NOTVMCON                                                 02490000
+         BNZ   LONGER2                                                  02500000
+         CLC   =C'R;',0(R2)                                             02510000
+         BE    IGNORE                                                   02520000
+         B     NOTVMCON                                                 02530000
+LONGER2  BCT   R0,LONGER3                                               02540000
+         CLC   =C'CMS',0(R2)                                            02550000
+         BE    IGNORE                                                   02560000
+LONGER3  DS    0H                                                       02570000
+NOTVMCON DS    0H                                                       02580000
+         SPACE ,                                                        02590000
+         LA    R6,=C'VM/370 SYSTEM'                                     02600000
+         LA    R7,13                                                    02610000
+         B     OUTMSG                                                   02620000
+         SPACE ,                                                        02630000
+NONICK   CLI   8(R4),C' '                                               02640000
+         BNE   GOTUSER                                                  02650000
+         LA    R6,=C'VM/370 RSCS'                                       02660000
+         LA    R7,11                                                    02670000
+         B     OUTMSG                                                   02680000
+GOTUSER  DS    0H                                                       02690000
+         SPACE ,                                                        02700000
+         LA    R7,MAKENICK                                              02710000
+         MVC   0(8,R7),8(R4)           MOVE IN USERID                   02720000
+         LA    R7,7(,R7)               TRUNCATE IT FROM 8 CHARS         02730000
+         CLI   0(R7),C' '                                               02740000
+         BNE   *+8                                                      02750000
+         BCT   R7,*-8                                                   02760000
+         MVI   1(R7),C'@'              MOVE IN '@'                      02770000
+         LA    R7,2(,R7)               SKIP LAST CHAR AND '@'           02780000
+         MVC   0(8,R7),16(R4)          MOVE IN NODE                     02790000
+         LA    R7,7(,R7)               TRUNCATE IT FROM 8 CHARS         02800000
+         CLI   0(R7),C' '                                               02810000
+         BNE   *+8                                                      02820000
+         BCT   R7,*-8                                                   02830000
+         LA    R7,1(,R7)               ADDRESS PAST NICK                02840000
+         LA    R6,MAKENICK             START OF NICK                    02850000
+         SLR   R7,R6                   LENGTH OF NICK                   02860000
+         B     OUTMSG                  GO DO IT                         02870000
+         EJECT ,                                                        02880000
+RELAYCTL DS    0H                                                       02890000
+         SPACE ,                                                        02900000
+         CLC   =C'|Signoff|',0(R2)                                      02910000
+         BE    SIGNOFF                                                  02920000
+         CLC   =C'|Change |',0(R2)                                      02930000
+         BE    CHANGE                                                   02940000
+         CLC   =C'|Sign on|',0(R2)                                      02950000
+         BE    SIGNON                                                   02960000
+         B     NOTRELAY                                                 02970000
+         SPACE 2                                                        02980000
+CHANGE   LA    R6,10(R2)                                                02990000
+         LR    R7,R6                                                    03000000
+         CLI   0(R7),C' '                                               03010000
+         BE    *+12                                                     03020000
+         LA    R7,1(,R7)                                                03030000
+         BCT   R3,*-12                                                  03040000
+         OI    FLAG,$SIGNON                                             03050000
+         CLC   =C'has joined',1(R7)                                     03060000
+         BE    RC5                                                      03070000
+         NI    FLAG,X'FF'-$SIGNON                                       03080000
+         B     RC5                                                      03090000
+         SPACE ,                                                        03100000
+SIGNON   OI    FLAG,$SIGNON                                             03110000
+         LA    R0,6                                                     03120000
+         B     RC0                                                      03130000
+         SPACE ,                                                        03140000
+SIGNOFF  LA    R0,5                    SKIP '5' WORDS                   03150000
+RC0      LR    R4,R2                   STARTING AT START-OF-TEXT        03160000
+         LR    R5,R3                   LENGTH LENGTH-OF-TEXT            03170000
+RC1      CLI   0(R4),C' '              FOUND A BLANK?                   03180000
+         BE    RC3                     YES,                             03190000
+RC2      LA    R4,1(,R4)               ELSE SKIP WORD-CHAR              03200000
+         BCT   R5,RC1                  LOOP ON LENGTH                   03210000
+         B     NOTRELAY                OH OH.. NOTHING LEFT             03220000
+RC3      BCT   R0,RC2                  DECR WORD COUNT                  03230000
+         BCT   R5,*+8                  NOW TO DECR PAST LAST BLANK      03240000
+         B     NOTRELAY                NOTHING LEFT...                  03250000
+         CLI   1(R4),C'('              START OF NICK?                   03260000
+         BNE   NOTRELAY                NO,                              03270000
+         LA    R7,2(,R4)               YES, SKIP BLANK AND '('          03280000
+         LR    R6,R7                   COPY START ADDRESS               03290000
+RC4      BCT   R5,*+8                  DECR LENGTH FOR NICK-CHAR        03300000
+         B     NOTRELAY                NOTHING LEFT                     03310000
+         CLI   0(R7),C')'              END OF NICK?                     03320000
+         BE    RC5                     YES,                             03330000
+         LA    R7,1(,R7)               NO, SKIP NICK-CHAR               03340000
+         B     RC4                     LOOP BACK                        03350000
+RC5      DS    0H                                                       03360000
+         SLR   R7,R6                   GET LENGTH OF NICK               03370000
+         TM    FLAG,$SIGNON                                             03380000
+         BO    RC6                                                      03390000
+         LA    R2,=C'has left.'                                         03400000
+         LA    R3,9                                                     03410000
+         B     OUTMSG                                                   03420000
+RC6      DS    0H                                                       03430000
+         LA    R2,=C'has joined.'                                       03440000
+         LA    R3,11                                                    03450000
+         B     OUTMSG                                                   03460000
+         EJECT ,                                                        03470000
+IGNORE   XR    R15,R15                                                  03480000
+         BCTR  R15,0                                                    03490000
+RETURN   EXIT  (R15)                                                    03500000
+         EJECT ,                                                        03510000
+* HERE IS THE TABLE USED FOR TAGS..                                     03520000
+         DS    0F                                                       03530000
+TRAPTAB  DC    A(1)                                                     03540000
+         DC    AL1(5),C'RELAY',AL4(0)                                   03550000
+         DC    AL1(0)                                                   03560000
+         EJECT ,                                                        03570000
+MTRAPX   CSECT ,                                                        03580000
+CODE     DC    A(TRAPCODE-TRAPSTA) \ KEEP                               03590000
+TABLE    DC    A(TRAPTAB-TRAPSTA)  / TOGETHER...                        03600000
+         EJECT ,                                                        03610000
+MTRAPCOM DC    CL8'MTRAP',CL8'LOAD',8X'FF'                              03620000
+         SPACE ,                                                        03630000
+* GLOBALS                                                               03640000
+FLAG     DC    X'00'                                                    03650000
+$SIGNON  EQU   X'80'                                                    03660000
+$PRIVATE EQU   X'40'                                                    03670000
+LNICK    DC    CL&LNICK' '                                              03680000
+LRELAY   DC    CL16' '                                                  03690000
+MAKENICK DS    CL17                                                     03700000
+         SPACE 2                                                        03710000
+         LTORG ,                                                        03720000
+         SPACE 2                                                        03730000
+TRAPLEN  EQU   *-TRAPSTA                                                03740000
+TRAPSIZE EQU   (TRAPLEN+7)/8                                            03750000
+TRAPWORK DSECT ,                                                        03760000
+TRAPWLEN EQU   *-TRAPWORK                                               03770000
+         SPACE 2                                                        03780000
+NUCX     DSECT ,                                                        03790000
+         DC    CL8'NUCEXT'                                              03800000
+NUCXNAME DC    CL8'NAME'                                                03810000
+NUCXPSW  DC    XL2'0000',AL2(0)                                         03820000
+NUCXADDR DC    A(*-*)                                                   03830000
+NUCXUSER DC    A(*-*)                                                   03840000
+NUCXORG  DC    A(*-*)                                                   03850000
+NUCXLEN  DC    A(*-*)                                                   03860000
+NUCXSIZE EQU   *-NUCX                                                   03870000
+         SPACE 2                                                        03880000
+         PRINT NOGEN                                                    03890000
+         NUCON ,                                                        03900000
+         END   MTRAPX                                                   03910000
