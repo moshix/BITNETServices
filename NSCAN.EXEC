@@ -1,0 +1,184 @@
+/*                                                                    */
+/* nscan - scan a command line for userid's and return a list         */
+/*         of userid's and the rest of the line                       */
+/*                                                                    */
+/* a userid can be any of the following:                              */
+/*                                                                    */
+/*       nickname | userid                                            */
+/*       userid AT nodeid | userid<blanks>@<blanks>nodeid             */
+/*       tag<blanks>=<blanks>value                                    */
+/*                                                                    */
+/* The first argument is the string to parse.                         */
+/*                                                                    */
+/* The second argument specifies desribes the list.                   */
+/* If there is no second argument or it is blank then the entire      */
+/* plist is parsed, each token assumed ending on a blank.             */
+/* If the second parameter is ',' then the list is scanned until      */
+/* a non-terminated-by-',' token is found and the rest is returned    */
+/* as is. The ',' can be with zero or more leading/trailing blanks.   */
+/* Any other character will cause the list to be scanned until        */
+/* that character is encountered (with blanks between the tokens)     */
+/*                                                                    */
+/* The third argument is taken to be the filename of the names file   */
+/* (defaults to current userid).                                      */
+/*                                                                    */
+/* The returned string is 'userid@nodeid,... rest of string' if       */
+/* comma is specified, else a string of 'userid AT nodeid ... rest    */
+/* of string' is returned.                                            */
+/*                                                                    */
+/*                                                                    */
+/* Written by Yossie Silverman, W.I.C.C, last update 08/11/84         */
+/*                                                                    */
+
+'IDENTIFY ( STACK LIFO'; pull myuser . mynode .
+
+parse arg userlist,char,names
+address command
+
+if names = '' then names = myuser
+              else upper names
+comma = char = ',';  colon = (char /= '') & (^ comma)
+if colon then
+  parse var userlist userlist (char) +0 rest
+
+count = 0
+userlist =  resolve(userlist,comma,colon)
+
+if ^ colon then rest = userlist
+userid = ''
+do i = 1 to count
+  if colon then
+    userid = userid||"LEFT"('',i>1)||userid.i 'AT' nodeid.i
+  else
+    userid = userid||userid.i'@'nodeid.i||"LEFT"(',',i<count)
+end
+
+return userid||rest
+
+resolve: procedure expose myuser mynode names. list. userid. nodeid.,
+                          count names
+
+parse arg userlist,comma,colon
+
+do forever
+  parse value getword(userlist) with firstone'@'userlist
+
+/*                                                                    */
+/* handle the 'userid AT nodeid' format                               */
+/*                                                                    */
+  if "TRANSLATE"("WORD"(userlist,1)) = 'AT' then do
+    parse value getword("SUBWORD"(userlist,2)) with nodeid'@'userlist
+    if nodeid = '' then
+      call error '637E Missing Nodeid for the AT operand'
+    else
+      call addtolist firstone,nodeid
+  end
+  else do
+    x = "STRIP"(userlist); parse var x let +1 x
+    if let = '=' | let = '@' then do
+      parse value getword(x) with nodeid'@'userlist
+/*                                                                    */
+/* handle the 'userid @ nodeid' format                                */
+/*                                                                    */
+      if let = '@' then
+        if nodeid = '' | firstone = '' then
+         call error,
+           '649E Invalid userid@nodeid: '''firstone'@'nodeid''''
+        else
+          call addtolist firstone,nodeid
+/*                                                                    */
+/* handle the 'tag = value' format                                    */
+/*                                                                    */
+      else
+        if nodeid = '' | firstone = '' then
+          call error '650E Invalid tag=value: '''firstone'='nodeid''''
+        else
+          if pos('*',nodeid) > 0 then do /* arbchar in tag=value */
+            f = translate(firstone)
+            x = names(names,':NICK',':USERID',,
+                            ':NODE',':LIST',':'f)
+            do while x /= ''
+              parse var x ' :NICK' entry' :NICK' +0 x
+              parse var entry ' 'name' :'
+              if names.name = '' then iterate
+              parse var entry ' :'(f) value' :'
+              if value = '' then iterate
+              if pat(translate(value),translate(nodeid),'*','') then do
+                parse var entry ' :USERID 'userid' :'
+                parse var entry ' :NODE 'node' :'
+                parse var entry ' :LIST 'list' :'
+                if name /= '' then names.name = ''
+                if userid /= '' then
+                  call addtolist userid,"WORD"(node mynode,1)
+                if list /= '' then
+                  call resolve list,0,0
+              end
+            end
+          end
+          else do
+            'MAKEBUF'; i = "QUEUED"()
+            'NAMEFIND :'"TRANSLATE"(firstone nodeid),
+              ':NICK :USERID :NODE :LIST ( STACK FIFO * FILE' names
+            do ("QUEUED"()-i)/4
+              pull name; pull userid; pull nodeid; pull list
+              if names.name = '' then iterate
+              if name /= '' then names.name = ''
+              if userid /= '' then
+                call addtolist userid,"WORD"(nodeid mynode,1)
+              if list /= '' then
+                call resolve list,0,0
+            end
+            'DROPBUF'
+          end
+    end
+/*                                                                    */
+/* handle the 'nickname' format                                       */
+/*                                                                    */
+    else if firstone /= '' then
+      if names.firstone /= '' then do
+        'MAKEBUF'
+        names.firstone = ''
+        'NAMEFIND :NICK' "TRANSLATE"(firstone),
+          ':USERID :NODE :LIST ( STACK FIFO 1 FILE' names
+        if rc = 0 then do
+          pull userid; pull nodeid; pull list
+          if userid = '' & list = '' then
+            call error '647E Userid not specified for' firstone,
+              'in '''names 'NAMES'' File'
+          if userid /= '' then
+            call addtolist userid,"WORD"(nodeid mynode,1)
+          if list /= '' then
+            call resolve list,0,0
+        end
+
+/*                                                                    */
+/* handle the 'userid' format                                         */
+/*                                                                    */
+        else call addtolist firstone,mynode
+        'DROPBUF'
+      end
+  end
+  if comma then
+    if "LEFT"("STRIP"(userlist,'l'),1) = ',' then
+      parse var userlist ','userlist
+    else return userlist
+  else if userlist = '' then return ''
+end
+
+addtolist: procedure expose userid. nodeid. count list.
+  arg userid,nodeid
+  x = userid nodeid
+  if list.x = '' then return; list.x = ''
+  count = count + 1
+  userid.count = userid; nodeid.count = nodeid
+return
+
+error:
+  'EXECIO 1 EMSG ( STRING SLANSC'"ARG"(1)'.'
+return
+
+getword: procedure expose comma
+  parse arg x; x = "STRIP"(x,'l')
+  y = "VERIFY"(x,"LEFT"('@= ,',3+comma),'match')
+  if y = 0 then return x
+return "LEFT"(x,y-1)'@'"SUBSTR"(x,y)
