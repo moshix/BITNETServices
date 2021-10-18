@@ -155,10 +155,8 @@ Ready;
 <br><br>
 <h1>Special Thanks To:</h1>
 <br>
-Peter Jacob<br>
-Mike Grossman<br>
-Neale Ferguson<br>
-Bob Polmanter<br>
+
+Here is the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
 UPDATED: October 3, 2021<br>
