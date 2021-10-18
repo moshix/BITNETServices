@@ -159,6 +159,6 @@ Ready;
 Here is the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: October 3, 2021<br>
+UPDATED: October 17, 2021<br>
 Moshix
 
