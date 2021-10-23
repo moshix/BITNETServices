@@ -153,12 +153,11 @@ Ready;
 
 </pre>
 <br><br>
-<h1>Special Thanks To:</h1>
-<br>
 
-Here is the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
+
+Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: October 17, 2021<br>
+UPDATED: October 23, 2021<br>
 Moshix
 
