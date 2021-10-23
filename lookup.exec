@@ -1,0 +1,992 @@
+/* LOOKUP EXEC                         */
+/*                                     */
+/* A BITNET/HNET name server           */
+/* for z/VM, VM/ESA and VM/SP          */
+/* Moshix                              */
+/*                                     */
+/* copyright 2021  by moshix           */
+/* Apache 2.0 license                  */
+/***************************************/
+/* execute this from RELAY VM before starting RELAY CHAT:            */
+/* defaults set tell msgcmd msgnoh to remove host(user) in output    */
+/*  CHANGE HISTORY                                                   */
+/*  V0.1    :  Humble beginnings                                     */
+/*  V0.2    :  Add command history /history                          */
+/*  V0.3    :  Changed HELP and all main versioning commands         */
+/*  V0.4    :  Created logo for HELP and start messages              */
+/*  V0.5    :  Removed BCAST and unncessary functions like STORE     */
+/*  V0.6    :  Removed wakup                                         */
+/*  V0.7    :  Added /WHO handling general function                  */
+/*  V0.8    :  Added /ROUTE handling general function                */
+ 
+ 
+/* configuraiton parameters - IMPORTANT                               */
+lookupversion="0.8"       /* needed                                    */
+timezone="CDT"            /* adjust for your server IMPORTANT          */
+localnode=""              /* localnode is now autodetected as 2.7.1    */
+osversion="z/VM 7.2"      /* OS version for enquries and stats         */
+typehost="IBM 1090"       /* what kind of machine                      */
+hostloc  ="Houston, TX "  /* where is this machine                     */
+sysopname="Moshix  "      /* who is the sysop for this chat server     */
+sysopemail="moshix      " /* where to contact this systop             */
+postpswd="125"            /* password needed to store bcast msgs       */
+compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
+sysopuser='MAINT'         /* sysop user who can force users out       */
+sysopnode=translate(localnode) /* sysop node automatically set        */
+raterwatermark=18000      /* max msgs per minute set for this server  */
+log2file=1                 /* log also to lookup log file          */
+ 
+/* global variables                                                  */
+isincluded=0               /* is keyword found ??                    */
+eStarttime=1               /* used for logged on users to start countdown to asleep */
+LastSessionStart=3000000   /* last user session started at...        */
+InSessionUser=""           /* which user is currently in session     */
+BIGLOCK=0                  /* RESET LOCK FOR MULTITENANT */
+returnNJEmsg="HCPMSG045E" /* messages returning for users not logged on */
+returnNJEmsg2="DMTRGX334I"/* looping error message flushed         */
+returnNJEmsg3="HCPMFS057I"/* looping error message flushed         */
+returnNJEmsg4="HCPMSG045E"/* user not logged on                    */
+returnNJEmsg5="DMSWTL648E"/* userid not found, no message sent     */
+loggedonusers = 0        /* online user at any given moment        */
+highestusers = 0         /* most users online at any given moment  */
+totmessages  = 0         /* total number of msgs sent              */
+otime = 0                /* overtime to log off users after n minutes */
+starttime=mytime()       /*  for /SYSTEM                           */
+starttimeSEC=ExTime()    /*  for msg rate  calculation             */
+logline = " "            /* initialize log line                    */
+receivedmsgs=0           /* number of messages received for stats and loop*/
+err1="currently NOT"
+err2="to logon on"
+err3="Weclome to Relay chat"
+err4="logged off now"
+illegaluser1="RSCS"      /* we should never receive a message from these users */
+illegaluser2="ROOT"      /* we should never receive a message from these users */
+historypointer=1
+history.0=20             /* max 20 entries for user command history */
+ 
+ 
+ 
+sysperf=0                /* /benchmark system performance (in sec) holder */
+TRUE=1
+FALSE=0
+WGET=FALSE               /* is Charlot and WW2GET installed TRUE=yes */
+call initlookup          /* initalize lookup and do all the fancy stuff to start */
+ 
+/* Invoke WAKEUP first so it will be ready to receive msgs */
+/* This call also issues a 'SET MSG IUCV' command.         */
+ 
+  'SET MSG IUCV'
+ 
+  'MAKEBUF'
+ 
+  Do forever;
+     'wakeup +1 (iucvmsg QUIET'   /* wake up every minute anyway */
+/*   parse pull text   */        /* get what was send          */
+     select
+           when Rc = 2 then do
+           /* timer has expired */
+           call scheduler              /* check if any scheduled slots */
+           end
+ 
+        when Rc = 5 then do;  /* we have a message          */
+        /* parse it                                       */
+            parse pull text
+           if pos('From', text) > 0 then  do  /* from RSCS   */
+              parse var text type sender . nodeuser msg
+              parse var nodeuser node '(' userid '):'
+              CALL LOG('from '||userid||' @ '||node||' '||msg)
+              receivedmsgs= receivedmsgs + 1
+              /* below line checks if high rate watermark is exceeded */
+              /* and if so.... exits!                                 */
+              call highrate (receivedmsgs)
+              uppuserid=TRANSLATE(userid)
+  /* below line eliminates service messages from other relay nodes and eliminates loops */
+  if pos(err1,msg) > 0 | pos(err2,msg) > 0 | pos(err3,msg) > 0 | pos(err4,msg) > 0 then do
+              end
+              else do
+                if detector(msg) > 0 then call handlemsg  userid,node,msg
+              end
+          end
+          else do;  /* simple msg from local user  */
+        /* format is like this:                           */
+        /* *MSG    MAINT    hello                         */
+              parse var text type userid msg
+                   node = localnode
+               call handlemsg  userid,node,msg
+           end
+        end
+        when Rc = 6 then
+          signal xit
+        otherwise
+     end
+ end;   /* of do forever loop  */
+ 
+ 
+xit:
+/* when its time to quit, come here    */
+ 
+  'WAKEUP RESET';        /* turn messages from IUCV to ON    */
+  'SET MSG ON'
+  'DROPBUF'
+exit;
+ 
+ 
+handlemsg:
+/* handle all incoming messages and send to proper method */
+   parse ARG userid,node,msg
+   smsg=SUBSTR(msg,2)
+   smsg=STRIP(smsg)
+/* call immulog userid,node,smsg    */
+    userid=strip(userid)
+    node=strip(node)
+    if userid = illegaluser1 | userid = illegaluser2 then do
+        call log ('Message arrived from illegal user: '||userid)
+       return
+    end
+    CurrentTime=Extime()
+    umsg = translate(msg)  /* make upper case */
+    umsg=strip(umsg)
+ 
+    /* below few lines: loop detector                  */
+    loopmsg=SUBSTR(umsg,1,11) /* extract RSCS error msg */
+ if (loopmsg  = returnNJEmsg | loopmsg = returnNJEmsg2 | loopmsg = returnNJEmsg3 loopmsg = returnNJEmsg5 ) then do
+      call log('Loop detector triggered for user:  '||userid||'@'||node)
+      return
+    end
+   commandumsg=SUBSTR(umsg,2,5)
+ 
+   updbuff=1
+   SELECT                             /* HANDLE MESSAGE TYPES  */
+      when (umsg = "/CPU") then
+           call sendcpu      userid,node
+      when (umsg = "/SYSTEM") then
+           call systeminfo userid,node
+      when (umsg = "/STATS") then
+           call sendstats userid,node
+ 
+      when (umsg = "/HISTORY") then
+           call users   userid,node
+ 
+      when (umsg = "/NEWS") then
+           call news  userid,node
+ 
+      when (umsg = "/FOREX") then
+           call forex  userid,node
+ 
+      when (umsg = "/MOON") then
+           call moon   userid,node
+ 
+      when (LEFT(umsg,9)  = "/FORECAST") then
+           call forecast userid,node,msg
+ 
+      when (umsg = "/HELP") then
+          call helpuser  userid,node
+ 
+ 
+      when (LEFT(umsg,4) = "/WHO") then
+          call whois     userid,node,msg
+ 
+      when (LEFT(umsg,6) = "/ROUTE") then
+          call route     userid,node,msg
+ 
+ 
+      when (umsg = "/BENCHMARK") then
+           call usrbenchmark userid,node
+ 
+      when (umsg = "/TIME") then
+           call sendtime userid,node
+ 
+      otherwise
+           call helpuser    userid,node,msg
+      end
+return
+ 
+whois:
+/* who is user or node main handling function */
+ parse arg userid,node,msg
+rec.0=100
+htime=mytime()
+histuser=htime||" : "userid||" @ "||node||" : /WHO    "
+call inserthistory histuser,historypointer
+if  historypointer < history.0 then historypointer=historypointer +1
+Parse Value msg With . srchword
+ 
+fileid='LOOKUP TABL A'
+  'EXECIO * DISKR' fileid '(STEM REC. FINIS'
+  if rc<>0 then call log ('Problems reading file' || fileid)
+  do i=1 by 1 to rec.0
+     if left(rec.i,1)='*' then iterate
+     /* process record */
+     if WORDPOS(srchword,rec.i) > 0 then call respond userid,node,rec.i
+end
+ 
+ 
+ 
+return 0
+ 
+ 
+ 
+ROUTE:
+/* dispay routes for a node    */
+ parse arg userid,node,msg
+rec.0=100
+htime=mytime()
+histuser=htime||" : "userid||" @ "||node||" : /ROUTE  "
+call inserthistory histuser,historypointer
+if  historypointer < history.0 then historypointer=historypointer +1
+Parse Value msg With . srchword
+ 
+fileid='ROUTES TABL A'
+  'EXECIO * DISKR' fileid '(STEM REC. FINIS'
+  if rc<>0 then call log ('Problems reading file' || fileid)
+  do i=1 by 1 to rec.0
+     if left(rec.i,1)='*' then iterate
+     /* process record */
+     if WORDPOS(srchword,rec.i) > 0 then call respond userid,node,rec.i
+end
+ 
+return 0
+ 
+ 
+ 
+scheduler:
+/* called every n minutes by WAKEUP function for housekeeping jobs */
+ 
+ 
+ 
+return 0
+ 
+ 
+news:
+/* send bbc and npr news */
+parse arg userid,node
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : NEWS    "
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 
+/*
+ 'ERASE WGET OUT A'
+ 'WW2GET http://relayserv.dynu.net/cleanreq?arg=NEWS       WGET OUT A'
+  do forever
+     'EXECIO 1 DISKR WGET OUT A (VAR LINEIN'
+      if rc<>0 then leave
+    call respond userid,node,LINEIN
+  end
+ 'FINIS' 'WGET OUT A'*/
+return 0
+ 
+ 
+forecast:
+/* send forecast for city */
+parse ARG userid,node,msg
+ 
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : FORECAST"
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ parse VALUE msg with . city
+ request='http://relayserv.dynu.net/cleanreq?arg=FORECAST%20'||city||'  WGET OUT A'
+ 
+ 'ERASE WGET OUT A'
+ 'WW2GET' request
+  do forever
+     'EXECIO 1 DISKR WGET OUT A (VAR LINEIN'
+      if rc<>0 then leave
+    call respond userid,node,LINEIN
+  end
+ 'FINIS' 'WGET OUT A'
+return 0
+forex:
+/* get forex infro from relayserv.bitnet.systems/cleanforex */
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : FOREX   "
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 'ERASE FOREX OUT A'
+ 'WW2GET http://relayserver.dynu.net/cleanforex FOREX OUT A'
+  do forever
+     'EXECIO 1 DISKR FOREX OUT A (VAR LINEIN'
+      if rc<>0 then leave
+    call respond userid,node,LINEIN
+  end
+ 'FINIS' 'FOREX OUT A'
+return 0
+ 
+moon:
+/* get moon phase from relayserver.bitnet.systems */
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : MOON    "
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 'ERASE MOON OUT A'
+ 'WW2GET http://relayserv.dynu.net/cleanmoon MOON OUT A'
+  do forever
+     'EXECIO 1 DISKR MOON OUT A (VAR LINEIN'
+      if rc<>0 then leave
+    call respond userid,node,LINEIN
+  end
+ 'FINIS' 'MOON  OUT A'
+return 0
+ 
+systeminfo:
+/* send /SYSTEM info about this host  */
+     parse ARG userid,node
+     listuser = userid"@"node
+ htime=mytime()
+ histuser=htime||" : "userid||" @ "||node||" : SYSINFO  "
+ call inserthistory histuser,historypointer
+ if  historypointer < history.0 then historypointer=historypointer +1
+ 
+ 
+ 
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)
+    'TELL' userid 'AT' node '-> NJE node name        : 'localnode
+    'TELL' userid 'AT' node '-> Lookup version       : 'lookupversion
+    'TELL' userid 'AT' node '-> OS for this host     : 'osversion
+    'TELL' userid 'AT' node '-> Type of host         : 'typehost
+    'TELL' userid 'AT' node '-> Location of this host: 'hostloc
+    'TELL' userid 'AT' node '-> Time Zone of         : 'timezone
+    'TELL' userid 'AT' node '-> SysOp for this server: 'sysopname
+    'TELL' userid 'AT' node '-> SysOp email addr     : 'sysopemail
+    'TELL' userid 'AT' node '-> System Load          :'cpu'%'
+    if compatibility > 2 then do
+       page=paging()
+       rstor=rstorage()
+       cfg=configuration()
+       lcpus=numcpus()
+   /*  parse var mcpu mpage mcf mrstor mlcpus  */
+      'TELL' userid 'AT' node '-> Pages/Sec            : 'page
+      'TELL' userid 'AT' node '-> IBM Machine Type     : 'cfg
+      'TELL' userid 'AT' node '-> Memory in LPAR or VM : 'rstor
+      'TELL' userid 'AT' node '-> Number of CPUs       : 'lcpus
+    end
+     if compatibility > 2 then do
+     totmessages = totmessages + 13
+     end
+    else do
+     totmessages = totmessages + 9
+    end
+return
+ 
+ 
+sendstats:
+/* send usage statistics to whoever asks, even if not logged on */
+    parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : STATS    "
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)
+    actualtime=Extime()
+    elapsedsec=(actualtime-starttimeSEC)
+    if elapsedsec = 0 then elapsedsec = 1 /* avoid division by zero on Jan 1 at 00:00 */
+ 
+    msgsrate = (receivedmsgs + totmessages) / elapsedsec
+    msgsratef= FORMAT(msgsrate,4,2) /* rounding */
+    msgsratef = STRIP(msgsratef)
+    listuser = userid"@"node
+    'TELL' userid 'AT' node '-> Total number of msgs : 'totmessages
+    'TELL' userid 'AT' node '-> Messages rate /minute: 'msgsratef
+    'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
+    'TELL' userid 'AT' node '-> System CPU load      : 'STRIP(cpu)'%'
+    'TELL' userid 'AT' node '-> LOOKUP version       : v'lookupversion
+ 
+     totmessages = totmessages+ 5
+return
+ 
+helpuser:
+/* send help menu */
+  parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : HELP     "
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
+  listuser = userid"@"node
+ 
+ 
+'TELL' userid 'AT' node '._     ____  ____  _  __ _     ____                       '
+'TELL' userid 'AT' node ' / \   /  _ \/  _ \/ |/ // \ /\/  __\                        '
+'TELL' userid 'AT' node ' | |   | / \|| / \||   / | | |||  \/|                        '
+'TELL' userid 'AT' node ' | |_/\| \_/|| \_/||   \ | \_/||  __/                        '
+'TELL' userid 'AT' node ' \____/\____/\____/\_|\_\\____/\_/                           '
+'TELL' userid 'AT' node '                                                             '
+'TELL' userid 'AT' node '  for VM/SP, VM/ESA and z/VM                                 '
+'TELL' userid 'AT' node '/HELP      for this help'
+'TELL' userid 'AT' node '/STATS     for ... you guessed it ...statistics!'
+'TELL' userid 'AT' node '/SYSTEM    for info about this host'
+'TELL' userid 'AT' node '/BENCHMARK to see the performance of this machien'
+'TELL' userid 'AT' node '/TIME      to get time zone and time of this server'
+'TELL' userid 'AT' node '/WHO       Lokup a user name    '
+'TELL' userid 'AT' node '/ROUTE     Lokup a route to a node'
+if WGET=TRUE then do
+'TELL' userid 'AT' node '/FOREX     gets your updated foreign exchange prices from web '
+'TELL' userid 'AT' node '/MOON      check out the current moon phase!'
+'TELL' userid 'AT' node '/NEWS      to get latest BBC and NPR news   '
+'TELL' userid 'AT' node '/FORECAST CITY to get graphic weather forecast'
+'TELL' userid 'AT' node '/LOOKUP     to look up a node routing'
+'TELL' userid 'AT' node '/CALENDAR YEAR MON for a UNIX-style calendar'
+'TELL' userid 'AT' node '/OIL       to get current WTI oil prices'
+'TELL' userid 'AT' node '/MAZE      to have a little fun break from work'
+'TELL' userid 'AT' node '/WINE BRAND POINTS to get reviews of the wine in front of you'
+'TELL' userid 'AT' node '/STOCK IBM  to get your favorite stock price'
+end
+'TELL' userid 'AT' node '              '
+'TELL' userid 'AT' node ' messages with  -> are dialogues from Lookup '
+ 
+  totmessages = totmessages + 20
+  if WGET = TRUE then totmessages = totmessages + 12
+return
+ 
+ 
+users:
+/* show history of last 20 chat messages to /users                 */
+  parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : USERS    "
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
+ 
+i=0
+found=0
+z=history.0
+say 'history queue length: 'z
+'TELL 'userid' AT 'node '> Previous 'history.0' messages:'
+totmessages = totmessages + 1
+do  i = 1 to z   by 1
+   if history.i /= "" then do
+       'TELL 'userid' AT 'node '> 'history.i
+       totmessages = totmessages + 1
+       found=found+1
+   end
+end
+if found < 1 then 'TELL 'userid' AT 'node '> ...bummer... no chat history so far...'
+       totmessages = totmessages + 1
+return
+ 
+usrbenchmark:
+/* send to user a fuller benchmark suite */
+    parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : BENCHMARK"
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
+ 
+  'TELL' userid 'AT' node '-> Benchmark Overiew (smaller number is better)'
+  'TELL' userid 'AT' node '-> --------------------------------------------'
+  'TELL' userid 'AT' node '->                  '
+ 
+  'TELL' userid 'AT' node '-> This system                   :  'sysperf
+  'TELL' userid 'AT' node '-> IBM z114                      :  0.225'
+  'TELL' userid 'AT' node '-> IBM zEC12                     :  0.230'
+  'TELL' userid 'AT' node '-> IBM z/PDT on Xeon 3.5Ghz      :  0.850'
+  'TELL' userid 'AT' node '-> IBM z/PDT on Xeon 2.4Ghz      :  1.250'
+  'TELL' userid 'AT' node '-> Hyperion 4.4 on Xeon 3.5Ghz   :  8.800'
+  'TELL' userid 'AT' node '-> Hyperion 4.4 on Xeon 2.1Ghz   : 12.200'
+  totmessages = totmessages + 9
+return 0
+ 
+sendtime:
+/* send time and time zone to user */
+    parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : TIME"
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
+ Parse Value Diag(8,'QUERY TIME') With . . timenow tz tday tdate
+ 
+ 
+    CALL RESPOND userid,node,"It is: "||timenow||" "||tday||" "||tdate
+    CALL RESPOND userid,node,"time zone: "||tz
+return 0
+ 
+ 
+sendcpu:
+/* send  cpu busy of this machine */
+ 
+    parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : CPU "
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
+ 
+    CALL RESPOND userid,node,"CPU busy average for this machine:  "cpubusy()||" %"
+return 0
+ 
+forecast:
+/* send weather forecast thru RELAY service */
+ 
+    parse ARG userid,node
+    htime=mytime()
+    histuser=htime||" : "userid||" @ "||node||" : FORECAST"
+    call inserthistory histuser,historypointer
+    if  historypointer < history.0 then historypointer=historypointer +1
+ 
+/* extract city from /forecast xxx and send to RELAY as following:
+      smsg rscs cmd relay forecast CITY
+      */
+return 0
+ 
+ 
+ 
+refreshTime:
+/* Refresh last transaction time */
+   arg ctime,userid,node
+   listuser=userid'@'node
+   ppos=pos('/'listuser,$.@)
+   if ppos=0 then return              /* user not logged on */
+   ppos=pos('(',$.@,ppos+1)           /* find timestamp */
+   if ppos=0 then return              /* not found, let it be */
+   rpos=pos(')',$.@,ppos+1)+1         /* find end of timestamp  */
+   if rpos=0 then return              /* ) not found, let it be */
+   rlen=rpos-ppos
+   $.@=overlay('('ctime')',$.@,ppos,rlen)
+return
+ 
+ 
+exTime:
+/* Calculate Seconds in this year */
+  dd=(date('d')-1)*86400
+  parse value time() with hh':'mm':'ss
+  tt=hh*3600+mm*60+ss
+return right(dd+tt,8,'0')
+ 
+epochtime: procedure
+/*return date and time of now since jan 1 2021 */
+today = Date('Base')
+days = today - Date('Base', '20210101', 'Standard')
+/* TIME IS 00:09:05 EDT WEDNESDAY 03/03/21 */
+qtime=time()
+parse var qtime hh':'mm':'ss
+tt=hh*3600+mm*60+ss
+dd=days*86400
+sincepoch=tt+dd
+return sincepoch
+ 
+epochat: procedure
+/*return future epoch time based on date       */
+parse arg futuretime
+ 
+today = Date('Base')
+days = today - Date('Base', '20210101', 'Standard')
+/* TIME IS 00:09:05 EDT WEDNESDAY 03/03/21 */
+qtime=futuretime
+parse var qtime hh':'mm':'ss
+tt=hh*3600+mm*60+ss
+dd=days*86400
+sincepoch=tt+dd
+return sincepoch
+ 
+mytime: procedure
+ timenow = left(time(),5)
+ hr = left(timenow,2)
+ min = right(timenow,2)
+ if hr > 12 then timenow         = (hr - 12)'.'min' pm'
+   else if hr = 12 then timenow  = hr'.'min' pm'
+                    else timenow = hr'.'min' am'
+ if left(timenow,1) = '0' then timenow = substr(timenow,2)
+ dow     = left(date('weekday'),3)
+ day     = right(date('sorted'),2)
+ if left(day,1) = '0' then day = substr(day,2)
+ month   = left(date('month'),3)
+ year    = left(date('sorted'),4)
+return timenow',' dow day month year
+ 
+log:
+/* general logger function                */
+/* log a line to console and LOOKUP LOG A  */
+   parse ARG  logline
+   say mytime()' :: 'logline
+   if log2file = 1 & compatibility > 0 then do
+   address command
+/*  'PIPE (name logit)',
+     '| spec /'mytime()'/ 1 /::/ n /'logLine'/ n',
+     '| >> LOOKUP LOG A'*/
+   logline=mytime()||' :: '||logline
+     'EXECIO 1 DISKW RELAY LOG A (STRING '||logline
+     'FINIS LOOKUP LOG A'
+   end
+return
+ 
+ 
+cpubusy:
+/* how busy are the CPU(s) on this LPAR */
+/* extract CPU buy information for stats etc. */
+ cplevel = space(cp_id) sl
+ strlen = length(cplevel)
+ 
+ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+ cpu = right( cpu+0, 3)
+return cpu
+ 
+paging:
+/* how many pages per second is this LPAR doing? */
+/* extra currenct OS paging activity */
+ sl = c2d(right(diag(0), 2))
+ cplevel = space(cp_id) sl
+ strlen = length(cplevel)
+ 
+ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+        with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+return page
+ 
+rstorage:
+ parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
+return rstor
+ 
+configuration:
+/* return machine configuration */
+/* extract machine type etc. */
+ if compatibility > 2 then do
+Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+ 
+ 
+  Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+  Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+  parse value stsi(1,1,1) with 49  type   +4 ,
+                               81  seq   +16 ,
+                              101  model +16 .
+ 
+  parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                               39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                               45 lname  +8    /* partition name         */
+ 
+  parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                               57 cp_id +16
+ 
+  parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+         with     lnum      lcpus      vcpus        ser    lname model .
+ 
+  blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+          "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
+ 
+  brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+end
+return type
+ 
+numcpus:
+/* return number of CPUs in this LPAR */
+  parse value stsi(1,1,1) with 49  type   +4 ,
+                               81  seq   +16 ,
+                              101  model +16 .
+ 
+  parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                               39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                               45 lname  +8    /* partition name         */
+ 
+  parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                               57 cp_id +16
+ 
+  parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+         with     lnum      lcpus      vcpus        ser    lname model .
+ 
+  blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+          "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s 1090 zPDT 3096 z14"
+ 
+  brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+ 
+ 
+return lcpus
+ 
+highrate:
+/* when too many incoming messages per second exit server to avoid CPU overloading */
+/* this function detects high msg rate for loop detection purposes
+   or for system load abatement purposes                          */
+  RATE = 0
+  parse ARG receivedmsg
+  currentime=Extime()
+  elapsedtime=currentime-starttimeSEC
+  if elapsedtime = 0 then elapsedtime = 3 /* some machines too fast */
+  rate = receivedmsg/elapsedtime
+  if rate > raterwatermark then do
+     call log ('Rate high watermark exceeded, rate: '||rate)
+     signal xit;
+   end
+  else do
+   return 0
+   end
+return
+ 
+ 
+detector:
+/* detect if a message is looping by extracting middle of an incoming message-> comparing*/
+parse ARG msg /* last message in */
+ 
+Middle=center(prevmsg.1,20)
+Middle=strip(middle)                      /* in case message <50 we will
+have leading/trailing blanks, drop them */
+Opos=pos(middle,msg)  /* middle part in new message */
+If opos>0 then do
+     prevmsg.1=msg
+     say "message looping detected.."
+     return -1
+ end
+prevmsg.1=msg
+return 1
+ 
+whoami:
+ 
+"id (stack"
+pull whoamiuser . whoaminode . whoamistack
+whoamistack=LEFT(whoamistack,5)
+return
+ 
+respond:
+ /* general TELL command for lookup */
+ parse ARG userid,node,response
+ 'TELL' userid 'AT' node '-> 'response
+ totmessages=totmessages+1
+return 0
+ 
+inithistory:
+history.1=""
+history.2=""
+history.3=""
+history.4=""
+history.5=""
+history.6=""
+history.7=""
+history.8=""
+history.9=""
+history.10=""
+history.11=""
+history.12=""
+history.13=""
+history.14=""
+history.15=""
+history.16=""
+history.17=""
+history.18=""
+history.19=""
+history.20=""
+history.21=""
+history.22=""
+history.23=""
+history.24=""
+history.25=""
+history.26=""
+history.27=""
+history.28=""
+history.29=""
+history.30=""
+history.31=""
+history.32=""
+history.33=""
+history.34=""
+history.35=""
+RETURN 0
+ 
+inserthistory:
+/* insert history item and scroll */
+parse ARG hmsg,pointer
+if pointer < history.0 then do
+ history.pointer = hmsg
+end
+if pointer >= history.0 then do
+/* ok, we need to scroll up */
+ 
+  do i = 1 to history.0
+      d = i + 1
+      history.i =history.d
+  end
+ 
+  history.z = hmsg/* insert msg at the bottom */
+end
+return 0
+ 
+ 
+benchmark:
+/* benchmark relative system speed with nqueen problem 8x8 */
+elp=time('E')
+bsolution=queen(8,1)
+elp=Trunc(time('e')-elp,3) /* number of seconds */
+return elp
+ 
+QUEEN: PROCEDURE expose count
+ parse arg n,noprint
+ chess.0=copies('. + ',n%2)
+ chess.1=copies('+ . ',n%2)
+ chessAl='a b c d e f g h i j k l m n o p q r s t u v x y z'
+ count = 0
+ k = 1
+ a.k = 0
+ do while k>0
+    a.k = a.k + 1
+    do while a.k<= n & place(k) =0
+       a.k = a.k +1
+    end
+    if a.k > n then k=k-1
+    else do   /* a.k <= n */
+       if k=n then do
+          count=count+1
+       end
+       else do
+          k=k+1
+          a.k=0
+       end
+    end
+end
+return count
+ 
+place: procedure expose a. count
+/* place queens on chess board for /benchmark command */
+ parse arg ps
+ do i=1 to ps-1
+    if a.i = a.ps then return 0
+    if abs(a.i-a.ps)=(ps-i) then return 0
+ end
+return 1
+ 
+ 
+authlog:
+/* immutably  log all new /bcast users (e.q logins) to immudb on RELAY server */
+    parse ARG auserid,anode
+    authuser=auserid||"@"||anode||":"
+    request='http://relayserv.dynu.net/cleanreq?arg=AUTHLOG%20'||authuser||'  AUTH LOG A'
+ 
+    'WW2GET' request
+    'ERASE AUTH LOG A'
+return 0
+ 
+immulog:
+/* immutably  log all commands arriving from users                            */
+    parse ARG iuserid,inode,imsg
+    iuthuser=iuserid||"@"||inode||"_"||imsg||"-"
+    request='http://relayserv.dynu.net/cleanreq?arg=LOG%20'||iuthuser||'  AUTH LOG A'
+ 
+    'WW2GET' request
+    'ERASE AUTH LOG A'
+return 0
+ 
+initlookup:
+/* lookup initialization routimes */
+whoamiuser=""             /* for autoconfigure                        */
+whoaminode=""
+whomistack=""
+call whoami               /* who the fahma am I??                     */
+say 'Hello, I am: '||whoamiuser||' at '||whoaminode||' with '||whoamistack
+ 
+localnode=whoaminode   /* set localnode */
+ 
+if compatibility > 2 then do /* must be z/VM       , ie min requirement VM level*/
+ 
+ say 'All CPU avg: 'cpu '%     Paging: 'paging()
+ 
+     say 'Machine type: 'configuration()'     RAM: 'rstorage()
+     say 'Number of CPU: in LPAR: 'numcpus()
+ END
+     say '                        '
+     say '****** LOG BELOW *******'
+ 
+/* some simple logging  for stats etc        */
+      CALL log('LOOKUP '||lookupversion||' started. ')
+ 
+ Parse Value Diag(8,'QUERY TIME') With . . timenow tz tday tdate
+/*-------------------------------------------*/
+ 
+call inithistory
+call log ('History initalized...')
+call log ('Exact time in seconds: '||epochtime())
+ 
+/* init double linked list of online users   */
+call @init
+ CALL log('List has been initialized.')
+ CALL log('List size: '||@size())
+if @size() /= 0 then do
+   CALL log('Linked list init has failed! Abort ')
+   signal xit;
+end
+ 
+ 
+sysperf=benchmark()
+   CALL log('Benchmark performed. This machine speeed: '||sysperf)
+ 
+CALL log('********** LOOKUP  START **********')
+ say '  _     ____  ____  _  __ _     ____                        '
+ say ' / \   /  _ \/  _ \/ |/ // \ /\/  __\                       '
+ say ' | |   | / \|| / \||   / | | |||  \/|                       '
+ say ' | |_/\| \_/|| \_/||   \ | \_/||  __/                       '
+ say ' \____/\____/\____/\_|\_\\____/\_/                          '
+ say '  for VM/SP, VM/ESA and z/VM  by Moshix                     '
+ say '                                                            '
+ say '  Lookup now listening for requests...                      '
+ say '                                                            '
+ say '                                                            '
+ say '  Feel free to #CP DISC....                                 '
+ 
+return
+ 
+p:      return word(arg(1), 1)    /*pick the first word out of many items*/
+sy:      say;
+         say left('', 30) "   " arg(1) '   ';
+         return
+@init:   $.@=;
+        @adjust: $.@=space($.@);
+        $.#=words($.@);
+        return
+@hasopt: arg o;
+        return pos(o, opt)\==0
+@size:  return $.#
+ 
+/*                                        */
+@del:   procedure expose $.;
+        arg k,m;
+        call @parms 'km'
+         _=subword($.@, k, k-1)   subword($.@, k+m)
+         $.@=_;
+         call @adjust;
+        return
+ 
+@get:    procedure expose $.;     arg k,m,dir,_
+         call @parms 'kmd'
+         do j=k  for m  by dir  while  j>0  &  j<=$.#
+             _=_ subword($.@, j, 1)
+        end   /*j*/
+         return strip(_)
+ 
+@parms:  arg opt      /*define a variable based on an option.*/
+         if @hasopt('k')  then k=min($.#+1, max(1, p(k 1)))
+         if @hasopt('m')  then m=p(m 1)
+         if @hasopt('d')  then dir=p(dir 1);
+         return
+ @put:    procedure expose $.;
+            parse arg x,k;
+            k=p(k $.#+1);
+            call @parms 'k'
+            $.@=subword($.@, 1, max(0, k-1))   x   subword($.@, k);
+            call @adjust
+         return
+ 
+@show:   procedure expose $.;
+            parse arg k,m,dir;
+            if dir==-1  &  k==''   then k=$.#
+            m=p(m $.#);
+            call @parms 'kmd';
+            say @get(k,m, dir);
+         return
+ 
+list:
+/* this is only as examples how to use the double linked list
+    for future expanesion of this program                      */
+   call sy 'initializing the list.'            ;  call @init
+   call sy 'building list: blue'               ;  call @put "blue"
+   call sy 'displaying list size.'             ;  say  "list size="@size()
+   call sy 'forward list'                      ;  call @show
+   call sy 'backward list'                     ;  call @show ,,-1
+   call sy 'showing 4th item'                  ;  call @show 4,1
+   call sy 'showing 5th & 6th items'           ;  call @show 5,2
+   call sy 'adding item before item 4: black'  ;  call @put "black",4
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to tail: white'             ;  call @put "white"
+   call sy 'showing list'                      ;  call @show
+   call sy 'adding to head: red'               ;  call @put  "red",0
+   call sy 'showing list'                      ;  call @show
+return
+ 
