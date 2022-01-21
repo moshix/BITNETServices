@@ -37,7 +37,7 @@ l1=`sed "${p1}q;d" /root/peptalk/pep.1`
 l2=`sed "${p2}q;d" /root/peptalk/pep.2`
 l3=`sed "${p3}q;d" /root/peptalk/pep.3`
 l4=`sed "${p4}q;d" /root/peptalk/pep.4`
-if (( $1 == "clean" )); then #  no screeen formating/colors etc.
+if [ "$1" == "clean" ]; then #  no screeen formating/colors etc.
         echo "$l1 $l2 $l3 $l4"
 else
         echo " ${cyan}"
