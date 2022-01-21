@@ -10,7 +10,8 @@
 # Ver 0.03 - Add colors and terminal handling
 # Ver 0.04 - add values to associative array onlinuers: timestamp%room
 # Ver 0.05 - parse incoming messages from
-VERSION="0.80"
+# Ver 0.06 - give "clean" switch for no screen formatted output 
+VERSION="0.06"
 
 
 # terminal handling globals
@@ -36,9 +37,13 @@ l1=`sed "${p1}q;d" /root/peptalk/pep.1`
 l2=`sed "${p2}q;d" /root/peptalk/pep.2`
 l3=`sed "${p3}q;d" /root/peptalk/pep.3`
 l4=`sed "${p4}q;d" /root/peptalk/pep.4`
+if (( $1 == "clean" )); then #  no screeen formating/colors etc.
+        echo "$l1 $l2 $l3 $l4"
+else
+        echo " ${cyan}"
+        echo "🍺🍺"
+        echo "$l1 $l2 $l3 $l4"
+        echo "${reset}"
+fi
 
-echo " ${cyan}"
-echo "🍺🍺"
-echo "$l1 $l2 $l3 $l4"
-echo "${reset}"
 exit
