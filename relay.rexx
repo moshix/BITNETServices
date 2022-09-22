@@ -1,4 +1,4 @@
-/* RELAY EXEC CHAT PROGRAM             */
+/* RELAY EXEC CHAT REXX PROGRAM        */
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
@@ -10,20 +10,20 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.5.1" /* must be configured!                       */
+relaychatversion="3.7.0" /* must be configured!                       */
 timezone="CDT"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="1t333rrr9" /* any user with this passwd shuts down rver*/
-osversion="z/VM 6.4"     /* OS version for enquries and stats         */
-typehost="IBM z114"      /* what kind of machine                      */
-hostloc  ="Timbuktu.   " /* where is this machine                     */
-sysopname="MOdsdf  "     /* who is the sysop for this chat server     */
-sysopemail="moadffdd.  " /* where to contact this systop             */
+shutdownpswd="999999999" /* any user with this passwd shuts down rver*/
+osversion="VM/ESA 2.4"   /* OS version for enquries and stats         */
+typehost="Hercules"      /* what kind of machine                      */
+hostloc  ="Stockholm,SE" /* where is this machine                     */
+sysopname="MOSHIX  "     /* who is the sysop for this chat server     */
+sysopemail="      @gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=18000      /* max msgs per minute set for this server  */
+raterwatermark=12000      /* max msgs per minute set for this server  */
 debugmode=0               /* print debug info on RELAY console when 1 */
 send2ALL=1                /* 0 send chat msgs to users in same room   */
                           /* 1 send chat msgs to all logged-in users  */
@@ -32,7 +32,7 @@ log2file=1                /* all calls to log also in RELAY LOG A     */
 history.0=15              /* history goes back n  last chat lines */
 ushistory.0=15            /* user logon/logff history n entries   */
 silentlogoff=0            /* silently logg off user by 1/min wakeup call */
- 
+federation=1              /* is this chat server federating with others? */
  
  
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
@@ -47,6 +47,13 @@ if relinit() /= 0 then signal xit /* initialize RELAY CHAT properly and run test
 /*"WAKEUP +1 (IUCVMSG"  really needed??                    */
  
   'MAKEBUF'
+ 
+ 
+/* if we are federating go initalize the federation now    */
+if federation = 1 then call initfederation
+ 
+ 
+ 
 /* In this loop, we wait for a message to arrive and       */
 /* process it when it does.  If the "operator" types on    */
 /* the console (rc=6) then leave the exec.                 */
@@ -231,8 +238,9 @@ if  userid = "RELAY" | userid = "RSCS" then do
 end
    CurrentTime=Extime()
    call CheckTimeout currentTime
- 
+    lastmsgreceived=Extime()               /* log this for /stats command */
     listuser = userid || "@"||node
+    lastmsgwho=listuser                    /* log who sent last msg for /stats */
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
              do ci=1 to words($.@)
@@ -452,15 +460,27 @@ sendstats:
     msgsratef= FORMAT(msgsrate,4,2) /* rounding */
     msgsratef = STRIP(msgsratef)
     listuser = userid"@"node
-    'TELL' userid 'AT' node '-> Total number of users: '@size()
-    'TELL' userid 'AT' node '-> Highest nr.  of users: 'highestusers
-    'TELL' userid 'AT' node '-> Total number of msgs : 'totmessages
-    'TELL' userid 'AT' node '-> Messages rate /second: 'msgsratef
-    'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
-    'TELL' userid 'AT' node '-> System CPU load      : 'STRIP(cpu)'%'
-    'TELL' userid 'AT' node '-> RELAY CHAT version   : v'relaychatversion
+    'TELL' userid 'AT' node '-> Total number of users       : '@size()
+    'TELL' userid 'AT' node '-> Highest nr.  of users       : 'highestusers
+    'TELL' userid 'AT' node '-> Total number of msgs        : 'totmessages
+    'TELL' userid 'AT' node '-> Messages rate /second       : 'msgsratef
+    'TELL' userid 'AT' node '-> Server up since             : 'starttime' 'timezone
+    'TELL' userid 'AT' node '-> System CPU load             : 'STRIP(cpu)'%'
+    'TELL' userid 'AT' node '-> RELAY CHAT version          : v'relaychatversion
  
-     totmessages = totmessages+ 7
+ 
+     if lastmsgreceived /= 0 then do               /* did we ever get any real chat msg? */
+        lastno=Extime()
+        sincelast=(lastno-lastmsgreceived)        /* how many sec since last msg */
+        'TELL' userid 'AT' node '-> Seconds since last chat msg : 'sincelast
+        'TELL' userid 'AT' node '-> Last chat msg by user       : 'lastmsgwho
+     end
+ 
+     if lastmsgreceived /= 0 then do             /* did we ever get any real chat msg? */
+        totmessages = totmessages+ 9
+     end
+      else totmessages = totmessages+ 7
+ 
      call writestats                               /* write stats to disk for now */
 return
  
@@ -1025,6 +1045,9 @@ returnNJEmsg3="HCPMFS057I"/* RSCS not receiving message            */
 returnNJEmsg4="DMTPAF208E"/* Invalid user ID message               */
 returnNJEmsg5="DMTPAF210E"/* RSCS DMTPAF210E Invalid location      */
  
+ 
+lastmsgreceived=0        /* log when last user message was recvd   */
+lastmsgwho='NOBODY'      /* log which user sent last chat msg      */
 loggedonusers = 0        /* online user at any given moment        */
 highestusers = 0         /* most users online at any given moment  */
 totmessages  = 0         /* total number of msgs sent              */
@@ -1176,6 +1199,17 @@ place: procedure expose a. count
  end
 return 1
  
+initfederation:
+/* initializes nodes we are federating with               */
+/* below configure all friendly nodes and update fnodes.0 */
+fnodes.0=1
+fnodes.1="zvm72msh"
+ 
+ 
+ 
+ 
+ 
+return 0
  
 /*  CHANGE HISTORY                                                   */
 /*  V0.1-0.9:  testing WAKEUP mechanism                              */
@@ -1227,3 +1261,5 @@ return 1
 /*  v3.4.4  :  Made start of source easier and put init into function*/
 /*  v3.5.0  :  /BENCHMARK FEATURE TO get relatie system speed        */
 /*  v3.5.1  :  Cosmetics                                             */
+/*  v3.6.0  :  Federation                                            */
+/*  v3.7.0  :  Show when last message was sent and by whom           */
