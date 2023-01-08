@@ -3,7 +3,7 @@
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
 /*                                     */
-/* copyright 2020, 2021  by moshix     */
+/* copyright 2020-2023  by moshix      */
 /* Apache 2.0 license                  */
 /***************************************/
 /* execute this from RELAY VM before starting RELAY CHAT:            */
