@@ -159,6 +159,6 @@ Ready;
 Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED: October 23, 2021<br>
+UPDATED:January 8, 2023<br>
 Moshix
 
