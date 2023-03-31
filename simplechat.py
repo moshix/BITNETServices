@@ -2,6 +2,11 @@
 import socket
 import threading
 import random
+# Copyright 2023 by moshix
+# v 0.1 humble beginnings
+# v 0.2 Added random names
+# TODO v0.3 pass it IP and port for connection
+# TODO v0.4 Inform other users that a certain users has disconnected, then delete from names{}
 
 # dictionary how-to: https://www.guru99.com/python-dictionary-append.html
 # Set up socket connection
@@ -31,8 +36,8 @@ def handle_client(client_socket):
 # create random name for connection
 def name_client(client_socket):
 
-   first_names = ['Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'Moshix', 'Dennis', 'Jay']
-   last_names = ['Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
+   first_names = ['Greg','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'Moshix', 'Dennis', 'Jay']
+   last_names = ['Sundlof', 'Hauser', 'Wagner', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
    full_name = random.choice(first_names) + " " + random.choice(last_names)
    # debug only: print ("name_client func   - full_name: ", full_name, "client_socket", client_socket)
    names[client_socket]=full_name
