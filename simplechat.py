@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/python3.9
+#!/opt/homebrew/bin/python3.10
 import socket
 import threading
 import random
@@ -29,14 +29,17 @@ print ('Argument List:', str(sys.argv))
 if len(sys.argv) == 3:
     HOST=sys.argv[1]
     PORT = sys.argv[2]
+    print("You povided HOST: " + str(HOST))
+    print("You provide PORT: " + str(PORT))
 else:
-    print ('Wrong command line arguments! \nExecute this chat server ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]')
-
+    print ('Wrong command line arguments! \nExecute this chat server ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]\n')
+newline = "\n"
 totmsg = 0
 maxusers = 0
 currentusers = 0
-Version = "0.8"
+Version = "0.9"
 started = datetime.datetime.now()
+helpmsg = "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n"
 
 # Set up socket connection
 # Create socket object and bind to host and port
@@ -59,6 +62,7 @@ def handle_client(client_socket):
             global maxusers
             global currentusers
             global started
+            global helpmsg
 
             # some stats keeping
             currentusers = 0
@@ -80,22 +84,23 @@ def handle_client(client_socket):
             if stripmsg != "":
                print("user: ",user, " wrote: ", message) # for console
             formatmsg = user + "> " + message
-            receipt = "< \n"
-            helpmsg = "/who for list of users"
+            #print ("Debug: msg: " + stripmsg + newline) 
 
             # handle  help request 
-            if stripmsg== "Help" or stripmsg== "/help":
+            if stripmsg[:5] == "/Help" or stripmsg[:5] == "/help":
                 totmsg = totmsg + 1
                 whosent.send(helpmsg.encode())
+                continue
 
             # handle version request
-            if stripmsg== "/Ver"[:4] or stripmsg== "/ver"[:4]:
+            if stripmsg[:4] == "/Vers" or stripmsg[:4] == "/ver":
                 totmsg = totmsg + 1
-                versionmsg = str("Moshix Chat Server is currently running Version: ") + str(Version) + "\n"  
-                whosent.send(Version.encode())
+                versionmsg = str("Moshix Chat Server is currently running Version: ") + str(Version) + newline
+                whosent.send(versionmsg.encode())
+                continue
             
             # handle stats request
-            if stripmsg== "/stats"[:6] or stripmsg== "/Stats"[:6]:
+            if stripmsg[:6] == "/stats" or stripmsg[:5] == "/Stats":
                 totmsg = totmsg + 1
                 strtotmsg = str(totmsg)
                 strcurrentusers = str(currentusers)
@@ -103,14 +108,32 @@ def handle_client(client_socket):
                 strstarted = str(started)
                 statsmsg = str("Chat server up since: " + strstarted[:19] + " - total messages sent: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users seen: " + strmaxusers + "\n")
                 whosent.send(statsmsg.encode())
+                continue
 
 
             # handle to change nick name with /nick
-            if stripmsg== "/nick"[:5] or stripmsg== "/Nick"[:5]:
+            if stripmsg[:5] == "/nick" or stripmsg[:5] == "/Nick":
+                #print ("Debug: Entered /nick function ")
+                wordCount = len(stripmsg.split()) 
+                #print ("Debug: /nick number of words: ", wordCount)
+                
+                if wordCount < 2:
+                    totmsg = totmsg + 1
+                    errormsg="You need to provide a one word nickname, like:  /nick JiffyLube. Retry. \n"
+                    whosent.send(errormsg.encode())
+                else:
+                    print ("Debug info: Number of words in /nick is correct")
+                    nick = stripmsg.split()[1]
+                    strnick = str(nick)
+                    clients[client_socket]["name"] = strnick
+                    confirm = "Your nick has been changed to" + strnick + "\n"
+                    totmsg = totmsg + 1
+                    whosent.send(confirm.encode())
 
+                continue
 
             # send list of logged in users to requesting client
-            if stripmsg == "/who"[:4] or stripmsg == "/Who":
+            if stripmsg[:4] == "/who" or stripmsg[:4] == "/Who":
                 counter = 0
                 for toBroadcast, data in clients.items():
                     totmsg = totmsg + 1
@@ -119,6 +142,7 @@ def handle_client(client_socket):
                     listuser = clients[toBroadcast]["name"]
                     detail = str(strcounter + " - " + listuser + " \n")
                     whosent.send(detail.encode())
+                continue
 
             # Broadcast message to all clients
             if stripmsg != "":
@@ -128,7 +152,8 @@ def handle_client(client_socket):
                       toBroadcast.send(formatmsg.encode())
                   #else: 
                   #    whosent.send(receipt.encode())
-  
+ 
+
     except (ConnectionResetError, OSError):
         print("client connetion reset")
     finally:
@@ -158,8 +183,8 @@ def greet_user(client_socket):
 # create random name for connection
 def name_client(client_socket):
 
-   first_names = ['Raj', 'Oren', 'Ben', 'Eden', 'Greg','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
-   last_names = ['Depardieu', 'Hajij', 'Yamamoto', 'Ostrovsky','Sundlof', 'Hauser', 'Wagner', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
+   first_names = ['Raj', 'Oren', 'Tom', 'Greg','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
+   last_names = ['Depardieu', 'Hajin', 'Yamamoto', 'Ostrovsky','Johnson', 'Beermo', 'Santis', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
    full_name = random.choice(first_names) + " " + random.choice(last_names)
    # debug only: print ("name_client func   - full_name: ", full_name, "client_socket", client_socket)
    clients[client_socket]["name"] = full_name
@@ -182,4 +207,4 @@ server_socket.listen()
 print("Started Moshix Chat Server with HOST and IP: ", str(HOST) + ":" + str(PORT))
 accept_thread = threading.Thread(target=accept_clients)
 accept_thread.start()
-
+#!/opt/homebrew/bin/python3.10
