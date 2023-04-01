@@ -18,6 +18,7 @@ import datetime
 # v 0.6 Handle /stats
 # v 0.7 Handle /help
 # v 0.8 Now get host and port from command line optionally
+# v 0.9 Change nick name with /nick
 
 # default values 
 HOST = "localhost"
@@ -103,10 +104,16 @@ def handle_client(client_socket):
                 statsmsg = str("Chat server up since: " + strstarted[:19] + " - total messages sent: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users seen: " + strmaxusers + "\n")
                 whosent.send(statsmsg.encode())
 
+
+            # handle to change nick name with /nick
+            if stripmsg== "/nick"[:5] or stripmsg== "/Nick"[:5]:
+
+
             # send list of logged in users to requesting client
             if stripmsg == "/who"[:4] or stripmsg == "/Who":
                 counter = 0
                 for toBroadcast, data in clients.items():
+                    totmsg = totmsg + 1
                     counter = + counter + 1
                     strcounter = str(counter)
                     listuser = clients[toBroadcast]["name"]
