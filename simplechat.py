@@ -17,20 +17,31 @@ import datetime
 # v 0.5 Handle command /who
 # v 0.6 Handle /stats
 # v 0.7 Handle /help
+# v 0.8 Now get host and port from command line optionally
 
-# dictionary how-to: https://www.guru99.com/python-dictionary-append.html
-# Set up socket connection
+# default values 
 HOST = "localhost"
 PORT = 8000
+
+#print ('Number of arguments:', len(sys.argv), 'arguments.')
+print ('Argument List:', str(sys.argv))
+if len(sys.argv) == 3:
+    HOST=sys.argv[1]
+    PORT = sys.argv[2]
+else:
+    print ('Wrong command line arguments! \nExecute this chat server ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]')
+
 totmsg = 0
 maxusers = 0
 currentusers = 0
-Version = "0.7"
+Version = "0.8"
 started = datetime.datetime.now()
 
+# Set up socket connection
 # Create socket object and bind to host and port
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.bind((HOST, PORT))
+intPORT = int(PORT)
+server_socket.bind((HOST, intPORT))
 
 
 # Set up list to store client sockets and dictionary with random names
@@ -161,7 +172,7 @@ def accept_clients():
 
 # Start accepting clients
 server_socket.listen()
-print("Started Moshix Chat Server...")
+print("Started Moshix Chat Server with HOST and IP: ", str(HOST) + ":" + str(PORT))
 accept_thread = threading.Thread(target=accept_clients)
 accept_thread.start()
 
