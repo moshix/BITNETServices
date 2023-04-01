@@ -5,7 +5,8 @@ import random
 import signal
 import sys
 import string
-
+import time
+import datetime
 
 
 # Copyright 2023 by moshix
@@ -25,6 +26,7 @@ totmsg = 0
 maxusers = 0
 currentusers = 0
 Version = "0.7"
+started = datetime.datetime.now()
 
 # Create socket object and bind to host and port
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -44,6 +46,7 @@ def handle_client(client_socket):
             global totmsg 
             global maxusers
             global currentusers
+            global started
 
             # some stats keeping
             currentusers = 0
@@ -85,7 +88,8 @@ def handle_client(client_socket):
                 strtotmsg = str(totmsg)
                 strcurrentusers = str(currentusers)
                 strmaxusers = str(maxusers)
-                statsmsg = str("Total messages sent: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users seen: " + strmaxusers + "\n")
+                strstarted = str(started)
+                statsmsg = str("Chat server up since: " + strstarted[:19] + " - total messages sent: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users seen: " + strmaxusers + "\n")
                 whosent.send(statsmsg.encode())
 
             # send list of logged in users to requesting client
