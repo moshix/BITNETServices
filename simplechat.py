@@ -13,14 +13,18 @@ import string
 # v 0.2 Added random names
 # v 0.3 Greet user individually
 # v 0.4 Inform other users that a certain users has disconnected, then delete from names{}
-# TODO handle simple commands like /who
-# TODO  
-# TODO 
+# v 0.5 Handle command /who
+# v 0.6 Handle /stats
+# v 0.7 Handle /help
 
 # dictionary how-to: https://www.guru99.com/python-dictionary-append.html
 # Set up socket connection
 HOST = "localhost"
 PORT = 8000
+totmsg = 0
+maxusers = 0
+currentusers = 0
+Version = "0.7"
 
 # Create socket object and bind to host and port
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -36,6 +40,18 @@ def handle_client(client_socket):
     try:
         while True:
             # Receive message from client
+
+            global totmsg 
+            global maxusers
+            global currentusers
+
+            # some stats keeping
+            currentusers = 0
+            for toBroadcast, data in clients.items():
+                 currentusers= currentusers + 1
+                 if maxusers < currentusers:
+                     maxusers = maxusers +1
+
             whosent = 0
             received = client_socket.recv(1024)
             if(received == b''):
@@ -52,20 +68,41 @@ def handle_client(client_socket):
             receipt = "< \n"
             helpmsg = "/who for list of users"
 
-            # handle commands 
-            if message == "Help" or message == "help":
+            # handle  help request 
+            if stripmsg== "Help" or stripmsg== "/help":
+                totmsg = totmsg + 1
                 whosent.send(helpmsg.encode())
 
+            # handle version request
+            if stripmsg== "/Ver"[:4] or stripmsg== "/ver"[:4]:
+                totmsg = totmsg + 1
+                versionmsg = str("Moshix Chat Server is currently running Version: ") + str(Version) + "\n"  
+                whosent.send(Version.encode())
+            
+            # handle stats request
+            if stripmsg== "/stats"[:6] or stripmsg== "/Stats"[:6]:
+                totmsg = totmsg + 1
+                strtotmsg = str(totmsg)
+                strcurrentusers = str(currentusers)
+                strmaxusers = str(maxusers)
+                statsmsg = str("Total messages sent: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users seen: " + strmaxusers + "\n")
+                whosent.send(statsmsg.encode())
+
             # send list of logged in users to requesting client
-            if message == "/who"[:4] or message == "/Who":
+            if stripmsg == "/who"[:4] or stripmsg == "/Who":
+                counter = 0
                 for toBroadcast, data in clients.items():
+                    counter = + counter + 1
+                    strcounter = str(counter)
                     listuser = clients[toBroadcast]["name"]
-                    whosent.send(listuser,encode())
+                    detail = str(strcounter + " - " + listuser + " \n")
+                    whosent.send(detail.encode())
 
             # Broadcast message to all clients
             if stripmsg != "":
               for toBroadcast, data in clients.items():
                   if toBroadcast != whosent:
+                      totmsg = totmsg + 1
                       toBroadcast.send(formatmsg.encode())
                   #else: 
                   #    whosent.send(receipt.encode())
@@ -78,11 +115,11 @@ def handle_client(client_socket):
 
 
 def greet_user(client_socket):
-   Version = "0.4"
+   global Version
    whosent = client_socket
    user = clients[client_socket]["name"]
    formatmsg = str("Look who just came in from the cold! It's  ")  +str(user) + str("! ") + str("\n")
-   boilerplate = str("\n\nMoshix Chat System - Version ") + str(Version) + str("\n")
+   boilerplate = str("\n\nMoshix Chat System - Version ") + str(Version) + str("-- /help for comands ") +  str("\n")
    usergreet = str("Welcome ") + str(user) +str("!  \n")
 
    for toBroadcast, data in clients.items():
