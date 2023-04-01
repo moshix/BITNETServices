@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/python3.10
+#!/usr/local/bin/python3.10
 import socket
 import threading
 import random
@@ -10,15 +10,17 @@ import datetime
 
 
 # Copyright 2023 by moshix
-# v 0.1 humble beginnings
-# v 0.2 Added random names
-# v 0.3 Greet user individually
-# v 0.4 Inform other users that a certain users has disconnected, then delete from names{}
-# v 0.5 Handle command /who
-# v 0.6 Handle /stats
-# v 0.7 Handle /help
-# v 0.8 Now get host and port from command line optionally
-# v 0.9 Change nick name with /nick
+# v 0.1  humble beginnings
+# v 0.2  Added random names
+# v 0.3  Greet user individually
+# v 0.4  Inform other users that a certain users has disconnected, then delete from names{}
+# v 0.5  Handle command /who
+# v 0.6  Handle /stats
+# v 0.7  Handle /help
+# v 0.8  Now get host and port from command line optionally
+# v 0.9  Change nick name with /nick
+# v 0.91 Show message of the day with /motd
+Version = "0.91"
 
 # default values 
 HOST = "localhost"
@@ -37,10 +39,9 @@ newline = "\n"
 totmsg = 0
 maxusers = 0
 currentusers = 0
-Version = "0.9"
 started = datetime.datetime.now()
-helpmsg = "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n"
-
+helpmsg = "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n\n"
+Motd="***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n"
 # Set up socket connection
 # Create socket object and bind to host and port
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,6 +64,7 @@ def handle_client(client_socket):
             global currentusers
             global started
             global helpmsg
+            global Motd
 
             # some stats keeping
             currentusers = 0
@@ -90,6 +92,12 @@ def handle_client(client_socket):
             if stripmsg[:5] == "/Help" or stripmsg[:5] == "/help":
                 totmsg = totmsg + 1
                 whosent.send(helpmsg.encode())
+                continue
+
+	    # handle message of the dasy (motd) request 
+            if stripmsg[:4] == "/Mot" or stripmsg[:4] == "/mot":       
+                totmsg = totmsg + 1                                     
+                whosent.send(Motd.encode())                       
                 continue
 
             # handle version request
@@ -163,6 +171,7 @@ def handle_client(client_socket):
 
 def greet_user(client_socket):
    global Version
+   global Motd # message of the day
    whosent = client_socket
    user = clients[client_socket]["name"]
    formatmsg = str("Look who just came in from the cold! It's  ")  +str(user) + str("! ") + str("\n")
@@ -177,6 +186,7 @@ def greet_user(client_socket):
        # greet user who just signed in
            whosent.send(boilerplate.encode())
            whosent.send(usergreet.encode())
+           whosent.send(Motd.encode())
 
 
 
