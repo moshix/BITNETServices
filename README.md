@@ -154,8 +154,10 @@ Ready;
 
 </pre>
 <br><br>
-
-
+<h1>Python Simple Chat Server</h1>
+<br>
+This chat server is compatible with every Pyton 3.x without other package requirements and can be a handy ad-hoc chat server that scales well to thousands of users. Check it out. 
+<br><br>
 Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
