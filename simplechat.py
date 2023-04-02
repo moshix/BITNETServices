@@ -1,5 +1,6 @@
 #!/opt/homebrew/bin/python3.10
 #!/usr/local/bin/python3.10
+#!/opt/homebrew/bin/python3.9
 import socket
 import threading
 import random
@@ -11,7 +12,7 @@ import datetime
 
 
 # Copyright 2023 by moshix
-# License: All rights restricted. You may not copy, use, or re-use parts or all of this code and algorithms  without my written permission. 
+# License: All rights restricted. You may not copy, use, or re-use parts or all of this code and algorithms  without my written permission.
 # v 0.1  humble beginnings
 # v 0.2  Added random names
 # v 0.3  Greet user individually
@@ -53,10 +54,14 @@ PORT = 8000
 if len(sys.argv) == 3:
     HOST=sys.argv[1]
     PORT = sys.argv[2]
-    print("You povided HOST: " + str(HOST))
-    print("You provide PORT: " + str(PORT))
+    print(bcolors.GREEN + "You povided HOST: " + str(HOST))
+    print("You provide PORT: " + str(PORT) + bcolors.ENDC)
 else:
-    print ('Wrong command line arguments! \nExecute this chat server ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]\n')
+    print (bcolors.WARNING + 'You did not provide IP and HOST as arguments \nRun this chat server with ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]\n')
+    print(bcolors.BLUE + "Default value for this run of  HOST: " + str(HOST))
+    print(bcolors.BLUE + "Default value for this run of  PORT: " + str(PORT) + bcolors.ENDC)
+
+
 newline = "\n"
 totmsg = 0
 maxusers = 0
@@ -183,7 +188,7 @@ def handle_client(client_socket):
                     nick  = stripmsg.split()[1]
                     strnick = str(nick)
                     #print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
-                    # get DM payload 
+                    # get DM payload
                     dmCount = len(stripmsg.split()) # how many words in total message sent by requester
                     dmsplit = stripmsg.split() # stripomsg split into words
                     # finds client_socket from name
@@ -196,7 +201,7 @@ def handle_client(client_socket):
                             toDm=client_socket
                         else:
                             toDm=0
-                            
+
                     if toDm != 0:
                         #print(bcolors.WARNING +"Debug: Found client socket for nick: " + str(clients[client_socket]) + bcolors.ENDC)
                         totmsg = totmsg + 2 # one for confirmation and one with DM
@@ -205,10 +210,10 @@ def handle_client(client_socket):
                         strdm = ' '.join(dm)
                         #print(bcolors.WARNING + "Debug: payload: " + strdm + bcolors.ENDC)
                         whosent.send(confirm.encode())
-                        DMmsg=bcolors.GREEN +  "DM from " + str(user) + " > " + strdm + bcolors.ENDC + newline 
+                        DMmsg=bcolors.GREEN +  "DM from " + str(user) + " > " + strdm + bcolors.ENDC + newline
                         toDm.send(DMmsg.encode())
-                    else: 
-                        totmsg = totmsg + 1 
+                    else:
+                        totmsg = totmsg + 1
                         confirm = bcolors.YELLOW + "Your DM cannot be sent. Nick not existing or logged out meanwhile. " +  bcolors.ENDC  + newline
                         whosent.send(confirm.encode())
                 continue
