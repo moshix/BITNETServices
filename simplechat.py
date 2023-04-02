@@ -123,7 +123,7 @@ def handle_client(client_socket):
             user = clients[client_socket]["name"]
 
             if stripmsg != "":
-               print("user: ",user, " wrote: ", message) # for console
+               print(str(datetime.datetime.now())[11:22] + " User: ",user, " wrote: ", message) # for console
             formatmsg = user + "> " + message
             #print ("Debug: msg: " + stripmsg + newline)
  
@@ -133,7 +133,7 @@ def handle_client(client_socket):
                 whosent.send(helpmsg.encode())
                 continue
  
-           # handle message of the dasy (motd) request
+           # handle message of the day (motd) request
             if stripmsg[:4] == "/Mot" or stripmsg[:4] == "/mot":
                 totmsg = totmsg + 1
                 whosent.send(Motd.encode())
@@ -186,7 +186,7 @@ def handle_client(client_socket):
 
                     if nickExists == "False":
                         clients[client_socket]["name"] = strnick
-                        print(bcolors.CYAN + "User: " + str(user) + " has changed name to: " +strnick + bcolors.ENDC) #also print on console
+                        print(bcolors.CYAN + str(datetime.datetime.now())[11:22] + " User: " + str(user) + " has changed name to: " +strnick + bcolors.ENDC) #also print on console
                         confirm = bcolors.CYAN + "Your nick has been changed to: " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
                         totmsg = totmsg + 1
                         whosent.send(confirm.encode())
@@ -195,7 +195,7 @@ def handle_client(client_socket):
                         for toBroadcast, data in clients.items():
                             if toBroadcast != whosent:
                                totmsg = totmsg + 1
-                               nickchangemsg = bcolors.CYAN + "User: " + str(user) + " has changed nickname to: " + bcolors.GREEN + strnick + bcolors.ENDC + newline
+                               nickchangemsg = bcolors.CYAN + str(datetime.datetime.now())[11:22] + " User: " + str(user) + " has changed nickname to: " + bcolors.GREEN + strnick + bcolors.ENDC + newline
                                toBroadcast.send(nickchangemsg.encode())
                     else: 
                         confirm = bcolors.WARNING + "No can  do. This nickname already exists... " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
@@ -246,7 +246,7 @@ def handle_client(client_socket):
                         strdm = ' '.join(dm)
                         #print(bcolors.WARNING + "Debug: payload: " + strdm + bcolors.ENDC)
                         whosent.send(confirm.encode())
-                        DMmsg=bcolors.GREEN +  "DM from " + str(user) + " > " + strdm + bcolors.ENDC + newline
+                        DMmsg=bcolors.GREEN + str(datetime.datetime.now())[11:22] +  "DM from " + str(user) + " > " + strdm + bcolors.ENDC + newline
                         toDm.send(DMmsg.encode())
                     else:
                         totmsg = totmsg + 1
@@ -270,7 +270,7 @@ def handle_client(client_socket):
 
             if stripmsg[:7] == "/logoff" or stripmsg[:7] == "/LOGOFF":
               if client_socket in clients:
-                 logoffmsg= bcolors.YELLOW + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
+                 logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
                  totmsg = totmsg + 1
                  whosent.send(logoffmsg.encode())
                  whosent.close()
@@ -279,7 +279,7 @@ def handle_client(client_socket):
                  for toBroadcast, data in clients.items():
                      if toBroadcast != whosent:
                         totmsg = totmsg + 1
-                        usergonemsg = bcolors.CYAN + "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
+                        usergonemsg = bcolors.CYAN + str(datetime.datetime.now())[11:22] + "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
                         toBroadcast.send(usergonemsg.encode())
               continue
 
@@ -376,3 +376,4 @@ server_socket.listen()
 print(bcolors.GREEN + "Started Moshix Chat Server with HOST and IP: "+  str(HOST) + ":" + str(PORT) +bcolors.ENDC)
 accept_thread = threading.Thread(target=accept_clients)
 accept_thread.start()
+
