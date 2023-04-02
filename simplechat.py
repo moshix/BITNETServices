@@ -59,7 +59,7 @@ totmsg = 0
 maxusers = 0
 currentusers = 0
 started = datetime.datetime.now()
-helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\nDM user to send a direct message to a user\n\n"  + bcolors.ENDC
+helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n/DM user to send a direct message to a user\n\n"  + bcolors.ENDC
 Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\nStart chatting now:\n\n" + bcolors.ENDC
 
 
