@@ -29,11 +29,12 @@ import datetime
 # v 1.3  Inform all online users of user who changed nick name!
 # v 1.4  Random sentences to inform of new users
 # v 1.5  Make random names witha space and set timeout for sockets
+# v 1.6   /logoff to get out
 # v 1.9  TODO Re-organize into more functions (for send, for search of users etc)
 # v 2.0  TODO SSL comms
 
 
-Version = "1.5"
+Version = "1.6"
 
 class bcolors:
     HEADER = '\033[95m'
@@ -65,6 +66,7 @@ else:
     print (bcolors.WARNING + 'You did not provide IP and HOST as arguments \nRun this chat server with ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]\n')
     print(bcolors.BLUE + "Default value for this run of  HOST: " + str(HOST))
     print(bcolors.BLUE + "Default value for this run of  PORT: " + str(PORT) + bcolors.ENDC)
+    print(bcolors.BLUE + "Moshix Chat Server version: " + str(Version) + bcolors.ENDC)
 
 
 newline = "\n"
@@ -73,8 +75,9 @@ maxusers = 0
 currentusers = 0
 started = datetime.datetime.now()
 strhereis = " "
-helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n/dm user to send a Direct Message to a user\n\n"  + bcolors.ENDC
-Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n" + bcolors.CYAN + "Start chatting now\n\n" + bcolors.ENDC
+helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n/dm user to send a Direct Message to a user\n/logoff to log off the chat server\n\n"  + bcolors.ENDC
+Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n" + bcolors.ENDC
+startchatmsg=bcolors.BLUE + "Start chatting now\n\n" + bcolors.ENDC 
 
 
 # Set up socket connection
@@ -119,6 +122,7 @@ def handle_client(client_socket):
             stripmsg=message.strip() #strip of newline
             whosent = client_socket
             user = clients[client_socket]["name"]
+
             if stripmsg != "":
                print("user: ",user, " wrote: ", message) # for console
             formatmsg = user + "> " + message
@@ -253,7 +257,7 @@ def handle_client(client_socket):
 
 
             # send list of logged in users to requesting client
-            if stripmsg[:4] == "/who" or stripmsg[:4] == "/Who":
+            if stripmsg[:6] == "/users/" or stripmsg[:4] == "/who" or stripmsg[:4] == "/Who":
                 counter = 0
                 for toBroadcast, data in clients.items():
                     totmsg = totmsg + 1
@@ -263,6 +267,22 @@ def handle_client(client_socket):
                     detail = str(bcolors.CYAN + strcounter + " - " + listuser + bcolors.ENDC  + newline)
                     whosent.send(detail.encode())
                 continue
+
+
+            if stripmsg[:7] == "/logoff" or strimpmsg[:7] == "/LOGOFF":
+              if client_socket in clients:
+                 logoffmsg= bcolors.YELLOW + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
+                 totmsg = totmsg + 1
+                 whosent.send(logoffmsg.encode())
+                 whosent.close()
+                 del clients[client_socket]
+                 # now inform all users of name change
+                 for toBroadcast, data in clients.items():
+                     if toBroadcast != whosent:
+                        totmsg = totmsg + 1
+                        usergonemsg = bcolors.CYAN + "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
+                        toBroadcast.send(usergonemsg.encode())
+              continue
 
             # Broadcast message to all clients
             if stripmsg != "":
@@ -288,6 +308,7 @@ def greet_user(client_socket):
    global Motd # message of the day
    global currentusers
    global maxusers
+   global startchatmsg
 
    # count users into global variable
    for toBroadcast, data in clients.items():
@@ -312,6 +333,7 @@ def greet_user(client_socket):
            whosent.send(usergreet.encode())
            whosent.send(usergreetCount.encode())
            whosent.send(Motd.encode())
+           whosent.send(startchatmsg.encode())
 
 
 
