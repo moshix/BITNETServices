@@ -1,4 +1,5 @@
 #!/opt/homebrew/bin/python3.10
+#!/usr/local/bin/python3.10
 import socket
 import threading
 import random
@@ -60,7 +61,7 @@ maxusers = 0
 currentusers = 0
 started = datetime.datetime.now()
 helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n/DM user to send a direct message to a user\n\n"  + bcolors.ENDC
-Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\nStart chatting now:\n\n" + bcolors.ENDC
+Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n" + bcolors.CYAN + "Start chatting now\n\n" + bcolors.ENDC
 
 
 # Set up socket connection
@@ -154,7 +155,7 @@ def handle_client(client_socket):
                     nick = stripmsg.split()[1]
                     strnick = str(nick)
                     clients[client_socket]["name"] = strnick
-                    confirm = bcolors.CYAN + "Your nick has been changed to: " + strnick +  bcolors.END + newline
+                    confirm = bcolors.CYAN + "Your nick has been changed to: " + strnick +  bcolors.ENDC + newline
                     totmsg = totmsg + 1
                     whosent.send(confirm.encode())
                 continue
@@ -245,7 +246,7 @@ def greet_user(client_socket):
    whosent = client_socket
    user = clients[client_socket]["name"]
    formatmsg = str(bcolors.CYAN + "Look who just came in from the cold! It's  ") + bcolors.GREEN  +str(user) + bcolors.CYAN +  str("! ") +  bcolors.ENDC + newline
-   boilerplate = str(bcolors.CYAN + "\n\nMoshix Chat System - Version ") + str(Version) + str("-- /help for comands ") + bcolors.ENDC +  newline
+   boilerplate = str(bcolors.CYAN + "\n\nMoshix Chat System - Version ") + str(Version) + bcolors.RED + str("-- /help for comands ") + bcolors.ENDC +  newline
    usergreet = str(bcolors.CYAN + "Welcome ") + bcolors.HEADER + str(user) + bcolors.ENDC +  newline
 
    for toBroadcast, data in clients.items():
@@ -284,6 +285,6 @@ def accept_clients():
 
 # Start accepting clients
 server_socket.listen()
-print("Started Moshix Chat Server with HOST and IP: ", str(HOST) + ":" + str(PORT))
+print(bcolors.GREEN + "Started Moshix Chat Server with HOST and IP: "+  str(HOST) + ":" + str(PORT) +bcolors.ENDC)
 accept_thread = threading.Thread(target=accept_clients)
 accept_thread.start()
