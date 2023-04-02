@@ -10,6 +10,7 @@ import datetime
 
 
 # Copyright 2023 by moshix
+# License: All rights restricted. You may not copy, use, or re-use parts or all of this code and algorithms  without my written permission. 
 # v 0.1  humble beginnings
 # v 0.2  Added random names
 # v 0.3  Greet user individually
@@ -23,7 +24,7 @@ import datetime
 # v 1.0  TODO DM between users: bug!!! /nick does not correclty change clients dictionary
 # v 1.1  TODO Make sure new /nick is unique and otherwise reject it!
 
-Version = "1.00"
+Version = "1.01"
 
 # default values
 HOST = "localhost"
@@ -177,12 +178,13 @@ def handle_client(client_socket):
                     dmCount = len(stripmsg.split()) # how many words in total message sent by requester
                     dmsplit = stripmsg.split() # stripomsg split into words
                     # finds client_socket from name
-                    #print(list(mydict.keys())[list(mydict.values()).index(16)])  # Prints george
-                    #dmsocket=list(clients.keys())[list(clients.values()).index(strnick)] # should get socket
                     for client_socket, name in clients.items():
-                        print(bcolors.WARNING +"Debug: entered client_socket search function!! " + bcolors.ENDC)
-                        if name  == strnick:
-                            print(bcolors.WARNING +"Debug: Found client socket for nick: " + strnick, client_socket + bcolors.ENDC)
+                        print(bcolors.OKGREEN + "Debug: nick: " + str(name) + "  client_socket: ", str(client_socket) + " "  + bcolors.ENDC)
+                        #print(bcolors.OKGREEN + "Debug: strnick: : " + strnick + bcolors.ENDC)
+                        #print(bcolors.OKGREEN + "Debug: name: : " + name  + bcolors.ENDC)
+                        # clients[client_socket]["name"] = strnick
+                        if clients[client_socket]["name"]  == strnick:
+                            print(bcolors.WARNING +"Debug: Found client socket for nick: " + str(client_socket) + bcolors.ENDC)
                             toDm=client_socket
                         else:
                             toDm=0
