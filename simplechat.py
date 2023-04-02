@@ -20,7 +20,9 @@ import datetime
 # v 0.8  Now get host and port from command line optionally
 # v 0.9  Change nick name with /nick
 # v 0.91 Show message of the day with /motd
-Version = "0.91"
+# v 1.0  TODO DM between users
+
+Version = "1.00"
 
 # default values 
 HOST = "localhost"
@@ -40,7 +42,7 @@ totmsg = 0
 maxusers = 0
 currentusers = 0
 started = datetime.datetime.now()
-helpmsg = "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n\n"
+helpmsg = "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\nDM user to send a direct message to a user\n\n"
 Motd="***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n"
 # Set up socket connection
 # Create socket object and bind to host and port
@@ -130,15 +132,30 @@ def handle_client(client_socket):
                     errormsg="You need to provide a one word nickname, like:  /nick JiffyLube. Retry. \n"
                     whosent.send(errormsg.encode())
                 else:
-                    print ("Debug info: Number of words in /nick is correct")
                     nick = stripmsg.split()[1]
                     strnick = str(nick)
                     clients[client_socket]["name"] = strnick
                     confirm = "Your nick has been changed to" + strnick + "\n"
                     totmsg = totmsg + 1
                     whosent.send(confirm.encode())
-
                 continue
+
+            # handle send direct message to a particular user
+            if stripmsg[:3] == "/dm" or stripmsg[:3] == "/Dm":      
+                wordCount = len(stripmsg.split())                       
+                                                                        
+                if wordCount < 2:                                       
+                    totmsg = totmsg + 1                                 
+                    errormsg="You did not provide a nickname to whom you want to send a DM.  Retry. \n"
+                    whosent.send(errormsg.encode())                     
+                else:                                                   
+                    dm = stripmsg.split()[1]                          
+                    strnick = str(dm)                                 
+                    totmsg = totmsg + 1                                 
+                    confirm = "Message to sent to" + str(dm) + newline
+                    whosent.send(confirm.encode())                      
+                continue  
+
 
             # send list of logged in users to requesting client
             if stripmsg[:4] == "/who" or stripmsg[:4] == "/Who":
