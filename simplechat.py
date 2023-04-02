@@ -25,9 +25,12 @@ import datetime
 # v 0.91 Show message of the day with /motd
 # v 1.0  DM between users: bug!!! /nick does not correclty change clients dictionary
 # v 1.1  Use colors for DM, and response to commands
-# v 1.2  TODO Make sure new /nick is unique and otherwise reject it!
+# v 1.2  Make sure new /nick is unique and otherwise reject it!
+# v 1.3  Inform all online users of user who changed nick name!
+# v 1.4  RRndom sentences to inform of new users
 
-Version = "1.1"
+
+Version = "1.4"
 
 class bcolors:
     HEADER = '\033[95m'
@@ -43,7 +46,6 @@ class bcolors:
     FAIL = '\033[91m'
     RED = '\033[91m'
     ENDC = '\033[0m'
-    BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 # default values
 HOST = "localhost"
@@ -67,7 +69,8 @@ totmsg = 0
 maxusers = 0
 currentusers = 0
 started = datetime.datetime.now()
-helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n/DM user to send a direct message to a user\n\n"  + bcolors.ENDC
+strhereis = " "
+helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n/dm user to send a Direct Message to a user\n\n"  + bcolors.ENDC
 Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n" + bcolors.CYAN + "Start chatting now\n\n" + bcolors.ENDC
 
 
@@ -94,6 +97,7 @@ def handle_client(client_socket):
             global started
             global helpmsg
             global Motd
+            nickExists = "False"  # for dupblicate nickname checking 
 
             # some stats keeping
             currentusers = 0
@@ -159,13 +163,39 @@ def handle_client(client_socket):
                     errormsg=bcolors.YELLOW  + "You need to provide a one word nickname, like:  /nick JiffyLube. Retry. " +  bcolors.ENDC  + newline
                     whosent.send(errormsg.encode())
                 else:
+                    #find out if nick already exists
                     nick = stripmsg.split()[1]
                     strnick = str(nick)
-                    clients[client_socket]["name"] = strnick
-                    print(bcolors.CYAN + "User: " + str(user) + " has changed name to: " +strnick + bcolors.ENDC) #also print on console
-                    confirm = bcolors.CYAN + "Your nick has been changed to: " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
-                    totmsg = totmsg + 1
-                    whosent.send(confirm.encode())
+                    #print(bcolors.GREEN + "Debug: in else: strnick: : " + strnick + bcolors.ENDC)
+
+                    # does this nick exist alrady? let's loop thru all clients to find out
+                    for client_socket, name in clients.items():
+                        #print(bcolors.GREEN + "Debug: INSIDE search looop! strnick: : " + strnick + bcolors.ENDC)
+                        #print(bcolors.GREEN + "Debug: name: : " + name  + bcolors.ENDC)
+                        if clients[client_socket]["name"]  == strnick:
+                            #print(bcolors.WARNING +"Debug: Found client socket for nick: " + str(clients[client_socket]) + bcolors.ENDC)
+                            nickExists = "True" #this nickname already exists!
+                        else:
+                            nickExists = "False"
+
+                    if nickExists == "False":
+                        clients[client_socket]["name"] = strnick
+                        print(bcolors.CYAN + "User: " + str(user) + " has changed name to: " +strnick + bcolors.ENDC) #also print on console
+                        confirm = bcolors.CYAN + "Your nick has been changed to: " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
+                        totmsg = totmsg + 1
+                        whosent.send(confirm.encode())
+
+                        # now inform all users of name change
+                        for toBroadcast, data in clients.items():
+                            if toBroadcast != whosent:
+                               totmsg = totmsg + 1
+                               nickchangemsg = bcolors.CYAN + "User: " + str(user) + " has changed nickname to: " + bcolors.GREEN + strnick + bcolors.ENDC + newline
+                               toBroadcast.send(nickchangemsg.encode())
+                    else: 
+                        confirm = bcolors.WARNING + "No can  do. This nickname already exists... " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
+                        totmsg = totmsg + 1
+                        whosent.send(confirm.encode())
+
                 continue
 
             # handle send direct message to a particular user
@@ -251,11 +281,21 @@ def handle_client(client_socket):
 def greet_user(client_socket):
    global Version
    global Motd # message of the day
+   global currentusers
+   global maxusers
+
+   # count users into global variable
+   for toBroadcast, data in clients.items():
+       currentusers= currentusers + 1
+       if maxusers < currentusers:
+          maxusers = maxusers +1
+
    whosent = client_socket
    user = clients[client_socket]["name"]
-   formatmsg = str(bcolors.CYAN + "Look who just came in from the cold! It's  ") + bcolors.GREEN  +str(user) + bcolors.CYAN +  str("! ") +  bcolors.ENDC + newline
-   boilerplate = bcolors.CYAN + "\n\nMoshix Chat System - Version " + str(Version) + bcolors.RED + str(" -- /help for comands ") + bcolors.ENDC +  newline
-   usergreet = bcolors.CYAN + "Welcome " + bcolors.HEADER + str(user) + bcolors.ENDC +  newline
+   formatmsg =  strhereis + bcolors.GREEN  +str(user) + bcolors.CYAN +  str("! ") +  bcolors.ENDC + newline
+   boilerplate = bcolors.CYAN + "\n\nMoshix Chat System - Version " + str(Version) + bcolors.BLUE + str(" -- /help for comands ") + bcolors.ENDC +  newline
+   usergreet = bcolors.CYAN + "Welcome in, " + str(user) + bcolors.ENDC +  newline
+   usergreetCount = bcolors.CYAN + "Currently there are: " + str(currentusers) + " users in this chat. Including you, of course. " + bcolors.ENDC +  newline
 
    for toBroadcast, data in clients.items():
        if toBroadcast != whosent:
@@ -265,16 +305,26 @@ def greet_user(client_socket):
        # greet user who just signed in
            whosent.send(boilerplate.encode())
            whosent.send(usergreet.encode())
+           whosent.send(usergreetCount.encode())
            whosent.send(Motd.encode())
 
 
 
 # create random name for connection
 def name_client(client_socket):
+   global strhereis
 
    first_names = ['Raj', 'Oren', 'Tom', 'Greg','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
    last_names = ['Depardieu', 'Hajin', 'Yamamoto', 'Ostrovsky','Johnson', 'Beermo', 'Santis', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
    full_name = random.choice(first_names) + " " + random.choice(last_names)
+   informmsg = ['As the prophesy foretold, here is ',
+                'A random apparition of ',
+                'And out of the blue here comes ',
+                'Behold! Here comes ',
+                'No way! Look who just walked in! Its ',
+                'Yeah! And in comes ']
+   hereis = random.choice(informmsg)            
+   strhereis = bcolors.CYAN + str(hereis)
    # debug only: print ("name_client func   - full_name: ", full_name, "client_socket", client_socket)
    clients[client_socket]["name"] = full_name
 
