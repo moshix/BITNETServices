@@ -30,6 +30,7 @@ Version = "1.1"
 
 class bcolors:
     HEADER = '\033[95m'
+    WHITE = '\033[95m'
     OKBLUE = '\033[94m'
     BLUE = '\033[94m'
     OKCYAN = '\033[96m'
@@ -39,6 +40,7 @@ class bcolors:
     WARNING = '\033[93m'
     YELLOW = '\033[93m'
     FAIL = '\033[91m'
+    RED = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
@@ -155,7 +157,7 @@ def handle_client(client_socket):
                     nick = stripmsg.split()[1]
                     strnick = str(nick)
                     clients[client_socket]["name"] = strnick
-                    confirm = bcolors.CYAN + "Your nick has been changed to: " + strnick +  bcolors.ENDC + newline
+                    confirm = bcolors.CYAN + "Your nick has been changed to: " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
                     totmsg = totmsg + 1
                     whosent.send(confirm.encode())
                 continue
@@ -246,8 +248,8 @@ def greet_user(client_socket):
    whosent = client_socket
    user = clients[client_socket]["name"]
    formatmsg = str(bcolors.CYAN + "Look who just came in from the cold! It's  ") + bcolors.GREEN  +str(user) + bcolors.CYAN +  str("! ") +  bcolors.ENDC + newline
-   boilerplate = str(bcolors.CYAN + "\n\nMoshix Chat System - Version ") + str(Version) + bcolors.RED + str("-- /help for comands ") + bcolors.ENDC +  newline
-   usergreet = str(bcolors.CYAN + "Welcome ") + bcolors.HEADER + str(user) + bcolors.ENDC +  newline
+   boilerplate = bcolors.CYAN + "\n\nMoshix Chat System - Version " + str(Version) + bcolors.RED + str(" -- /help for comands ") + bcolors.ENDC +  newline
+   usergreet = bcolors.CYAN + "Welcome " + bcolors.HEADER + str(user) + bcolors.ENDC +  newline
 
    for toBroadcast, data in clients.items():
        if toBroadcast != whosent:
