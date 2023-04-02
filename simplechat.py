@@ -21,11 +21,26 @@ import datetime
 # v 0.8  Now get host and port from command line optionally
 # v 0.9  Change nick name with /nick
 # v 0.91 Show message of the day with /motd
-# v 1.0  TODO DM between users: bug!!! /nick does not correclty change clients dictionary
-# v 1.1  TODO Make sure new /nick is unique and otherwise reject it!
+# v 1.0  DM between users: bug!!! /nick does not correclty change clients dictionary
+# v 1.1  Use colors for DM, and response to commands
+# v 1.2  TODO Make sure new /nick is unique and otherwise reject it!
 
-Version = "1.01"
+Version = "1.1"
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    BLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    CYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    GREEN = '\033[92m'
+    WARNING = '\033[93m'
+    YELLOW = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 # default values
 HOST = "localhost"
 PORT = 8000
@@ -44,19 +59,9 @@ totmsg = 0
 maxusers = 0
 currentusers = 0
 started = datetime.datetime.now()
-helpmsg = "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\nDM user to send a direct message to a user\n\n"
-Motd="***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n"
+helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\nDM user to send a direct message to a user\n\n"  + bcolors.ENDC
+Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\nStart chatting now:\n\n" + bcolors.ENDC
 
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
 
 # Set up socket connection
 # Create socket object and bind to host and port
@@ -119,7 +124,7 @@ def handle_client(client_socket):
             # handle version request
             if stripmsg[:4] == "/Vers" or stripmsg[:4] == "/ver":
                 totmsg = totmsg + 1
-                versionmsg = str("Moshix Chat Server is currently running Version: ") + str(Version) + newline
+                versionmsg = str(bcolors.CYAN + "Moshix Chat Server is currently running Version: ") + str(Version) + bcolors.ENDC + newline
                 whosent.send(versionmsg.encode())
                 continue
 
@@ -130,7 +135,7 @@ def handle_client(client_socket):
                 strcurrentusers = str(currentusers)
                 strmaxusers = str(maxusers)
                 strstarted = str(started)
-                statsmsg = str("Chat server up since: " + strstarted[:19] + " - total messages sent: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users seen: " + strmaxusers + newline)
+                statsmsg = str(bcolors.CYAN +"Chat server up since: " + strstarted[:19] + " - total messages sent: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users seen: " + strmaxusers + bcolors.ENDC + newline)
                 whosent.send(statsmsg.encode())
                 continue
 
@@ -143,13 +148,13 @@ def handle_client(client_socket):
 
                 if wordCount < 2:
                     totmsg = totmsg + 1
-                    errormsg="You need to provide a one word nickname, like:  /nick JiffyLube. Retry. \n"
+                    errormsg=bcolors.YELLOW  + "You need to provide a one word nickname, like:  /nick JiffyLube. Retry. " +  bcolors.ENDC  + newline
                     whosent.send(errormsg.encode())
                 else:
                     nick = stripmsg.split()[1]
                     strnick = str(nick)
                     clients[client_socket]["name"] = strnick
-                    confirm = "Your nick has been changed to: " + strnick + newline
+                    confirm = bcolors.CYAN + "Your nick has been changed to: " + strnick +  bcolors.END + newline
                     totmsg = totmsg + 1
                     whosent.send(confirm.encode())
                 continue
@@ -161,46 +166,46 @@ def handle_client(client_socket):
                 if wordCount < 2:
                     print(bcolors.WARNING +"Debug: less than 2 wordcount in /DM" + bcolors.ENDC)
                     totmsg = totmsg + 1
-                    errormsg="You did not provide a nickname.  Retry. \n"
+                    errormsg=bcolors.YELLOW + "You did not provide a nickname.  Retry. " +  bcolors.ENDC  + newline
                     whosent.send(errormsg.encode())
                     continue
                 if wordCount < 3:
-                    print(bcolors.WARNING +"Debug: less than 3 wordcount in /DM" + bcolors.ENDC)
+                    #print(bcolors.WARNING +"Debug: less than 3 wordcount in /DM" + bcolors.ENDC)
                     totmsg = totmsg + 1
-                    errormsg="You did not provide a DM.  Retry. \n"
+                    errormsg= bcolors.YELLOW + "You did not provide a DM.  Retry. " +  bcolors.ENDC  + newline
                     whosent.send(errormsg.encode())
                 else:
-                    print(bcolors.WARNING +"Debug: 3 or more words found in /dm" + bcolors.ENDC)
+                    #print(bcolors.WARNING +"Debug: 3 or more words found in /dm" + bcolors.ENDC)
                     nick  = stripmsg.split()[1]
                     strnick = str(nick)
-                    print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
+                    #print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
                     # get DM payload 
                     dmCount = len(stripmsg.split()) # how many words in total message sent by requester
                     dmsplit = stripmsg.split() # stripomsg split into words
                     # finds client_socket from name
                     for client_socket, name in clients.items():
-                        print(bcolors.OKGREEN + "Debug: nick: " + str(name) + "  client_socket: ", str(client_socket) + " "  + bcolors.ENDC)
+                        # print(bcolors.OKGREEN + "Debug: nick: " + str(name) + "  client_socket: ", str(client_socket) + " "  + bcolors.ENDC)
                         #print(bcolors.OKGREEN + "Debug: strnick: : " + strnick + bcolors.ENDC)
                         #print(bcolors.OKGREEN + "Debug: name: : " + name  + bcolors.ENDC)
-                        # clients[client_socket]["name"] = strnick
                         if clients[client_socket]["name"]  == strnick:
-                            print(bcolors.WARNING +"Debug: Found client socket for nick: " + str(client_socket) + bcolors.ENDC)
+                            #print(bcolors.WARNING +"Debug: Found client socket for nick: " + str(clients[client_socket]) + bcolors.ENDC)
                             toDm=client_socket
                         else:
                             toDm=0
                             
                     if toDm != 0:
-                        print(bcolors.WARNING +"Debug: socket found: " , dmsocket, " for name: " + strnick) + bcolors.ENDC
+                        #print(bcolors.WARNING +"Debug: Found client socket for nick: " + str(clients[client_socket]) + bcolors.ENDC)
                         totmsg = totmsg + 2 # one for confirmation and one with DM
                         confirm = "Message to sent to" + str(strnick) + newline
-                        dm = dmsplit[3:] # get everything exepct first two words: /DM nick ..
-                        print(bcolors.WARNING + "Debug: payload: " + str(dm) + bcolors.ENDC)
+                        dm = dmsplit[2:] # get everything exepct first two words: /DM nick ..
+                        strdm = ' '.join(dm)
+                        #print(bcolors.WARNING + "Debug: payload: " + strdm + bcolors.ENDC)
                         whosent.send(confirm.encode())
-                        DMmsg="DM from " + whosent + " > " + strdm + newline 
-                        toDM.send(DMmsg.encode())
+                        DMmsg=bcolors.GREEN +  "DM from " + str(user) + " > " + strdm + bcolors.ENDC + newline 
+                        toDm.send(DMmsg.encode())
                     else: 
                         totmsg = totmsg + 1 
-                        confirm = "Your DM cannot be sent. Nick not existing or logged out meanwhile \n "
+                        confirm = bcolors.YELLOW + "Your DM cannot be sent. Nick not existing or logged out meanwhile. " +  bcolors.ENDC  + newline
                         whosent.send(confirm.encode())
                 continue
 
@@ -213,7 +218,7 @@ def handle_client(client_socket):
                     counter = + counter + 1
                     strcounter = str(counter)
                     listuser = clients[toBroadcast]["name"]
-                    detail = str(strcounter + " - " + listuser + " \n")
+                    detail = str(bcolors.CYAN + strcounter + " - " + listuser + bcolors.ENDC  + newline)
                     whosent.send(detail.encode())
                 continue
 
@@ -239,9 +244,9 @@ def greet_user(client_socket):
    global Motd # message of the day
    whosent = client_socket
    user = clients[client_socket]["name"]
-   formatmsg = str("Look who just came in from the cold! It's  ")  +str(user) + str("! ") + str("\n")
-   boilerplate = str("\n\nMoshix Chat System - Version ") + str(Version) + str("-- /help for comands ") +  str("\n")
-   usergreet = str("Welcome ") + str(user) +str("!  \n")
+   formatmsg = str(bcolors.CYAN + "Look who just came in from the cold! It's  ") + bcolors.GREEN  +str(user) + bcolors.CYAN +  str("! ") +  bcolors.ENDC + newline
+   boilerplate = str(bcolors.CYAN + "\n\nMoshix Chat System - Version ") + str(Version) + str("-- /help for comands ") + bcolors.ENDC +  newline
+   usergreet = str(bcolors.CYAN + "Welcome ") + bcolors.HEADER + str(user) + bcolors.ENDC +  newline
 
    for toBroadcast, data in clients.items():
        if toBroadcast != whosent:
@@ -282,4 +287,3 @@ server_socket.listen()
 print("Started Moshix Chat Server with HOST and IP: ", str(HOST) + ":" + str(PORT))
 accept_thread = threading.Thread(target=accept_clients)
 accept_thread.start()
-#!/opt/homebrew/bin/python3.10
