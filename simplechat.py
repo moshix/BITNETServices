@@ -1,6 +1,4 @@
 #!/opt/homebrew/bin/python3.10
-#!/usr/local/bin/python3.10
-#!/opt/homebrew/bin/python3.9
 import socket
 import threading
 import random
@@ -30,11 +28,12 @@ import datetime
 # v 1.4  Random sentences to inform of new users
 # v 1.5  Make random names witha space and set timeout for sockets
 # v 1.6   /logoff to get out
+# v 1.7  show time stamp for incoming messages
 # v 1.9  TODO Re-organize into more functions (for send, for search of users etc)
 # v 2.0  TODO SSL comms
 
 
-Version = "1.6"
+Version = "1.7"
 
 class bcolors:
     HEADER = '\033[95m'
@@ -269,7 +268,7 @@ def handle_client(client_socket):
                 continue
 
 
-            if stripmsg[:7] == "/logoff" or strimpmsg[:7] == "/LOGOFF":
+            if stripmsg[:7] == "/logoff" or stripmsg[:7] == "/LOGOFF":
               if client_socket in clients:
                  logoffmsg= bcolors.YELLOW + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
                  totmsg = totmsg + 1
@@ -286,6 +285,7 @@ def handle_client(client_socket):
 
             # Broadcast message to all clients
             if stripmsg != "":
+              formatmsg= bcolors.GREEN + str(datetime.datetime.now())[11:22]  + " " +str(user) + "> " + bcolors.BLUE + stripmsg + newline + bcolors.ENDC
               for toBroadcast, data in clients.items():
                   if toBroadcast != whosent:
                       totmsg = totmsg + 1
@@ -376,4 +376,3 @@ server_socket.listen()
 print(bcolors.GREEN + "Started Moshix Chat Server with HOST and IP: "+  str(HOST) + ":" + str(PORT) +bcolors.ENDC)
 accept_thread = threading.Thread(target=accept_clients)
 accept_thread.start()
-
