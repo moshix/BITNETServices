@@ -27,10 +27,13 @@ import datetime
 # v 1.1  Use colors for DM, and response to commands
 # v 1.2  Make sure new /nick is unique and otherwise reject it!
 # v 1.3  Inform all online users of user who changed nick name!
-# v 1.4  RRndom sentences to inform of new users
+# v 1.4  Random sentences to inform of new users
+# v 1.5  Make random names witha space and set timeout for sockets
+# v 1.9  TODO Re-organize into more functions (for send, for search of users etc)
+# v 2.0  TODO SSL comms
 
 
-Version = "1.4"
+Version = "1.5"
 
 class bcolors:
     HEADER = '\033[95m'
@@ -120,14 +123,14 @@ def handle_client(client_socket):
                print("user: ",user, " wrote: ", message) # for console
             formatmsg = user + "> " + message
             #print ("Debug: msg: " + stripmsg + newline)
-
+ 
             # handle  help request
             if stripmsg[:5] == "/Help" or stripmsg[:5] == "/help":
                 totmsg = totmsg + 1
                 whosent.send(helpmsg.encode())
                 continue
-
-	    # handle message of the dasy (motd) request
+ 
+           # handle message of the dasy (motd) request
             if stripmsg[:4] == "/Mot" or stripmsg[:4] == "/mot":
                 totmsg = totmsg + 1
                 whosent.send(Motd.encode())
@@ -269,14 +272,16 @@ def handle_client(client_socket):
                       toBroadcast.send(formatmsg.encode())
                   #else:
                   #    whosent.send(receipt.encode())
-
+           #except socket.timeout: 
+           #  if client_socket in clients:
+           #     del clients[client_socket]
 
     except (ConnectionResetError, OSError):
         print("Client connetion reset")
     finally:
         if client_socket in clients:
             del clients[client_socket]
-
+# end of handle_cient function 
 
 def greet_user(client_socket):
    global Version
@@ -314,14 +319,16 @@ def greet_user(client_socket):
 def name_client(client_socket):
    global strhereis
 
-   first_names = ['Raj', 'Oren', 'Tom', 'Greg','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
-   last_names = ['Depardieu', 'Hajin', 'Yamamoto', 'Ostrovsky','Johnson', 'Beermo', 'Santis', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
-   full_name = random.choice(first_names) + " " + random.choice(last_names)
+   first_names = ['Raj', 'Ron', 'Chris','Sal','David','Jacob','Oren', 'Tom', 'Greg','Doug','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
+   last_names = ['Depardieu', 'McLaughlin','Rivera','Zoff','Rossi','Danio','Mesrine','Hajin', 'Yamamoto', 'Ostrovsky','Johnson', 'Beermo', 'Santis', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
+   full_name = random.choice(first_names) + "_" + random.choice(last_names)
    informmsg = ['As the prophesy foretold, here is ',
                 'A random apparition of ',
                 'And out of the blue here comes ',
                 'Behold! Here comes ',
                 'No way! Look who just walked in! Its ',
+                'Everybody listen up! Her Roal Highness has shown up: ',
+                'Yo, yo yo! A new chatter has appeared: ',
                 'Yeah! And in comes ']
    hereis = random.choice(informmsg)            
    strhereis = bcolors.CYAN + str(hereis)
@@ -335,6 +342,7 @@ def accept_clients():
         client_socket, address = server_socket.accept()
         clients[client_socket] = dict()
         print(f"Connection from {address} established.")
+        #server_socket.settimeout(10.0)
         name_client(client_socket)
         greet_user(client_socket)
         client_thread = threading.Thread(target=handle_client, args=(client_socket,))
@@ -346,3 +354,4 @@ server_socket.listen()
 print(bcolors.GREEN + "Started Moshix Chat Server with HOST and IP: "+  str(HOST) + ":" + str(PORT) +bcolors.ENDC)
 accept_thread = threading.Thread(target=accept_clients)
 accept_thread.start()
+
