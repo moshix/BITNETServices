@@ -49,7 +49,7 @@ HOST = "localhost"
 PORT = 8000
 
 #print ('Number of arguments:', len(sys.argv), 'arguments.')
-print ('Argument List:', str(sys.argv))
+#print ('Argument List:', str(sys.argv))
 if len(sys.argv) == 3:
     HOST=sys.argv[1]
     PORT = sys.argv[2]
