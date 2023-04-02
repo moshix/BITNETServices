@@ -157,6 +157,7 @@ def handle_client(client_socket):
                     nick = stripmsg.split()[1]
                     strnick = str(nick)
                     clients[client_socket]["name"] = strnick
+                    print(bcolors.CYAN + "User: " + str(user) + " has changed name to: " +strnick + bcolors.ENDC) #also print on console
                     confirm = bcolors.CYAN + "Your nick has been changed to: " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
                     totmsg = totmsg + 1
                     whosent.send(confirm.encode())
