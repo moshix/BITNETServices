@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/python3.10
+#!/usr/local/bin/python3.10
 import socket
 import threading
 import random
@@ -117,7 +117,7 @@ def handle_client(client_socket):
                 print("client disconnected")
                 client_socket.close()
                 break
-            message = received.decode()
+            message = received.decode('utf-16')
             stripmsg=message.strip() #strip of newline
             whosent = client_socket
             user = clients[client_socket]["name"]
