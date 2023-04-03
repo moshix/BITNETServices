@@ -29,11 +29,12 @@ import datetime
 # v 1.5  Make random names witha space and set timeout for sockets
 # v 1.6   /logoff to get out
 # v 1.7  show time stamp for incoming messages
+# v 1.8  Fix for Windows compatibility and make IP address reuse turned on
 # v 1.9  TODO Re-organize into more functions (for send, for search of users etc)
 # v 2.0  TODO SSL comms
 
 
-Version = "1.7"
+Version = "1.8"
 
 class bcolors:
     HEADER = '\033[95m'
@@ -68,20 +69,21 @@ else:
     print(bcolors.BLUE + "Moshix Chat Server version: " + str(Version) + bcolors.ENDC)
 
 
-newline = "\n"
+newline = "\n\r" # also carriage return for windows compatibility
 totmsg = 0
 maxusers = 0
 currentusers = 0
 started = datetime.datetime.now()
 strhereis = " "
-helpmsg = bcolors.CYAN + "Available Commands\n==================\n/who for list of users\n/nick SoandSo to change your nick to SoandSo\n/version for version info\n/help for help\n/motd for message of the day\n/dm user to send a Direct Message to a user\n/logoff to log off the chat server\n\n"  + bcolors.ENDC
-Motd=bcolors.FAIL + "***NEW !!***\nYou can now change your nick name with /nick Sigfrid\n" + bcolors.ENDC
-startchatmsg=bcolors.BLUE + "Start chatting now\n\n" + bcolors.ENDC
+helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
+Motd=bcolors.FAIL + "***NEW !!***\n\rYou can now change your nick name with /nick Sigfrid\n\r" + bcolors.ENDC
+startchatmsg=bcolors.BLUE + "Start chatting now\n\r\n\r" + bcolors.ENDC
 
 
 # Set up socket connection
 # Create socket object and bind to host and port
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 intPORT = int(PORT)
 server_socket.bind((HOST, intPORT))
 
@@ -114,10 +116,22 @@ def handle_client(client_socket):
             whosent = 0
             received = client_socket.recv(1024)
             if(received == b''):
-                print("client disconnected")
-                client_socket.close()
+                print(str(user) + " has disconnected")
+                #client_socket.close()
+                logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
+                whosent.close()
                 break
-            message = received.decode('utf-8')
+            #message = received.decode('ascii', "ignore")
+            message = received.decode('ascii', "backslashreplace")
+            #message = received.decode('ascii', "replace")
+            #message = received.decode('ascii')
+            if(message == "\xff\xf4\xff\xfd"):
+                print(str(user) + "sent a Ctrl-C")
+                #logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
+                #whosent.close()
+                #client_socket.close()
+                continue
+            totmsg = totmsg + 1
             stripmsg=message.strip() #strip of newline
             whosent = client_socket
             user = clients[client_socket]["name"]
@@ -130,20 +144,20 @@ def handle_client(client_socket):
             # handle  help request
             if stripmsg[:5] == "/Help" or stripmsg[:5] == "/help":
                 totmsg = totmsg + 1
-                whosent.send(helpmsg.encode('utf-8'))
+                whosent.send(helpmsg.encode('ascii'))
                 continue
 
            # handle message of the day (motd) request
             if stripmsg[:4] == "/Mot" or stripmsg[:4] == "/mot":
                 totmsg = totmsg + 1
-                whosent.send(Motd.encode('utf-8'))
+                whosent.send(Motd.encode('ascii'))
                 continue
 
             # handle version request
             if stripmsg[:4] == "/Vers" or stripmsg[:4] == "/ver":
                 totmsg = totmsg + 1
                 versionmsg = str(bcolors.CYAN + "Moshix Chat Server is currently running Version: ") + str(Version) + bcolors.ENDC + newline
-                whosent.send(versionmsg.encode('utf-8'))
+                whosent.send(versionmsg.encode('ascii'))
                 continue
 
             # handle stats request
@@ -155,8 +169,8 @@ def handle_client(client_socket):
                 strstarted = str(started)
                 statsmsg1 = str(bcolors.CYAN +"Chat server up since: " + strstarted[:19] + bcolors.ENDC + newline)
                 statsmsg2 = str("Total messages: " + strtotmsg + " - current users: " + strcurrentusers + " - Max users: " + strmaxusers + bcolors.ENDC + newline)
-                whosent.send(statsmsg1.encode('utf-8'))
-                whosent.send(statsmsg2.encode('utf-8'))
+                whosent.send(statsmsg1.encode('ascii'))
+                whosent.send(statsmsg2.encode('ascii'))
                 continue
 
 
@@ -169,7 +183,7 @@ def handle_client(client_socket):
                 if wordCount < 2:
                     totmsg = totmsg + 1
                     errormsg=bcolors.YELLOW  + "You need to provide a one word nickname, like:  /nick JiffyLube. Retry. " +  bcolors.ENDC  + newline
-                    whosent.send(errormsg.encode('utf-8'))
+                    whosent.send(errormsg.encode('ascii'))
                 else:
                     #find out if nick already exists
                     nick = stripmsg.split()[1]
@@ -191,18 +205,18 @@ def handle_client(client_socket):
                         print(bcolors.CYAN + str(datetime.datetime.now())[11:22] + " User: " + str(user) + " has changed name to: " +strnick + bcolors.ENDC) #also print on console
                         confirm = bcolors.CYAN + "Your nick has been changed to: " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
                         totmsg = totmsg + 1
-                        whosent.send(confirm.encode('utf-8'))
+                        whosent.send(confirm.encode('ascii'))
 
                         # now inform all users of name change
                         for toBroadcast, data in clients.items():
                             if toBroadcast != whosent:
                                totmsg = totmsg + 1
                                nickchangemsg = bcolors.CYAN + str(datetime.datetime.now())[11:22] + " User: " + str(user) + " has changed nickname to: " + bcolors.GREEN + strnick + bcolors.ENDC + newline
-                               toBroadcast.send(nickchangemsg.encode('utf-8'))
+                               toBroadcast.send(nickchangemsg.encode('ascii'))
                     else:
                         confirm = bcolors.WARNING + "No can  do. This nickname already exists... " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
                         totmsg = totmsg + 1
-                        whosent.send(confirm.encode('utf-8'))
+                        whosent.send(confirm.encode('ascii'))
                     continue
 
                 # handle send direct message to a particular user
@@ -213,13 +227,13 @@ def handle_client(client_socket):
                     print(bcolors.WARNING +"Debug: less than 2 wordcount in /DM" + bcolors.ENDC)
                     totmsg = totmsg + 1
                     errormsg=bcolors.YELLOW + "You did not provide a nickname.  Retry. " +  bcolors.ENDC  + newline
-                    whosent.send(errormsg.encode('utf-8'))
+                    whosent.send(errormsg.encode('ascii'))
                     continue
                 if wordCount < 3:
                     #print(bcolors.WARNING +"Debug: less than 3 wordcount in /DM" + bcolors.ENDC)
                     totmsg = totmsg + 1
                     errormsg= bcolors.YELLOW + "You did not provide a DM.  Retry. " +  bcolors.ENDC  + newline
-                    whosent.send(errormsg.encode('utf-8'))
+                    whosent.send(errormsg.encode('ascii'))
                 else:
                     #print(bcolors.WARNING +"Debug: 3 or more words found in /dm" + bcolors.ENDC)
                     nick  = stripmsg.split()[1]
@@ -246,13 +260,13 @@ def handle_client(client_socket):
                         dm = dmsplit[2:] # get everything exepct first two words: /DM nick ..
                         strdm = ' '.join(dm)
                         #print(bcolors.WARNING + "Debug: payload: " + strdm + bcolors.ENDC)
-                        whosent.send(confirm.encode('utf-8'))
+                        whosent.send(confirm.encode('ascii'))
                         DMmsg=bcolors.GREEN + str(datetime.datetime.now())[11:22] + " -" + bcolors.YELLOW + "DM-  " + bcolors.GREEN + "from " + str(user) + bcolors.RED + " > " + strdm + bcolors.ENDC + newline
-                        toDm.send(DMmsg.encode('utf-8'))
+                        toDm.send(DMmsg.encode('ascii'))
                     else:
                         totmsg = totmsg + 1
                         confirm = bcolors.YELLOW + "Your DM cannot be sent. Nick not existing or logged out meanwhile. " +  bcolors.ENDC  + newline
-                        whosent.send(confirm.encode('utf-8'))
+                        whosent.send(confirm.encode('ascii'))
                     continue
 
 
@@ -265,7 +279,7 @@ def handle_client(client_socket):
                     strcounter = str(counter)
                     listuser = clients[toBroadcast]["name"]
                     detail = str(bcolors.CYAN + strcounter + " - " + listuser + bcolors.ENDC  + newline)
-                    whosent.send(detail.encode('utf-8'))
+                    whosent.send(detail.encode('ascii'))
                 continue
 
 
@@ -273,7 +287,7 @@ def handle_client(client_socket):
               if client_socket in clients:
                  logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
                  totmsg = totmsg + 1
-                 whosent.send(logoffmsg.encode('utf-8'))
+                 whosent.send(logoffmsg.encode('ascii'))
                  whosent.close()
                  del clients[client_socket]
                  # now inform all users of name change
@@ -281,7 +295,7 @@ def handle_client(client_socket):
                      if toBroadcast != whosent:
                         totmsg = totmsg + 1
                         usergonemsg = bcolors.CYAN + str(datetime.datetime.now())[11:22] + "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
-                        toBroadcast.send(usergonemsg.encode('utf-8'))
+                        toBroadcast.send(usergonemsg.encode('ascii'))
               continue
 
             # Broadcast message to all clients
@@ -290,9 +304,9 @@ def handle_client(client_socket):
               for toBroadcast, data in clients.items():
                   if toBroadcast != whosent:
                       totmsg = totmsg + 1
-                      toBroadcast.send(formatmsg.encode('utf-8'))
+                      toBroadcast.send(formatmsg.encode('ascii'))
                   #else:
-                  #    whosent.send(receipt.encode('utf-8'))
+                  #    whosent.send(receipt.encode('ascii'))
            #except socket.timeout:
            #  if client_socket in clients:
            #     del clients[client_socket]
@@ -327,14 +341,14 @@ def greet_user(client_socket):
    for toBroadcast, data in clients.items():
        if toBroadcast != whosent:
           # inform all other users who about new arrival
-          toBroadcast.send(formatmsg.encode('utf-8'))
+          toBroadcast.send(formatmsg.encode('ascii'))
        else:
        # greet user who just signed in
-           whosent.send(boilerplate.encode('utf-8'))
-           whosent.send(usergreet.encode('utf-8'))
-           whosent.send(usergreetCount.encode('utf-8'))
-           whosent.send(Motd.encode('utf-8'))
-           whosent.send(startchatmsg.encode('utf-8'))
+           whosent.send(boilerplate.encode('ascii'))
+           whosent.send(usergreet.encode('ascii'))
+           whosent.send(usergreetCount.encode('ascii'))
+           whosent.send(Motd.encode('ascii'))
+           whosent.send(startchatmsg.encode('ascii'))
 
 
 
