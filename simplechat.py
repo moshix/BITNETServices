@@ -115,22 +115,21 @@ def handle_client(client_socket):
 
             whosent = 0
             received = client_socket.recv(1024)
-            if(received == b''):
+            if(received == b'' or received == b'xfff4'):
                 print(str(user) + " has disconnected")
-                #client_socket.close()
-                logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
-                whosent.close()
+                client_socket.sendall(b"hello")
+                client_socket.close()
                 break
             #message = received.decode('ascii', "ignore")
             message = received.decode('ascii', "backslashreplace")
             #message = received.decode('ascii', "replace")
             #message = received.decode('ascii')
-            if(message == "\xff\xf4\xff\xfd"):
+            if (message == "����"):
                 print(str(user) + "sent a Ctrl-C")
-                #logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
-                #whosent.close()
-                #client_socket.close()
-                continue
+                logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
+                whosent.close()
+                client_socket.close()
+                break
             totmsg = totmsg + 1
             stripmsg=message.strip() #strip of newline
             whosent = client_socket
