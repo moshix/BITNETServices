@@ -7,6 +7,8 @@
 #    shellfunc_telnet from github.com/moshix/relaychat
 #    tcpserver from ucspi-tcp (brew,apt-get,yum)
 #    conv
+#    pv
+#    stdbuf
 #
 #  version 0.02  LOGON handling
 #  version 0.03  main menu
