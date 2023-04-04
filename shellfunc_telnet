@@ -1,0 +1,711 @@
+function sf_print { builtin printf '%s' "$*"; }
+
+function sf_println { builtin printf '%s\n' "$*"; }
+
+function sf_print2 { sf_print "$@" >&2; }
+
+function sf_println2 { sf_println "$@" >&2; }
+
+function sf_error_unknown_option { sf_println2 "Error: Unknown option -${OPTARG}"; }
+
+function sf_error_missing_argument { sf_println2 "Error: Option -${OPTARG} requires an argument"; }
+
+function sf_fields
+{
+	local skip=0 delimiter=" " input_delimiter="$IFS"
+	local OPTIND=1 OPTARG OPTERR opt
+	while getopts ":s:d:D:" opt; do
+		case "$opt" in
+			s)
+				skip=$OPTARG
+				if ! sf_integer -v -- "$skip"; then
+					return 1
+				fi
+			;;
+			D) delimiter=$OPTARG ;;
+			d) input_delimiter=$OPTARG ;;
+			[?])
+				sf_error_unknown_option
+				return 1
+			;;
+			:)
+				sf_error_missing_argument
+				return 1
+			;;
+		esac
+	done
+	shift $((OPTIND-1))
+	if [[ "${1:-}" = "--" ]]; then shift; fi
+
+	local f_min=() f_max=()
+	local opt
+	for opt; do
+		if [[ "$opt" =~ ^-?[0-9]+$ ]]; then
+			f_min+=( $((opt-1)) )
+			f_max+=( $((opt-1)) )
+		elif [[ "$opt" =~ ^[[:digit:]]+-$ ]]; then
+			opt=${opt%"-"}
+			f_min+=( $((opt-1)) )
+			f_max+=( "" )
+		elif [[ "$opt" =~ ^[[:digit:]]+-[[:digit:]]+$ ]]; then
+			local lower=${opt%%-*}
+			f_min+=( $((lower-1)) )
+			local upper=${opt##*-}
+			f_max+=( $((upper-1)) )
+		else
+			sf_println2 "Error: ${FUNCNAME}: Invalid field specification: $opt"
+			return 1
+		fi
+	done
+
+	while (( skip-- > 0 )); do
+		read -r
+	done
+
+	local fields=()
+	while IFS="$input_delimiter" read -ra fields; do
+		local cnt="${#fields[@]}"
+		local i=0
+		for ((; i<$#; i++)); do
+			local j=${f_min[i]}
+			local k=${f_max[i]:-$((cnt-1))}
+			for ((; j<=k; j++)); do
+				if (( j < cnt )) && (( j >= -cnt )); then
+					sf_print "${fields[j]}"
+				fi
+				if (( i+1 < $# )) || (( j+1 <= k )); then
+					sf_print "$delimiter"
+				fi
+			done
+		done
+		sf_println
+	done
+}
+
+function sf_integer { sf_number -i "$@"; }
+
+function sf_number
+{
+	local decimal=true
+	local negative=false
+	local complain=false
+	local OPTIND=1 OPTARG OPTERR opt
+	while getopts ":cC:de:int:vq" opt; do
+		case "$opt" in
+			i) decimal=false ;;
+			n) negative=true ;;
+			v) complain=true ;;
+			[?])
+				sf_error_unknown_option
+				return 1
+			;;
+			:)
+				sf_error_missing_argument
+				return 1
+			;;
+			*) sf_println2 "Warning: Deprecated option passed to ${FUNCNAME}: $opt" ;;
+		esac
+	done
+	shift $((OPTIND-1))
+	if [[ "${1:-}" = "--" ]]; then shift; fi
+	
+	local regex=""
+	if $negative; then
+		regex='-?'
+	fi
+	if $decimal; then
+		regex='^('"$regex"'[[:digit:]]+(\.[[:digit:]]*)?|'"$regex"'\.[[:digit:]]+)$'
+	else
+		regex='^'"$regex"'[[:digit:]]+$'
+	fi
+	if [[ "$*" =~ $regex ]]; then
+		return 0
+	fi
+	if $complain; then
+		local error
+		case "${FUNCNAME[1]}" in
+			sf_integer) printf '`%s` is not a valid integer!\n' "$*" >&2 ;;
+			sf_decimal) printf '`%s` is not a valid decimal!\n' "$*" >&2 ;;
+			*) printf '`%s` is not a valid number!\n' "$*" >&2 ;;
+		esac
+	fi
+	return 1
+}
+
+function sf_killtree
+{
+	local pids ppid=$1 sig=${2:-"TERM"}
+	if ! kill -0 "$ppid"; then
+		sf_println2 "killtree: ($ppid) - No such process"
+		return 1
+	fi
+	(( ppid == $$ )) || kill -STOP "$ppid" 2>/dev/null || :
+	mapfile -t pids < <( { pgrep -P "$ppid" || ps -o pid= --ppid "$ppid" || :; } 2>/dev/null )
+	if [[ -n "${pids[*]:-}" ]]; then
+		for pid in "${pids[@]}"; do
+			sf_killtree "$pid" "$sig" 2>/dev/null || :
+		done
+	fi
+	kill "-${sig}" "$ppid" 2>/dev/null || :
+	(( ppid == $$ )) || kill -CONT "$ppid" 2>/dev/null || :
+	wait "$ppid" 2>/dev/null || :
+}
+
+function sf_killchildren
+{
+	local _term
+	_term=$(builtin trap -p TERM)
+	builtin trap : TERM
+	sf_killtree $$ TERM;
+	builtin trap - TERM
+	builtin eval "$_term"
+}
+
+function sf_printable
+{
+	if (( $# )); then
+		printf '%s' "$*" | sf_printable
+	else
+		sed -e 's/[^[:print:]]//g'
+	fi
+}
+
+function sf_crlf
+{
+	if (( $# )); then
+		sf_crlf <<<"$@"
+		return $?
+	fi
+	perl -e '
+		$| = 1;
+		while ((my $c = getc) ne undef)
+		{
+			if ("$c" eq "\r") { next; }
+			if ("$c" eq "\n") { print "\r\n"; next; }
+			print "$c";
+		}
+	'
+}
+
+function sf_tn_init
+{
+	_sf_tn_mode=${1:-"default"}
+
+	local cmd
+	for cmd in iconv perl pv stdbuf xxd; do
+		if ! type "$cmd" >/dev/null 2>&1; then
+			sf_println2 "Error: ${FUNCNAME}: Required command not found: \`${cmd}\`"
+			return 1
+		fi
+	done
+
+	exec {_sf_tn_raw_fd}>&1
+	exec > >( { sf_crlf; } 2>/dev/null )
+	function echo { { builtin echo "$@"; } 2>/dev/null; }
+	function println { { builtin printf '%s\r\n' "$*" >&${_sf_tn_raw_fd}; } 2>/dev/null; }
+	function tn_raw { { builtin printf '%s' "$*" >&${_sf_tn_raw_fd}; } 2>/dev/null; }
+	function read { { builtin read -r "$@"; } 2>/dev/null; }
+	function printf { { builtin printf "$@"; } 2>/dev/null; }
+	function cat { { command cat "$@"; } 2>/dev/null; }
+	function pv { { command pv "$@"; } 2>/dev/null; }
+	function xxd { { command xxd "$@"; } 2>/dev/null; }
+
+	function _sf_tn_autostar
+	{
+		local _text="$*"
+		if $__password; then
+			_text=$(_sf_tn_iconv "$_text" | sed -e 's/./*/g')
+		fi
+		tn_raw "$_text"
+	}
+
+	function _sf_tn_iconv
+	{
+		{
+			if (( $# )); then
+				printf '%s' "$*"
+			else
+				cat
+			fi
+		} | {
+			if $_sf_tn_client_linux; then
+				iconv -c -f "UTF8" || :
+			else
+				iconv -c -f "CP850" || : # IBM850
+			fi
+		} 2>/dev/null
+	}
+
+	trap : PIPE
+
+	case "$_sf_tn_mode" in
+		echo)
+			tn_raw $'\xff\xfb\x01' # will echo
+			tn_raw $'\xff\xfb\x03' # will suppress go-ahead
+			tn_raw $'\xff\xfd\x18' # do termtype
+			_sf_tn_echo=true
+			_sf_tn_raw=false
+		;;
+		raw)
+			_sf_tn_echo=false
+			_sf_tn_raw=true
+		;;
+		*)
+			_sf_tn_echo=false
+			_sf_tn_raw=false
+		;;
+	esac
+
+	# hacks
+	_sf_tn_first_read=true
+	_sf_tn_skip_newline=false
+
+	# sub negotiation
+	_sf_tn_subnegotiate=""
+	_sf_tn_sub_data=""
+	_sf_tn_client_linux=true
+}
+
+function sf_tn_flush_input
+{
+	local c
+	while read -r -t 0; do
+		LC_ALL=C IFS='' read -r -n 1 -t 1 c 2>/dev/null || :
+	done
+}
+
+function sf_tn_iconv
+{
+	{
+		if (( $# )); then
+			printf '%s' "$*"
+		else
+			cat
+		fi
+	} | {
+		if $_sf_tn_client_linux; then
+			iconv -c -t "UTF8" || :
+		else
+			iconv -c -t "CP850" || : # IBM850
+		fi
+	} 2>/dev/null
+}
+
+function _sf_tn_read_char
+{
+	_sf_tn_read_result=$(( 128 + 14 )) # bash read timeout => exit code >128, most often =142
+	local __timeout=$((_sf_tn_read_timeout - SECONDS))
+	if (( _sf_tn_read_timeout <= 0 )) || ((__timeout >= 0 )); then
+		if (( _sf_tn_read_timeout > 0 )); then
+			LC_ALL=C IFS='' read -r -n 1 -t "$__timeout" "$1" 2>/dev/null && _sf_tn_read_result=$? || _sf_tn_read_result=$?
+		elif (( _sf_tn_read_timeout == 0 )); then
+			LC_ALL=C IFS='' read -r -n 1 -t 0			 "$1" 2>/dev/null && _sf_tn_read_result=$? || _sf_tn_read_result=$?
+		else
+			LC_ALL=C IFS='' read -r -n 1				 "$1" 2>/dev/null && _sf_tn_read_result=$? || _sf_tn_read_result=$?
+		fi
+		(( _sf_tn_read_result )) || [[ -n "${!1}" ]] || printf -v "$1" '\n'
+		if ! (( _sf_tn_read_result )) && ${_sf_tn_debug:-false}; then
+			local what
+			case "${!1}" in
+				$'\xff') what="ESC" ;;
+				$'\xf4') what="INT" ;;
+				$'\xfb') what="WILL" ;;
+				$'\xfc') what="WONT" ;;
+				$'\xfd') what="DO" ;;
+				$'\xfe') what="DONT" ;;
+				$'\xfa') what="SUB BEG, SB" ;;
+				$'\xf0') what="SUB END, SE" ;;
+				$'\x01') what="ECHO" ;;
+				$'\x02') what="RECONNECT" ;;
+				$'\x03') what="SUPPRESS GO-AHEAD" ;;
+				$'\x04') what="MESSAGE SIZE" ;;
+				$'\x05') what="OPT STATUS" ;;
+				$'\x06') what="TIMING" ;;
+				$'\x07') what="RC PRINTER" ;;
+				$'\x08') what="LINE WIDTH" ;;
+				$'\x09') what="PAGE LENGTH" ;;
+				$'\x0a') what="CARRIAGE RETURN USE" ;;
+				$'\x0b') what="HORIZ TAB" ;;
+				$'\x0c') what="HORIZ TAB USE" ;;
+				$'\x0d') what="FORM FEEDS" ;;
+				$'\x0e') what="VERT TAB" ;;
+				$'\x0f') what="VERT TAB USE" ;;
+				$'\x10') what="LINE FEED USE" ;;
+				$'\x11') what="EXTENDED ASCII" ;;
+				$'\x12') what="FORCED LOGOUT" ;;
+				$'\x13') what="BYTE MACRO" ;;
+				$'\x14') what="DATA TERM" ;;
+				$'\x15') what="SIGDUP" ;;
+				$'\x16') what="SIGDUP OUTPUT" ;;
+				$'\x17') what="SEND LOCATE" ;;
+				$'\x18') what="TERM TYPE" ;;
+				$'\x19') what="END RECORD" ;;
+				$'\x1a') what="TACACS ID" ;;
+				$'\x1b') what="OUTPUT MARK" ;;
+				$'\x1c') what="TERM LOC#" ;;
+				$'\x1d') what="3270 REGIME" ;;
+				$'\x1e') what="X.3 PAD" ;;
+				$'\x1f') what="WINDOW SIZE" ;;
+				$'\x20') what="TERMINAL SPEED" ;;
+				$'\x21') what="REMOTE FLOW" ;;
+				$'\x22') what="LINEMODE" ;;
+				*) what='?' ;;
+			esac
+			printf 'telnet << %s (%s)\n' "$(printf '%s' "${!1}" | xxd -p)" "$what" >&2
+		fi
+	fi
+	return $_sf_tn_read_result
+}
+
+function _sf_tn_assign
+{
+	local __i __input
+	read -r __input || :
+	for ((__i=0; __i<$#;)); do
+		if (( ++__i == $# )); then
+			read -r "${!__i}" <<<"$__input"
+		else
+			read -r "${!__i}" __input <<<"$__input"
+		fi
+	done
+}
+
+function sf_tn_read
+{
+	if [[ -z "${_sf_tn_raw_fd:-}" ]]; then
+		sf_println2 "Error: ShellFunc telnet must be initialized before using $FUNCNAME!"
+		return 1
+	fi
+
+	local __password=false
+	local __unsafe=false
+	local __timeout=60
+	local OPTIND=1 OPTARG OPTERR opt
+	while getopts ":pt:uP:" opt; do
+		case "$opt" in
+			P) printf '%s' "$OPTARG" ;;
+			p) __password=true ;;
+			u) __unsafe=true ;;
+			t)
+				__timeout=$OPTARG
+				sf_integer -n -v -- "$__timeout" || return 1
+			;;
+			[?])
+				sf_error_unknown_option
+				return 1
+			;;
+			:)
+				sf_error_missing_argument
+				return 1
+			;;
+		esac
+	done
+	shift $((OPTIND-1))
+	if [[ "${1:-}" = "--" ]]; then shift; fi
+
+	if [[ -z "${1:-}" ]]; then
+		local __garbage
+		set -- "__garbage"
+	fi
+
+	_sf_tn_assign "$@" </dev/null
+
+	local _sf_tn_read_timeout=$(( __timeout > 0 ? SECONDS + __timeout : __timeout ))
+	local __pos=0
+	local __cmd=""
+	local __c
+	local __i
+	local __s
+	local __mbPos=""
+	while _sf_tn_read_char __c; do
+		if $_sf_tn_first_read; then
+			_sf_tn_first_read=false
+			if [[ "$_sf_tn_mode" = "echo" ]] && [[ "$__c" != $'\xff' ]]; then
+				# this client is not negotiating with us
+				_sf_tn_mode="raw"
+				_sf_tn_raw=true
+				_sf_tn_echo=false
+			fi
+		fi
+		if $_sf_tn_skip_newline; then
+			_sf_tn_skip_newline=false
+			[[ "$__c" != $'\n' ]] || continue
+		fi
+		if [[ -n $_sf_tn_subnegotiate ]] && [[ "$__c" != $'\xff' ]]; then
+			_sf_tn_sub_data+="$__c"
+			continue
+		fi
+		if $_sf_tn_raw; then
+			case "$__c" in
+				$'\r'|$'\n')
+				   [[ "$__c" != $'\r' ]] || _sf_tn_skip_newline=true
+					if $__password && ! $__unsafe; then
+						_sf_tn_assign "$@" < <(_sf_tn_iconv "$__cmd" | sha256sum | sf_fields 1)
+					else
+						_sf_tn_assign "$@" < <(_sf_tn_iconv "$__cmd")
+					fi
+					return 0
+				;;
+				*) __cmd+="$__c";;
+			esac
+		else
+			case "$__c" in
+				$'\xff')
+					local __action __code __response=""
+					_sf_tn_read_char __action
+					case "$__action" in
+						$'\xfb') # 251, will
+							_sf_tn_read_char __code
+							if ! $_sf_tn_echo; then
+								__response=$'\xff\xfe'"${__code}" # 254, dont
+							else
+								case "$__code" in
+									$'\x18') # terminal type
+										# IAC SB TERMINAL-TYPE SEND IAC SE
+										__response=$'\xff\xfa\x18\x01\xff\xf0'
+									;;
+									*)
+										__response=$'\xff\xfe'"${__code}" # 254, dont
+									;;
+								esac
+							fi
+						;;
+						$'\xfd') # 253, do
+							_sf_tn_read_char __code
+							if ! $_sf_tn_echo || { [[ "$__code" != $'\x01' ]] && [[ "$__code" != $'\x03' ]]; }; then # allow echo and sga
+								__response=$'\xff\xfc'"${__code}" # 252, wont
+							fi
+						;;
+						$'\xfc') # 252, wont
+							_sf_tn_read_char __code
+						;;
+						$'\xfe') # 254, dont
+							_sf_tn_read_char __code
+						;;
+						$'\xf4') # 244, interrupt
+							return 69
+						;;
+						$'\xfa') # 250, begin subnegotiation
+							_sf_tn_read_char _sf_tn_subnegotiate # set sub type
+							continue
+						;;
+						$'\xf0') # 240, end subnegotiation
+							case "$_sf_tn_subnegotiate" in
+								$'\x18') # terminal type
+									case "${_sf_tn_sub_data,,}" in
+										"ansi")
+											_sf_tn_client_linux=false
+										;;
+									esac
+								;;
+							esac
+							if ${_sf_tn_debug:-false}; then
+								printf 'SUB DATA: %s (%s)\n' "$(printf '%s' "$_sf_tn_sub_data" | xxd -p)" "$_sf_tn_sub_data" >&2
+							fi
+							_sf_tn_subnegotiate=""
+							_sf_tn_sub_data=""
+							continue
+						;;
+						$'\xff') # 255, we actually meant to send 255
+							:
+						;;
+						*)
+							sf_println2 "Unknown action: $(printf '%s' "$__action" | xxd -p)"
+							exit 1
+						;;
+					esac
+					[[ -z "$__response" ]] || tn_raw "$__response"
+				;;
+				$'\r'|$'\n')
+					[[ "$__c" != $'\r' ]] || _sf_tn_skip_newline=true
+					if $_sf_tn_echo; then
+						println
+					fi
+					if $__password && ! $__unsafe; then
+						_sf_tn_assign "$@" < <(_sf_tn_iconv "$__cmd" | sha256sum | sf_fields 1)
+					else
+						_sf_tn_assign "$@" < <(_sf_tn_iconv "$__cmd")
+					fi
+					return 0
+				;;
+				$'\x03') # 3, windows interrupt
+					return 69
+				;;
+				$'\x1b') # 27, arrows
+					_sf_tn_read_char __action
+					_sf_tn_read_char __code
+					if [[ "$__action" = $'\x5b' ]] && $_sf_tn_echo; then
+						case "$__code" in
+							$'\x31'|$'\x37') # home
+								_sf_tn_read_char __code
+								for ((; __pos>0; __pos--)); do
+									tn_raw $'\x1b\x5b\x44' # left
+								done
+							;;
+							$'\x32') # insert
+								_sf_tn_read_char __code
+							;;
+							$'\x33') # delete
+								_sf_tn_read_char __code
+
+								# position must be less than the length of the current command
+								(( __pos < ${#__cmd} )) || continue
+
+								# erase character from command
+								__cmd="${__cmd:0:__pos}${__cmd:__pos+1}"
+
+								# write to end of command, space, then backpedal
+								_sf_tn_autostar "${__cmd:__pos}"
+								tn_raw " "
+								for ((__c=${#__cmd} + 1; __c>__pos; __c--)); do
+									tn_raw $'\x1b\x5b\x44' # left
+								done
+							;;
+							$'\x34'|$'\x38') # end
+								_sf_tn_read_char __code
+								for ((; __pos<${#__cmd}; __pos++)); do
+									tn_raw $'\x1b\x5b\x43' # right
+								done
+							;;
+							$'\x35') # page up
+								_sf_tn_read_char __code
+							;;
+							$'\x36') # page down
+								_sf_tn_read_char __code
+							;;
+							$'\x43') # C, right
+								if (( __pos < ${#__cmd} )); then
+									(( ++__pos ))
+									tn_raw "${__c}${__action}${__code}"
+								fi
+							;;
+							$'\x44') # D, left
+								if (( __pos )); then
+									(( __pos-- ))
+									tn_raw "${__c}${__action}${__code}"
+								fi
+							;;
+						esac
+					fi
+				;;
+				$'\x08') # backspace
+					if (( __pos )) && $_sf_tn_echo; then
+
+						# reduce position
+						(( __pos-- ))
+						tn_raw $'\x1b\x5b\x44' # left
+
+						# erase character from command
+						__cmd="${__cmd:0:__pos}${__cmd:__pos+1}"
+
+						# write to end of command, space, then backpedal
+						_sf_tn_autostar "${__cmd:__pos}"
+						tn_raw " "
+						for ((__c=${#__cmd} + 1; __c>__pos; __c--)); do
+							tn_raw $'\x1b\x5b\x44' # left
+						done
+					fi
+				;;
+				$'\x7f') # delete
+					if (( ${#__cmd} )) && $_sf_tn_echo; then
+
+						# linux client? if so, act like backspace
+						if $_sf_tn_client_linux; then
+							(( __pos )) || continue
+							(( __pos-- ))
+							tn_raw $'\x1b\x5b\x44' # left
+						fi
+
+						# position must be less than the length of the current command
+						(( __pos < ${#__cmd} )) || continue
+
+						# erase character from command
+						__cmd="${__cmd:0:__pos}${__cmd:__pos+1}"
+
+						# write to end of command, space, then backpedal
+						_sf_tn_autostar "${__cmd:__pos}"
+						tn_raw " "
+						for ((__c=${#__cmd} + 1; __c>__pos; __c--)); do
+							tn_raw $'\x1b\x5b\x44' # left
+						done
+					fi
+				;;
+				*)
+					__c=$(sf_printable "$__c")
+					if [[ -n "$__c" ]]; then
+						if ! $_sf_tn_echo; then
+							__cmd="${__cmd:0:__pos}${__c}${__cmd:__pos}" && (( ++__pos ))
+						else
+							# get old length
+							__s="$(_sf_tn_iconv "$__cmd")"
+							__i="${#__s}"
+
+							# add new byte
+							__cmd="${__cmd:0:__pos}${__c}${__cmd:__pos}" && (( ++__pos ))
+
+							# if length didn't change, we're writing a multibyte
+							__s="$(_sf_tn_iconv "$__cmd")"
+							if (( ${#__s} == __i )); then
+								# consider setting the end position of the multibyte
+								if [[ -z "$__mbPos" ]]; then
+									__mbPos="$((__pos))"
+								fi
+							else
+								# did we just end a multibyte?
+								if [[ -n "$__mbPos" ]]; then
+									__pos="$__mbPos"
+									__mbPos=""
+								fi
+
+								# write to end of command, then backpedal
+								_sf_tn_autostar "${__cmd:__pos-1}"
+								for ((__c=${#__cmd}; __c>__pos; __c--)); do
+									tn_raw $'\x1b\x5b\x44' # left
+								done
+							fi
+						fi
+					fi
+				;;
+			esac
+		fi
+	done
+	return $_sf_tn_read_result
+}
+
+exebasica () {
+  echo "OPENVMS 4.5"
+  echo "(c)Copyright by Hewlett-Packard  Inc."
+  echo " "
+ 
+while true; do
+if ! sf_tn_read -t 120 -P ". "  bcommand; then
+    echo "::  $bcommand"
+fi
+log "$TCPREMOTEIP - $bcommand"
+
+if [[ "$bcommand" == "QUIT" ]] || [[ "$bcommand" == "quit" ]]; then
+    return 0
+fi
+if [[ "$bcommand" == "HELP" ]] || [[ "$bcommand" == "help" ]]; then
+   echo "QUIT to exit BASICA"
+   echo "LIST  RUN  STOP   TRACE  RENUM  DEL  SAVE   OPEN   RENAME"
+   echo " "
+   echo "Or any valid BASICA syntax"
+fi
+done
+}
+
+
+log() {
+today=`date`
+echo ".$today:  $1" >> ./activity.log
+
+return 0
+}
+
+logconn() {
+today=`date`
+#echo ">$today:  $1" >> ./activity.log
+return 0
+}
+# vim: tabstop=4:softtabstop=4:shiftwidth=4:noexpandtab
