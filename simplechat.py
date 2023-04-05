@@ -32,11 +32,11 @@ from dataclasses import dataclass
 # v 1.7  show time stamp for incoming messages
 # v 1.8  Fix for Windows compatibility and make IP address reuse turned on
 # v 1.9  Collect more per user information in a struct chat_user
-# v 2.0  TODO Re-organize into more functions (for send, for search of users etc)
+# v 2.0  Re-organize into more functions (for send, for search of users etc)
 # v 2.1  TODO SSL comms
 
 
-Version = "1.9"
+Version = "2.0"
 
 class bcolors:
     HEADER = '\033[95m'
