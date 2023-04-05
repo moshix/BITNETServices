@@ -379,7 +379,7 @@ function sf_tn_read
 
 	local __password=false
 	local __unsafe=false
-	local __timeout=60
+	local __timeout=600
 	local OPTIND=1 OPTARG OPTERR opt
 	while getopts ":pt:uP:" opt; do
 		case "$opt" in
