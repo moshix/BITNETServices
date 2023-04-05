@@ -7,6 +7,7 @@ import sys
 import string
 import time
 import datetime
+from dataclasses import dataclass
 
 
 # Copyright 2023 by moshix
@@ -30,11 +31,12 @@ import datetime
 # v 1.6   /logoff to get out
 # v 1.7  show time stamp for incoming messages
 # v 1.8  Fix for Windows compatibility and make IP address reuse turned on
-# v 1.9  TODO Re-organize into more functions (for send, for search of users etc)
-# v 2.0  TODO SSL comms
+# v 1.9  Collect more per user information in a struct chat_user
+# v 2.0  TODO Re-organize into more functions (for send, for search of users etc)
+# v 2.1  TODO SSL comms
 
 
-Version = "1.8"
+Version = "1.9"
 
 class bcolors:
     HEADER = '\033[95m'
@@ -55,18 +57,39 @@ class bcolors:
 HOST = "localhost"
 PORT = 8000
 
-#print ('Number of arguments:', len(sys.argv), 'arguments.')
-#print ('Argument List:', str(sys.argv))
-if len(sys.argv) == 3:
-    HOST=sys.argv[1]
-    PORT = sys.argv[2]
-    print(bcolors.GREEN + "You povided HOST: " + str(HOST))
-    print("You provide PORT: " + str(PORT) + bcolors.ENDC)
-else:
-    print (bcolors.WARNING + 'You did not provide IP and HOST as arguments \nRun this chat server with ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]\n')
-    print(bcolors.BLUE + "Default value for this run of  HOST: " + str(HOST))
-    print(bcolors.BLUE + "Default value for this run of  PORT: " + str(PORT) + bcolors.ENDC)
-    print(bcolors.BLUE + "Moshix Chat Server version: " + str(Version) + bcolors.ENDC)
+
+#chat_user structure
+#chat_user = namedtuple('chat_user', 'nick, logintime, msgsent,awaystatus')
+## boiler plate 
+##Bfrom dataclasses import dataclass
+##
+##@dataclass
+##class House:
+##    city: str
+##    street: str
+##    price: int
+##
+##
+##houseArray = []
+##for index in range(3):
+##    house = House(city = 'Beijing', street = '1st street', price = 1000)
+##    houseArray.append(house)
+##
+##
+##for item in houseArray:
+##    if item.city == 'Beijing':
+##        print(item)
+##
+        
+class chat_user:
+      socket: int
+      nick: str
+      logintime: datetime
+      msgsSent: int
+      msgsReceived: int
+      Status: str
+chat_userArray = [] # this is an array of all chat_user 
+
 
 
 newline = "\n\r" # also carriage return for windows compatibility
@@ -78,15 +101,6 @@ strhereis = " "
 helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
 Motd=bcolors.FAIL + "***NEW !!***\n\rYou can now change your nick name with /nick Sigfrid\n\r" + bcolors.ENDC
 startchatmsg=bcolors.BLUE + "Start chatting now\n\r\n\r" + bcolors.ENDC
-
-
-# Set up socket connection
-# Create socket object and bind to host and port
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-intPORT = int(PORT)
-server_socket.bind((HOST, intPORT))
-
 
 # Set up list to store client sockets and dictionary with random names
 clients = dict()
@@ -371,6 +385,12 @@ def name_client(client_socket):
    # debug only: print ("name_client func   - full_name: ", full_name, "client_socket", client_socket)
    clients[client_socket]["name"] = full_name
 
+   # for now also add to chat_user array of structures
+   #chat_userRec = chat_user(socket = client_socket, nick = full_name, \
+   #logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, Status = "Online")
+   #chat_userArray.append(chat_userRec) 
+
+
 
 # Set up function to accept clients and start threaded handler
 def accept_clients():
@@ -385,9 +405,26 @@ def accept_clients():
         client_thread.start()
 
 
-# Start accepting clients
-server_socket.listen()
-print(bcolors.GREEN + "Started Moshix Chat Server with HOST and IP: "+  str(HOST) + ":" + str(PORT) +bcolors.ENDC)
-accept_thread = threading.Thread(target=accept_clients)
-accept_thread.start()
+if __name__=='__main__':
+   if len(sys.argv) == 3:
+      HOST=sys.argv[1]
+      PORT = sys.argv[2]
+      print(bcolors.GREEN + "You povided HOST: " + str(HOST))
+      print("You provide PORT: " + str(PORT) + bcolors.ENDC)
+   else:
+      print (bcolors.WARNING + 'You did not provide IP and HOST as arguments \nRun this chat server with ./command 127.0.0.1 8000  [where 127.0.01 is IP and 8000 is port]\n')
+      print(bcolors.BLUE + "Default value for this run of  HOST: " + str(HOST))
+      print(bcolors.BLUE + "Default value for this run of  PORT: " + str(PORT) + bcolors.ENDC)
+      print(bcolors.BLUE + "Moshix Chat Server version: " + str(Version) + bcolors.ENDC)
+   # Set up socket connection
+   # Create socket object and bind to host and port
+   server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+   server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+   intPORT = int(PORT)
+   server_socket.bind((HOST, intPORT))
 
+   # Start accepting clients
+   server_socket.listen()
+   print(bcolors.GREEN + "Started Moshix Chat Server with HOST and IP: "+  str(HOST) + ":" + str(PORT) +bcolors.ENDC)
+   accept_thread = threading.Thread(target=accept_clients)
+   accept_thread.start()
