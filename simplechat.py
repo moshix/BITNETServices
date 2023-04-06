@@ -311,8 +311,7 @@ def handle_client(client_socket):
               #for toBroadcast, data in clients.items():
               #    if toBroadcast != whosent:
               for item in chat_userArray:
-                 for isUser in item.whoSilencedme:
-                   if item.whoSilencedme[isUser] != client_socket and client_socket != whosent:
+                   if item.socket != whosent:
                        totmsg = totmsg + 1
                        item.socket.send(formatmsg.encode('ascii'))
             #[                                                                                       ]
