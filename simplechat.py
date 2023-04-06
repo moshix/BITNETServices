@@ -1,4 +1,5 @@
-#!/opt/homebrew/bin/python3.9
+#!/opt/homebrew/bin/python3.10
+
 import socket
 import threading
 import random
@@ -33,36 +34,28 @@ from dataclasses import dataclass
 # v 1.8  Fix for Windows compatibility and make IP address reuse turned on
 # v 1.9  Collect more per user information in a struct chat_user
 # v 2.0  Re-organize into more functions (for send, for search of users etc)
-# v 2.1  TODO SSL comms
-
-
-Version = "2.0"
+# v 2.1  Show more info per user, and start moving to dataclass in chat_user structure for more services
+# v 2.3  /silence to silence a certain user
+# v 2.4  TODO SSL comms
+Version = "2.1"
 
 class bcolors:
-    HEADER = '\033[95m'
-    WHITE = '\033[95m'
-    OKBLUE = '\033[94m'
-    BLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    CYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    GREEN = '\033[92m'
-    WARNING = '\033[93m'
-    YELLOW = '\033[93m'
-    FAIL = '\033[91m'
-    RED = '\033[91m'
-    ENDC = '\033[0m'
-    UNDERLINE = '\033[4m'
-# default values
-HOST = "localhost"
-PORT = 8000
+      HEADER = '\033[95m'
+      WHITE = '\033[95m'
+      OKBLUE = '\033[94m'
+      BLUE = '\033[94m'
+      OKCYAN = '\033[96m'
+      CYAN = '\033[96m'
+      OKGREEN = '\033[92m'
+      GREEN = '\033[92m'
+      WARNING = '\033[93m'
+      YELLOW = '\033[93m'
+      FAIL = '\033[91m'
+      RED = '\033[91m'
+      ENDC = '\033[0m'
+      UNDERLINE = '\033[4m'
 
 
-#chat_user structure
-#chat_user = namedtuple('chat_user', 'nick, logintime, msgsent,awaystatus')
-## boiler plate 
-##Bfrom dataclasses import dataclass
-##
 ##@dataclass
 ##class House:
 ##    city: str
@@ -81,44 +74,23 @@ PORT = 8000
 ##        print(item)
 ##
         
-class chat_user:
-      socket: int
-      nick: str
-      logintime: datetime
-      msgsSent: int
-      msgsReceived: int
-      Status: str
-chat_userArray = [] # this is an array of all chat_user 
 
 
-
-newline = "\n\r" # also carriage return for windows compatibility
-totmsg = 0
-maxusers = 0
-currentusers = 0
-started = datetime.datetime.now()
-strhereis = " "
-helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
-Motd=bcolors.FAIL + "***NEW !!***\n\rYou can now change your nick name with /nick Sigfrid\n\r" + bcolors.ENDC
-startchatmsg=bcolors.BLUE + "Start chatting now\n\r\n\r" + bcolors.ENDC
-
-# Set up list to store client sockets and dictionary with random names
-clients = dict()
-
-
+#------------------------------------------------------------------------
 # Set up function to handle client messages
 def handle_client(client_socket):
+    global chat_user
+    global chatuser_Array
+    global totmsg
+    global maxusers
+    global currentusers
+    global started
+    global helpmsg
+    global Motd
+    nickExists = "False"  # for dupblicate nickname checking
     try:
         while True:
             # Receive message from client
-
-            global totmsg
-            global maxusers
-            global currentusers
-            global started
-            global helpmsg
-            global Motd
-            nickExists = "False"  # for dupblicate nickname checking
 
             # some stats keeping
             currentusers = 0
@@ -153,6 +125,7 @@ def handle_client(client_socket):
                print(str(datetime.datetime.now())[11:22] + " User: ",user, " wrote: ", message) # for console
             formatmsg = user + "> " + message
             #print ("Debug: msg: " + stripmsg + newline)
+            update_user_lastSeen(client_socket)
 
             # handle  help request
             if stripmsg[:5] == "/Help" or stripmsg[:5] == "/help":
@@ -214,6 +187,7 @@ def handle_client(client_socket):
                             nickExists = "False"
 
                     if nickExists == "False":
+                        update_user_nick(client_socket, strnick)
                         clients[client_socket]["name"] = strnick
                         print(bcolors.CYAN + str(datetime.datetime.now())[11:22] + " User: " + str(user) + " has changed name to: " +strnick + bcolors.ENDC) #also print on console
                         confirm = bcolors.CYAN + "Your nick has been changed to: " + bcolors.WHITE + strnick +  bcolors.ENDC + newline
@@ -291,7 +265,13 @@ def handle_client(client_socket):
                     counter = + counter + 1
                     strcounter = str(counter)
                     listuser = clients[toBroadcast]["name"]
-                    detail = str(bcolors.CYAN + strcounter + " - " + listuser + bcolors.ENDC  + newline)
+                    for item in chat_userArray:
+                       if item.socket == client_socket:
+                          last = item.lastSeen
+                          intime = datetime.datetime.now() - last
+                          #intimemin = divmod(intime.total_seconds(), 60) / 1000000
+                          #strlast = str(intimemin)
+                    detail = str(bcolors.CYAN + strcounter + " -  Last Seen: " + str(last)[11:19] + " min ago  - " + listuser + bcolors.ENDC  + newline)
                     whosent.send(detail.encode('ascii'))
                 continue
 
@@ -302,7 +282,9 @@ def handle_client(client_socket):
                  totmsg = totmsg + 1
                  whosent.send(logoffmsg.encode('ascii'))
                  whosent.close()
-                 del clients[client_socket]
+                 #del clients[client_socket]
+                 # remove client from all data structures
+                 del_user(client_socket)
                  # now inform all users of name change
                  for toBroadcast, data in clients.items():
                      if toBroadcast != whosent:
@@ -330,6 +312,51 @@ def handle_client(client_socket):
         if client_socket in clients:
             del clients[client_socket]
 # end of handle_cient function
+#------------------------------------------------------------------------
+
+# udpate user last seen
+def update_user_lastSeen(client_socket):
+  global chat_user
+  global chatuser_Array
+  for item in chat_userArray:
+      if item.socket == client_socket:
+         item.lastSeen = datetime.datetime.now()
+
+# udpate user details
+def update_user_nick(client_socket, strnick):
+  global clients
+  global chat_user
+  global chat_userArray
+
+  for item in chat_userArray:
+      if item.socket == client_socket:
+         item.nick = strnick
+         item.lastSeen = datetime.datetime.now()
+
+
+# delete user from all data strutures
+def del_user(client_socket):
+  global currentusers
+  global maxusers
+  global clients
+  global chat_user
+  global chat_userArray
+
+  del clients[client_socket]
+  for item in chat_userArray:
+      if item.socket == client_socket:
+         print(bcolors.RED + "Removed user: " + str(item.nick) + bcolors.ENDC )
+         chat_userArray.remove(item)
+          
+
+#   # for now also add to chat_user array of structures
+#   chat_userRec = chat_user(socket = client_socket, nick = full_name, \
+#   logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, Status = "Online")
+#   chat_userArray.append(chat_userRec)
+##for item in houseArray:
+##    if item.city == 'Beijing':
+##        print(item)
+
 
 def greet_user(client_socket):
    global Version
@@ -368,6 +395,8 @@ def greet_user(client_socket):
 # create random name for connection
 def name_client(client_socket):
    global strhereis
+   global chat_userArray
+   global chat_user
 
    first_names = ['Raj', 'Ron', 'Chris','Sal','David','Jacob','Oren', 'Tom', 'Greg','Doug','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
    last_names = ['Depardieu', 'McLaughlin','Rivera','Zoff','Rossi','Danio','Mesrine','Hajin', 'Yamamoto', 'Ostrovsky','Johnson', 'Beermo', 'Santis', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
@@ -386,9 +415,9 @@ def name_client(client_socket):
    clients[client_socket]["name"] = full_name
 
    # for now also add to chat_user array of structures
-   #chat_userRec = chat_user(socket = client_socket, nick = full_name, \
-   #logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, Status = "Online")
-   #chat_userArray.append(chat_userRec) 
+   chat_userRec = chat_user(socket = client_socket, nick = full_name, \
+   logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, lastSeen = datetime.datetime.now(), Status = "Online")
+   chat_userArray.append(chat_userRec) 
 
 
 
@@ -406,6 +435,37 @@ def accept_clients():
 
 
 if __name__=='__main__':
+   Version = "2.0"
+   @dataclass
+   class chat_user:
+      socket: int
+      nick: str
+      logintime: datetime
+      msgsSent: int
+      msgsReceived: int
+      lastSeen: datetime
+      Status: str
+
+   chat_userArray = [] # this is an array of all chat_user 
+
+   class bcolors:
+      HEADER = '\033[95m'
+      WHITE = '\033[95m'
+      OKBLUE = '\033[94m'
+      BLUE = '\033[94m'
+      OKCYAN = '\033[96m'
+      CYAN = '\033[96m'
+      OKGREEN = '\033[92m'
+      GREEN = '\033[92m'
+      WARNING = '\033[93m'
+      YELLOW = '\033[93m'
+      FAIL = '\033[91m'
+      RED = '\033[91m'
+      ENDC = '\033[0m'
+      UNDERLINE = '\033[4m'
+   # default values
+   HOST = "localhost"
+   PORT = 8000
    if len(sys.argv) == 3:
       HOST=sys.argv[1]
       PORT = sys.argv[2]
@@ -416,6 +476,22 @@ if __name__=='__main__':
       print(bcolors.BLUE + "Default value for this run of  HOST: " + str(HOST))
       print(bcolors.BLUE + "Default value for this run of  PORT: " + str(PORT) + bcolors.ENDC)
       print(bcolors.BLUE + "Moshix Chat Server version: " + str(Version) + bcolors.ENDC)
+   
+   # some default values here:
+
+   newline = "\n\r" # also carriage return for windows compatibility
+   totmsg = 0
+   maxusers = 0
+   currentusers = 0
+   started = datetime.datetime.now()
+   strhereis = " "
+   helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
+   Motd=bcolors.FAIL + "***NEW !!***\n\rYou can now change your nick name with /nick Sigfrid\n\r" + bcolors.ENDC
+   startchatmsg=bcolors.BLUE + "Start chatting now\n\r\n\r" + bcolors.ENDC
+   
+   # Set up list to store client sockets and dictionary with random names
+   clients = dict()
+
    # Set up socket connection
    # Create socket object and bind to host and port
    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
