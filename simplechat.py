@@ -80,7 +80,7 @@ class bcolors:
 # Set up function to handle client messages
 def handle_client(client_socket):
     global chat_user
-    global chatuser_Array
+    global chat_userArray
     global totmsg
     global maxusers
     global currentusers
@@ -278,7 +278,8 @@ def handle_client(client_socket):
 
             if stripmsg[:7] == "/logoff" or stripmsg[:7] == "/LOGOFF":
               if client_socket in clients:
-                 logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
+                 logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] \
+                  + "Ok, then. See you soon! " +  bcolors.ENDC  + newline
                  totmsg = totmsg + 1
                  whosent.send(logoffmsg.encode('ascii'))
                  whosent.close()
@@ -289,22 +290,35 @@ def handle_client(client_socket):
                  for toBroadcast, data in clients.items():
                      if toBroadcast != whosent:
                         totmsg = totmsg + 1
-                        usergonemsg = bcolors.CYAN + str(datetime.datetime.now())[11:22] + "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
+                        usergonemsg = bcolors.CYAN + str(datetime.datetime.now())[11:22] + \
+                        "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
                         toBroadcast.send(usergonemsg.encode('ascii'))
               continue
+              
+            # nextgen handling function... see how clean it is??
+            if stripmsg[:5] == "/sile" or stripmsg[:5] == "/Sile":
+               silence_user_for_user(client_socket, stripmsg)
+               continue
 
+
+
+            #________________________________________________________________________________________
+            #[                                                                                       ]
             # Broadcast message to all clients
             if stripmsg != "":
-              formatmsg= bcolors.GREEN + str(datetime.datetime.now())[11:22]  + " - " +str(user) + bcolors.RED + " > " + bcolors.BLUE + stripmsg + newline + bcolors.ENDC
-              for toBroadcast, data in clients.items():
-                  if toBroadcast != whosent:
-                      totmsg = totmsg + 1
-                      toBroadcast.send(formatmsg.encode('ascii'))
-                  #else:
-                  #    whosent.send(receipt.encode('ascii'))
-           #except socket.timeout:
-           #  if client_socket in clients:
-           #     del clients[client_socket]
+              formatmsg= bcolors.GREEN + str(datetime.datetime.now())[11:22]  + " - " +str(user) \
+              + bcolors.RED + " > " + bcolors.BLUE + stripmsg + newline + bcolors.ENDC
+              #for toBroadcast, data in clients.items():
+              #    if toBroadcast != whosent:
+              for item in chat_userArray:
+                 for isUser in item.whoSilencedme:
+                   if item.whoSilencedme[isUser] != client_socket and client_socket != whosent:
+                       totmsg = totmsg + 1
+                       item.socket.send(formatmsg.encode('ascii'))
+            #[                                                                                       ]
+            #________________________________________________________________________________________
+
+
 
     except (ConnectionResetError, OSError):
         print("Client connetion reset")
@@ -313,6 +327,42 @@ def handle_client(client_socket):
             del clients[client_socket]
 # end of handle_cient function
 #------------------------------------------------------------------------
+
+
+# silence a user for a certain user
+def silence_user_for_user(client_socket, stripmsg):
+  global clients
+  global chatuser_Array
+  global chat_user
+  wordCount = len(stripmsg.split())
+
+  if wordCount < 2:
+      #print(bcolors.WARNING +"Debug: less than 2 wordcount in /DM" + bcolors.ENDC)
+      totmsg = totmsg + 1
+      errormsg=bcolors.YELLOW + "You did not provide a nickname.  Retry. " +  bcolors.ENDC  + newline
+      client_socket.send(errormsg.encode('ascii'))
+  else:
+      #print(bcolors.WARNING +"Debug: 2 or more words found in /silence" + bcolors.ENDC)
+      nick  = stripmsg.split()[1]
+      strnick = str(nick)
+      #print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
+      # finds client_socket from name
+   
+  for item in chat_userArray:
+       if item.nick == strnick:
+          item.whoSilencedme.append(client_socket) # requesting user blocked
+          
+          for blocking_user in chat_userArray:
+               if blocking_user.socket == client_socket:
+                  print (bcolors.YELLOW + blocking_user.nick + " has silenced user: " + strnick + bcolors.ENDC)
+                  confirmmsg=bcolors.CYAN + "You have silenced user: " + strnick  +  bcolors.ENDC  + newline
+                  client_socket.send(confirmmsg.encode('ascii'))
+       else:
+          errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
+          client_socket.send(errormsg.encode('ascii'))
+   
+
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 # udpate user last seen
 def update_user_lastSeen(client_socket):
@@ -408,6 +458,7 @@ def name_client(client_socket):
                 'No way! Look who just walked in! Its ',
                 'Everybody listen up! Her Roal Highness has shown up: ',
                 'Yo, yo yo! A new chatter has appeared: ',
+                'The bus arrived and it brought: ',
                 'Yeah! And in comes ']
    hereis = random.choice(informmsg)
    strhereis = bcolors.CYAN + str(hereis)
@@ -416,8 +467,10 @@ def name_client(client_socket):
 
    # for now also add to chat_user array of structures
    chat_userRec = chat_user(socket = client_socket, nick = full_name, \
-   logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, lastSeen = datetime.datetime.now(), Status = "Online")
+   logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, \
+   lastSeen = datetime.datetime.now(), whoSilencedme = [0],  Status = "Online")
    chat_userArray.append(chat_userRec) 
+   #print("Debug: " + str(chat_userRec))
 
 
 
@@ -435,7 +488,7 @@ def accept_clients():
 
 
 if __name__=='__main__':
-   Version = "2.0"
+
    @dataclass
    class chat_user:
       socket: int
@@ -444,6 +497,7 @@ if __name__=='__main__':
       msgsSent: int
       msgsReceived: int
       lastSeen: datetime
+      whoSilencedme: list[socket.socket]
       Status: str
 
    chat_userArray = [] # this is an array of all chat_user 
@@ -485,7 +539,7 @@ if __name__=='__main__':
    currentusers = 0
    started = datetime.datetime.now()
    strhereis = " "
-   helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
+   helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/silence user to turn off msgs from user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
    Motd=bcolors.FAIL + "***NEW !!***\n\rYou can now change your nick name with /nick Sigfrid\n\r" + bcolors.ENDC
    startchatmsg=bcolors.BLUE + "Start chatting now\n\r\n\r" + bcolors.ENDC
    
