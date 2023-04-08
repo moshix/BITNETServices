@@ -275,7 +275,6 @@ def handle_client(client_socket):
                     whosent.send(detail.encode('ascii'))
                 continue
 
-
             if stripmsg[:7] == "/logoff" or stripmsg[:7] == "/LOGOFF":
               if client_socket in clients:
                  logoffmsg= bcolors.YELLOW + str(datetime.datetime.now())[11:22] \
@@ -348,8 +347,8 @@ def silence_user_for_user(client_socket, stripmsg):
       # finds client_socket from name
    
   for item in chat_userArray:
-       if item.nick == strnick:
-          item.whoSilencedme.append(client_socket) # requesting user blocked
+       if item.nick == strnick and item.socker != client_socket: # dont' block yourself
+          item.blockedUsers = strnick    # requesting user blocked
           
           for blocking_user in chat_userArray:
                if blocking_user.socket == client_socket:
@@ -379,8 +378,13 @@ def update_user_nick(client_socket, strnick):
 
   for item in chat_userArray:
       if item.socket == client_socket:
+         oldnick = item.nick
          item.nick = strnick
+         for entry in item.blockedUsers: #also update blocked user in blocked user list
+              if entry.blockedusers == oldnick:
+                 entry.blockedUsrs = strnick
          item.lastSeen = datetime.datetime.now()
+
 
 
 # delete user from all data strutures
@@ -467,7 +471,7 @@ def name_client(client_socket):
    # for now also add to chat_user array of structures
    chat_userRec = chat_user(socket = client_socket, nick = full_name, \
    logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, \
-   lastSeen = datetime.datetime.now(), whoSilencedme = [0],  Status = "Online")
+   lastSeen = datetime.datetime.now(), blockedUsers= [""],  Status = "Online")
    chat_userArray.append(chat_userRec) 
    #print("Debug: " + str(chat_userRec))
 
@@ -496,8 +500,9 @@ if __name__=='__main__':
       msgsSent: int
       msgsReceived: int
       lastSeen: datetime
-      whoSilencedme: list[socket.socket]
+      blockedUsers: list[str]
       Status: str
+
 
    chat_userArray = [] # this is an array of all chat_user 
 
@@ -516,6 +521,7 @@ if __name__=='__main__':
       RED = '\033[91m'
       ENDC = '\033[0m'
       UNDERLINE = '\033[4m'
+
    # default values
    HOST = "localhost"
    PORT = 8000
