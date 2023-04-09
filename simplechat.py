@@ -34,7 +34,7 @@ from dataclasses import dataclass
 # v 1.9  Collect more per user information in a struct chat_user
 # v 2.0  Re-organize into more functions (for send, for search of users etc)
 # v 2.1  Show more info per user, and start moving to dataclass in chat_user structure for more services
-# v 2.3  /silence to silence a certain user
+# v 2.3  /away to set status away from keyboard
 # v 2.4  TODO SSL comms
 Version = "2.3"
 
@@ -270,7 +270,7 @@ def handle_client(client_socket):
                           intime = datetime.datetime.now() - last
                           #intimemin = divmod(intime.total_seconds(), 60) / 1000000
                           #strlast = str(intimemin)
-                    detail = str(bcolors.CYAN + strcounter + " -  Last Seen: " + str(last)[11:19] + " min ago  - " + listuser + bcolors.ENDC  + newline)
+                    detail = str(bcolors.CYAN + strcounter + " -  Last Seen: " + str(last)[11:19] + "  - " + listuser + " : Status= "+ item.Status + " " + bcolors.ENDC  + newline)
                     whosent.send(detail.encode('ascii'))
                 continue
 
@@ -294,8 +294,8 @@ def handle_client(client_socket):
               continue
 
             # nextgen handling function... see how clean it is??
-            if stripmsg[:5] == "/sile" or stripmsg[:5] == "/Sile":
-               silence_user_for_user(client_socket, stripmsg, user)
+            if stripmsg[:5] == "/away" or stripmsg[:5] == "/Away":
+               set_user_away(client_socket, user)
                continue
 
 
@@ -327,41 +327,51 @@ def handle_client(client_socket):
 # end of handle_cient function
 #------------------------------------------------------------------------
 
-
-#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-# silence a user for a certain strnick
-def silence_user_for_user(client_socket, stripmsg, user):
+def set_user_away(client_socket, user):
   global clients
   global chatuser_Array
   global chat_user
-  wordCount = len(stripmsg.split())
-
-  if wordCount < 2:
-      #print(bcolors.WARNING +"Debug: less than 2 wordcount in /DM" + bcolors.ENDC)
-      totmsg = totmsg + 1
-      errormsg=bcolors.YELLOW + "You did not provide a nickname.  Retry. " +  bcolors.ENDC  + newline
-      client_socket.send(errormsg.encode('ascii'))
-  else:
-      #print(bcolors.WARNING +"Debug: 2 or more words found in /silence" + bcolors.ENDC)
-      nick  = stripmsg.split()[1]
-      strnick = str(nick)
-      #print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
-      # finds client_socket from name
-
   for item in chat_userArray:
-       if item.socket != client_socket: # dont' block yourself
-          item.blockedUsers.append(strnick)
+       if item.socket == client_socket: 
+          item.Status = bcolors.RED + "Away" + bcolors.ENDC
+          msg = bcolors.RED + "Your status is now Away" + bcolors.ENDC + newline
+          item.socket.send(msg.encode('ascii'))
 
-          for blocking_user in chat_userArray:
-               if blocking_user.socket == client_socket:
-                  print (bcolors.YELLOW + user + " has silenced user: " + strnick + bcolors.ENDC)
-                  confirmmsg=bcolors.CYAN + "You have silenced user: " + strnick  +  bcolors.ENDC  + newline
-                  client_socket.send(confirmmsg.encode('ascii'))
-       else:
-          errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
-          client_socket.send(errormsg.encode('ascii'))
+   
 
-#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+## silence a user for a certain strnick
+#def silence_user_for_user(client_socket, stripmsg, user):
+#  global clients
+#  global chatuser_Array
+#  global chat_user
+#  wordCount = len(stripmsg.split())
+#
+#  if wordCount < 2:
+#      #print(bcolors.WARNING +"Debug: less than 2 wordcount in /DM" + bcolors.ENDC)
+#      totmsg = totmsg + 1
+#      errormsg=bcolors.YELLOW + "You did not provide a nickname.  Retry. " +  bcolors.ENDC  + newline
+#      client_socket.send(errormsg.encode('ascii'))
+#  else:
+#      #print(bcolors.WARNING +"Debug: 2 or more words found in /silence" + bcolors.ENDC)
+#      nick  = stripmsg.split()[1]
+#      strnick = str(nick)
+#      #print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
+#      # finds client_socket from name
+#
+#  for item in chat_userArray:
+#       if item.socket != client_socket: # dont' block yourself
+#          item.blockedUsers.append(strnick)
+#
+#          for blocking_user in chat_userArray:
+#               if blocking_user.socket == client_socket:
+#                  print (bcolors.YELLOW + user + " has silenced user: " + strnick + bcolors.ENDC)
+#                  confirmmsg=bcolors.CYAN + "You have silenced user: " + strnick  +  bcolors.ENDC  + newline
+#                  client_socket.send(confirmmsg.encode('ascii'))
+#       else:
+#          errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
+#          client_socket.send(errormsg.encode('ascii'))
+#
+##$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 # udpate user last seen
 def update_user_lastSeen(client_socket):
@@ -381,9 +391,6 @@ def update_user_nick(client_socket, strnick):
       if item.socket == client_socket:
          oldnick = item.nick
          item.nick = strnick
-         for entry in item.blockedUsers: #also update blocked users in blocked user list
-              if item.blockedUsers == oldnick:
-                 item.blockedUsers = strnick
          item.lastSeen = datetime.datetime.now()
 
 
@@ -472,7 +479,7 @@ def name_client(client_socket):
    # for now also add to chat_user array of structures
    chat_userRec = chat_user(socket = client_socket, nick = full_name, \
    logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, \
-   lastSeen = datetime.datetime.now(), blockedUsers= [""],  Status = "Online")
+   lastSeen = datetime.datetime.now(), Status = "Online")
    chat_userArray.append(chat_userRec)
    #print("Debug: " + str(chat_userRec))
 
@@ -501,7 +508,6 @@ if __name__=='__main__':
       msgsSent: int
       msgsReceived: int
       lastSeen: datetime
-      blockedUsers: list[str] # other users this user has blocked
       Status: str
 
 
