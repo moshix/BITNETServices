@@ -1,5 +1,4 @@
-#!/opt/homebrew/bin/python3.10
-
+#!/opt/homebrew/bin/python3.9
 import socket
 import threading
 import random
@@ -73,7 +72,7 @@ class bcolors:
 ##    if item.city == 'Beijing':
 ##        print(item)
 ##
-        
+
 
 
 #------------------------------------------------------------------------
@@ -293,7 +292,7 @@ def handle_client(client_socket):
                         "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
                         toBroadcast.send(usergonemsg.encode('ascii'))
               continue
-              
+
             # nextgen handling function... see how clean it is??
             if stripmsg[:5] == "/sile" or stripmsg[:5] == "/Sile":
                silence_user_for_user(client_socket, stripmsg, user)
@@ -309,10 +308,12 @@ def handle_client(client_socket):
               + bcolors.RED + " > " + bcolors.BLUE + stripmsg + newline + bcolors.ENDC
               #for toBroadcast, data in clients.items():
               #    if toBroadcast != whosent:
+              
+
               for item in chat_userArray:
-                   if item.socket != whosent:
-                       totmsg = totmsg + 1
-                       item.socket.send(formatmsg.encode('ascii'))
+                      if item.socket != whosent:
+                         totmsg = totmsg + 1
+                         item.socket.send(formatmsg.encode('ascii'))
             #[                                                                                       ]
             #________________________________________________________________________________________
 
@@ -346,11 +347,11 @@ def silence_user_for_user(client_socket, stripmsg, user):
       strnick = str(nick)
       #print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
       # finds client_socket from name
-   
+
   for item in chat_userArray:
        if item.socket != client_socket: # dont' block yourself
-          item.blockedUsers.append(user)       # looks wrong. who is being blocked?? requesting user blocked
-          
+          item.blockedUsers.append(strnick)
+
           for blocking_user in chat_userArray:
                if blocking_user.socket == client_socket:
                   print (bcolors.YELLOW + user + " has silenced user: " + strnick + bcolors.ENDC)
@@ -359,7 +360,7 @@ def silence_user_for_user(client_socket, stripmsg, user):
        else:
           errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
           client_socket.send(errormsg.encode('ascii'))
-   
+
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 # udpate user last seen
@@ -400,7 +401,7 @@ def del_user(client_socket):
       if item.socket == client_socket:
          print(bcolors.RED + "Removed user: " + str(item.nick) + bcolors.ENDC )
          chat_userArray.remove(item)
-          
+
 
 #   # for now also add to chat_user array of structures
 #   chat_userRec = chat_user(socket = client_socket, nick = full_name, \
@@ -465,14 +466,14 @@ def name_client(client_socket):
                 'Yeah! And in comes ']
    hereis = random.choice(informmsg)
    strhereis = bcolors.CYAN + str(hereis)
-   # debug only: print ("name_client func   - full_name: ", full_name, "client_socket", client_socket)
+   print (bcolors.CYAN + "New user connected: " + full_name + " " + bcolors.ENDC)
    clients[client_socket]["name"] = full_name
 
    # for now also add to chat_user array of structures
    chat_userRec = chat_user(socket = client_socket, nick = full_name, \
    logintime = datetime.datetime.now(), msgsSent = 0, msgsReceived = 0, \
    lastSeen = datetime.datetime.now(), blockedUsers= [""],  Status = "Online")
-   chat_userArray.append(chat_userRec) 
+   chat_userArray.append(chat_userRec)
    #print("Debug: " + str(chat_userRec))
 
 
@@ -482,7 +483,7 @@ def accept_clients():
     while True:
         client_socket, address = server_socket.accept()
         clients[client_socket] = dict()
-        print(f"Connection from {address} established.")
+        #print(f"Connection from {address} established.")
         #server_socket.settimeout(10.0)
         name_client(client_socket)
         greet_user(client_socket)
@@ -500,11 +501,11 @@ if __name__=='__main__':
       msgsSent: int
       msgsReceived: int
       lastSeen: datetime
-      blockedUsers: list[str] # other users this users blocked
+      blockedUsers: list[str] # other users this user has blocked
       Status: str
 
 
-   chat_userArray = [] # this is an array of all chat_user 
+   chat_userArray = [] # this is an array of all chat_user
 
    class bcolors:
       HEADER = '\033[95m'
@@ -535,7 +536,7 @@ if __name__=='__main__':
       print(bcolors.BLUE + "Default value for this run of  HOST: " + str(HOST))
       print(bcolors.BLUE + "Default value for this run of  PORT: " + str(PORT) + bcolors.ENDC)
       print(bcolors.BLUE + "Moshix Chat Server version: " + str(Version) + bcolors.ENDC)
-   
+
    # some default values here:
 
    newline = "\n\r" # also carriage return for windows compatibility
@@ -547,7 +548,7 @@ if __name__=='__main__':
    helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/silence user to turn off msgs from user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
    Motd=bcolors.FAIL + "***NEW !!***\n\rYou can now change your nick name with /nick Sigfrid\n\r" + bcolors.ENDC
    startchatmsg=bcolors.BLUE + "Start chatting now\n\r\n\r" + bcolors.ENDC
-   
+
    # Set up list to store client sockets and dictionary with random names
    clients = dict()
 
@@ -563,3 +564,4 @@ if __name__=='__main__':
    print(bcolors.GREEN + "Started Moshix Chat Server with HOST and IP: "+  str(HOST) + ":" + str(PORT) +bcolors.ENDC)
    accept_thread = threading.Thread(target=accept_clients)
    accept_thread.start()
+
