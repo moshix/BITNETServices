@@ -35,8 +35,8 @@ from dataclasses import dataclass
 # v 2.0  Re-organize into more functions (for send, for search of users etc)
 # v 2.1  Show more info per user, and start moving to dataclass in chat_user structure for more services
 # v 2.3  /away to set status away from keyboard
-# v 2.4  TODO SSL comms
-Version = "2.3"
+# v 2.4  /silence user NG
+Version = "2.4"
 
 class bcolors:
       HEADER = '\033[95m'
@@ -86,6 +86,7 @@ def handle_client(client_socket):
     global started
     global helpmsg
     global Motd
+    global blocked_users
     nickExists = "False"  # for dupblicate nickname checking
     try:
         while True:
@@ -161,7 +162,7 @@ def handle_client(client_socket):
 
             # handle to change nick name with /nick
             if stripmsg[:4] == "/nic" or stripmsg[:4] == "/Nic":
-                print ("Debug: Entered /nick function ")
+                #print ("Debug: Entered /nick function ")
                 wordCount = len(stripmsg.split())
                 #print ("Debug: /nick number of words: ", wordCount)
 
@@ -289,7 +290,7 @@ def handle_client(client_socket):
                      if toBroadcast != whosent:
                         totmsg = totmsg + 1
                         usergonemsg = bcolors.CYAN + str(datetime.datetime.now())[11:22] + \
-                        "User: " + str(user) + " has left. " + bcolors.GREEN + strnick + bcolors.ENDC + newline
+                        "User: " + str(user) + " has left. " + bcolors.GREEN + bcolors.ENDC + newline
                         toBroadcast.send(usergonemsg.encode('ascii'))
               continue
 
@@ -297,6 +298,15 @@ def handle_client(client_socket):
             if stripmsg[:5] == "/away" or stripmsg[:5] == "/Away":
                set_user_away(client_socket, user)
                continue
+            
+
+            # /silence
+            if stripmsg[:5] == "/sile" or stripmsg[:5] == "/Sile":
+               silence_user(client_socket, stripmsg)
+               continue
+
+
+
 
 
 
@@ -339,25 +349,48 @@ def set_user_away(client_socket, user):
 
    
 
-## silence a user for a certain strnick
-#def silence_user_for_user(client_socket, stripmsg, user):
-#  global clients
-#  global chatuser_Array
-#  global chat_user
-#  wordCount = len(stripmsg.split())
-#
-#  if wordCount < 2:
-#      #print(bcolors.WARNING +"Debug: less than 2 wordcount in /DM" + bcolors.ENDC)
-#      totmsg = totmsg + 1
-#      errormsg=bcolors.YELLOW + "You did not provide a nickname.  Retry. " +  bcolors.ENDC  + newline
-#      client_socket.send(errormsg.encode('ascii'))
-#  else:
-#      #print(bcolors.WARNING +"Debug: 2 or more words found in /silence" + bcolors.ENDC)
-#      nick  = stripmsg.split()[1]
-#      strnick = str(nick)
-#      #print(bcolors.WARNING +"Debug: target of DM: " + strnick + newline)
-#      # finds client_socket from name
-#
+# silence a user for a certain strnick
+def silence_user(client_socket, stripmsg):
+  global clients
+  global chatuser_Array
+  global chat_user
+  global blocked_users
+
+  wordCount = len(stripmsg.split())
+
+  if wordCount < 2:
+      #print(bcolors.WARNING +"Debug: less than 2 wordcount in /DM" + bcolors.ENDC)
+      totmsg = totmsg + 1
+      errormsg=bcolors.YELLOW + "You did not provide a nickname.  Retry. " +  bcolors.ENDC  + newline
+      client_socket.send(errormsg.encode('ascii'))
+  else:
+      #print(bcolors.WARNING +"Debug: 2 or more words found in /silence" + bcolors.ENDC)
+      nick  = stripmsg.split()[1]
+      strnick = str(nick)
+
+      # finds client_socket from name
+  for item in chat_userArray:
+      if item.socket != client_socket: # don't block yourself
+          if item.nick == strnick: # let's insert client_socket into blocked_users
+              tobeBlocked = item.socket # client socket of user to be blocked,to avoid updating on /nick
+          else:
+              errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
+              client_socket.send(errormsg.encode('ascii'))
+
+
+  for line in blocked_users:
+      if line in blocked_users:
+          # append new blocked client_socket to the requesting user list of blocked users
+          blocked_users[line[client_socket]].append(line[tobeBlocked]) #
+          print (str(blocked_users[line[client_socket]]))
+      else:
+          # create a new arracy with this new user and blocked users
+          blocked_users[line[client_socket]] = [line[tobeBlocked]]
+          print (str(blocked_users[line[client_socket]]))
+
+  confirmmsg=bcolors.CYAN + "You have silenced user: " + strnick  +  bcolors.ENDC  + newline
+  client_socket.send(confirmmsg.encode('ascii'))
+  
 #  for item in chat_userArray:
 #       if item.socket != client_socket: # dont' block yourself
 #          item.blockedUsers.append(strnick)
@@ -371,7 +404,6 @@ def set_user_away(client_socket, user):
 #          errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
 #          client_socket.send(errormsg.encode('ascii'))
 #
-##$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 # udpate user last seen
 def update_user_lastSeen(client_socket):
@@ -386,6 +418,7 @@ def update_user_nick(client_socket, strnick):
   global clients
   global chat_user
   global chat_userArray
+  global blocked_users
 
   for item in chat_userArray:
       if item.socket == client_socket:
@@ -402,6 +435,8 @@ def del_user(client_socket):
   global clients
   global chat_user
   global chat_userArray
+  global blocked_users
+# TODO remove user from blocking key in blocked_users
 
   del clients[client_socket]
   for item in chat_userArray:
@@ -436,7 +471,7 @@ def greet_user(client_socket):
    user = clients[client_socket]["name"]
    formatmsg =  strhereis + bcolors.GREEN  +str(user) + bcolors.CYAN +  str("! ") +  bcolors.ENDC + newline
    boilerplate = bcolors.CYAN + "\n\nMoshix Chat System - Version " + str(Version) + bcolors.BLUE + str(" -- /help for comands ") + bcolors.ENDC +  newline
-   usergreet = bcolors.CYAN + "Welcome in, " + str(user) + bcolors.ENDC +  newline
+   usergreet = bcolors.GREEN + "Welcome in, " + str(user) + bcolors.ENDC +  newline
    usergreetCount = bcolors.CYAN + "Currently there are: " + str(currentusers) + " users in this chat. Including you, of course. " + bcolors.ENDC +  newline
 
    for toBroadcast, data in clients.items():
@@ -446,9 +481,9 @@ def greet_user(client_socket):
        else:
        # greet user who just signed in
            whosent.send(boilerplate.encode('ascii'))
+           whosent.send(Motd.encode('ascii'))
            whosent.send(usergreet.encode('ascii'))
            whosent.send(usergreetCount.encode('ascii'))
-           whosent.send(Motd.encode('ascii'))
            whosent.send(startchatmsg.encode('ascii'))
 
 
@@ -512,6 +547,8 @@ if __name__=='__main__':
 
 
    chat_userArray = [] # this is an array of all chat_user
+
+   blocked_users = dict() # key is the user who is blocking people, and the values are the blocked people
 
    class bcolors:
       HEADER = '\033[95m'
