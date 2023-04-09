@@ -36,6 +36,8 @@ from dataclasses import dataclass
 # v 2.1  Show more info per user, and start moving to dataclass in chat_user structure for more services
 # v 2.3  /away to set status away from keyboard
 # v 2.4  /silence user NG
+# v 2.5 BUG: becuase of new /nick now the handle_loop doens't work anymore after a user does a /nick
+
 Version = "2.4"
 
 class bcolors:
@@ -371,25 +373,16 @@ def silence_user(client_socket, stripmsg):
       # finds client_socket from name
   for item in chat_userArray:
       if item.socket != client_socket: # don't block yourself
-          if item.nick == strnick: # let's insert client_socket into blocked_users
-              tobeBlocked = item.socket # client socket of user to be blocked,to avoid updating on /nick
+          if item.nick == strnick: # let's find and insert client_socket into blocked_users
+              #blocked_users.setdefault(client_socket, {})[item.socket) = 1 # =1 eliminate duplicates
+              blocked_users.setdefault(client_socket, []).append(item.socket)
+              confirmmsg=bcolors.CYAN + "You have silenced user: " + strnick  +  bcolors.ENDC  + newline
+              client_socket.send(confirmmsg.encode('ascii'))
           else:
               errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
               client_socket.send(errormsg.encode('ascii'))
 
 
-  for line in blocked_users:
-      if line in blocked_users:
-          # append new blocked client_socket to the requesting user list of blocked users
-          blocked_users[line[client_socket]].append(line[tobeBlocked]) #
-          print (str(blocked_users[line[client_socket]]))
-      else:
-          # create a new arracy with this new user and blocked users
-          blocked_users[line[client_socket]] = [line[tobeBlocked]]
-          print (str(blocked_users[line[client_socket]]))
-
-  confirmmsg=bcolors.CYAN + "You have silenced user: " + strnick  +  bcolors.ENDC  + newline
-  client_socket.send(confirmmsg.encode('ascii'))
   
 #  for item in chat_userArray:
 #       if item.socket != client_socket: # dont' block yourself
@@ -422,7 +415,7 @@ def update_user_nick(client_socket, strnick):
 
   for item in chat_userArray:
       if item.socket == client_socket:
-         oldnick = item.nick
+         #oldnick = item.nick
          item.nick = strnick
          item.lastSeen = datetime.datetime.now()
 
