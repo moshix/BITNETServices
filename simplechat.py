@@ -296,7 +296,7 @@ def handle_client(client_socket):
               
             # nextgen handling function... see how clean it is??
             if stripmsg[:5] == "/sile" or stripmsg[:5] == "/Sile":
-               silence_user_for_user(client_socket, stripmsg)
+               silence_user_for_user(client_socket, stripmsg, user)
                continue
 
 
@@ -327,8 +327,9 @@ def handle_client(client_socket):
 #------------------------------------------------------------------------
 
 
-# silence a user for a certain user
-def silence_user_for_user(client_socket, stripmsg):
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+# silence a user for a certain strnick
+def silence_user_for_user(client_socket, stripmsg, user):
   global clients
   global chatuser_Array
   global chat_user
@@ -347,19 +348,18 @@ def silence_user_for_user(client_socket, stripmsg):
       # finds client_socket from name
    
   for item in chat_userArray:
-       if item.nick == strnick and item.socker != client_socket: # dont' block yourself
-          item.blockedUsers = strnick    # requesting user blocked
+       if item.socket != client_socket: # dont' block yourself
+          item.blockedUsers.append(user)       # looks wrong. who is being blocked?? requesting user blocked
           
           for blocking_user in chat_userArray:
                if blocking_user.socket == client_socket:
-                  print (bcolors.YELLOW + blocking_user.nick + " has silenced user: " + strnick + bcolors.ENDC)
+                  print (bcolors.YELLOW + user + " has silenced user: " + strnick + bcolors.ENDC)
                   confirmmsg=bcolors.CYAN + "You have silenced user: " + strnick  +  bcolors.ENDC  + newline
                   client_socket.send(confirmmsg.encode('ascii'))
        else:
           errormsg=bcolors.YELLOW + "User: " + strnick + " not found! Try again"  +  bcolors.ENDC  + newline
           client_socket.send(errormsg.encode('ascii'))
    
-
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 # udpate user last seen
