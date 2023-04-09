@@ -37,7 +37,7 @@ from dataclasses import dataclass
 # v 2.1  Show more info per user, and start moving to dataclass in chat_user structure for more services
 # v 2.3  /silence to silence a certain user
 # v 2.4  TODO SSL comms
-Version = "2.1"
+Version = "2.3"
 
 class bcolors:
       HEADER = '\033[95m'
@@ -380,9 +380,9 @@ def update_user_nick(client_socket, strnick):
       if item.socket == client_socket:
          oldnick = item.nick
          item.nick = strnick
-         for entry in item.blockedUsers: #also update blocked user in blocked user list
-              if entry.blockedusers == oldnick:
-                 entry.blockedUsrs = strnick
+         for entry in item.blockedUsers: #also update blocked users in blocked user list
+              if item.blockedUsers == oldnick:
+                 item.blockedUsers = strnick
          item.lastSeen = datetime.datetime.now()
 
 
@@ -451,8 +451,8 @@ def name_client(client_socket):
    global chat_userArray
    global chat_user
 
-   first_names = ['Raj', 'Ron', 'Chris','Sal','David','Jacob','Oren', 'Tom', 'Greg','Doug','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
-   last_names = ['Depardieu', 'McLaughlin','Rivera','Zoff','Rossi','Danio','Mesrine','Hajin', 'Yamamoto', 'Ostrovsky','Johnson', 'Beermo', 'Santis', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
+   first_names = ['Jordan', 'Bill', 'Sarah', 'Ruth', 'Cindy', 'Anne','Raj', 'Ron', 'Chris','Sal','David','Jacob','Oren', 'Tom', 'Greg','Doug','Josh', 'Rob', 'Sigfried', 'Hilge', 'Ralph','Alice', 'Bob', 'Charlie', 'Diana', 'Emma', 'John', 'Dennis', 'Jay']
+   last_names = ['Depardieu', 'McLaughlin','Rivera','Zoff','Rossi','Danio','Mesrine','Hajin', 'Yamamoto', 'Ostrovsky','Johnson', 'Beermo', 'German', 'McCallan', 'Muller', 'Chang','Santis', 'Cohen', 'Levi', 'Hernandez','Brown', 'Green', 'White', 'Black', 'Gray', 'Baer', 'Smith', 'Holland']
    full_name = random.choice(first_names) + "_" + random.choice(last_names)
    informmsg = ['As the prophesy foretold, here is ',
                 'A random apparition of ',
@@ -500,7 +500,7 @@ if __name__=='__main__':
       msgsSent: int
       msgsReceived: int
       lastSeen: datetime
-      blockedUsers: list[str]
+      blockedUsers: list[str] # other users this users blocked
       Status: str
 
 
