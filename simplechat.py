@@ -36,7 +36,7 @@ from dataclasses import dataclass
 # v 2.1  Show more info per user, and start moving to dataclass in chat_user structure for more services
 # v 2.3  /away to set status away from keyboard
 # v 2.4  /silence user NG
-# v 2.5 BUG: becuase of new /nick now the handle_loop doens't work anymore after a user does a /nick
+# v 2.5  TODO: don't send broadcast to blocked users for certain client_socket
 
 Version = "2.4"
 
@@ -89,6 +89,7 @@ def handle_client(client_socket):
     global helpmsg
     global Motd
     global blocked_users
+
     nickExists = "False"  # for dupblicate nickname checking
     try:
         while True:
@@ -398,13 +399,19 @@ def silence_user(client_socket, stripmsg):
 #          client_socket.send(errormsg.encode('ascii'))
 #
 
+
 # udpate user last seen
 def update_user_lastSeen(client_socket):
+  global clients
   global chat_user
   global chatuser_Array
+  global blocked_users
+
   for item in chat_userArray:
       if item.socket == client_socket:
          item.lastSeen = datetime.datetime.now()
+
+
 
 # udpate user details
 def update_user_nick(client_socket, strnick):
@@ -413,11 +420,13 @@ def update_user_nick(client_socket, strnick):
   global chat_userArray
   global blocked_users
 
+  # change nick
   for item in chat_userArray:
       if item.socket == client_socket:
          #oldnick = item.nick
          item.nick = strnick
-         item.lastSeen = datetime.datetime.now()
+         print ("debug: nickname changed to " + strnick)
+         item.lastSeen = datetime.datetime.now() #also update last seen
 
 
 
