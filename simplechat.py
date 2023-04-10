@@ -321,12 +321,14 @@ def handle_client(client_socket):
               + bcolors.RED + " > " + bcolors.BLUE + stripmsg + newline + bcolors.ENDC
               #for toBroadcast, data in clients.items():
               #    if toBroadcast != whosent:
-              
-
+              keys = blocked_users.keys()
               for item in chat_userArray:
                       if item.socket != whosent:
-                         totmsg = totmsg + 1
-                         item.socket.send(formatmsg.encode('ascii'))
+                         for key in keys:
+                             for value in blocked_users[key]:
+                               if value != value:
+                                  totmsg = totmsg + 1
+                                  item.socket.send(formatmsg.encode('ascii'))
             #[                                                                                       ]
             #________________________________________________________________________________________
 
