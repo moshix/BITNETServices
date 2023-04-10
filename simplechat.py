@@ -36,7 +36,9 @@ from dataclasses import dataclass
 # v 2.1  Show more info per user, and start moving to dataclass in chat_user structure for more services
 # v 2.3  /away to set status away from keyboard
 # v 2.4  /silence user NG
-# v 2.5  TODO: don't send broadcast to blocked users for certain client_socket
+# v 2.4  TODO: don't send broadcast to blocked users for certain client_socket
+# v 2.4  BUGS: after /nick operation no further commands work
+# v 2.4  BUGS: broadcasting is currently not working
 
 Version = "2.4"
 
@@ -326,7 +328,7 @@ def handle_client(client_socket):
                       if item.socket != whosent:
                          for key in keys:
                              for value in blocked_users[key]:
-                               if value != value:
+                               if value != item.socket:
                                   totmsg = totmsg + 1
                                   item.socket.send(formatmsg.encode('ascii'))
             #[                                                                                       ]
