@@ -2,7 +2,7 @@
 /* COPYRIGHT 2021 BY MOSHIX
  *
  *
- *        Name: BOOK RETURNS OR AND XOR VALUES DECIMAL, HEX OR BIN
+ *        Name: BOOL RETURNS OR AND XOR VALUES DECIMAL, HEX OR BIN
  *
  *
  *        Author: moshix
