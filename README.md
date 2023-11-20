@@ -165,7 +165,58 @@ Now also with SSL and pub/priv key support!
 <h1>IUCVTRAP</h1>
 <br>
 This is a IUCVTRAP implementation for VM/SP and VM/XA. It assembles fine and it is a better WAKEUP for VM. XYZZY can be made to work with this. Check out the source. <br>
-Included is also iucvtrap_VMsp3.vmarc which is a version that assembles cleanly on VM/SP r3-r5. 
+Included is also iucvtrap_VMsp3.vmarc which is a version that assembles cleanly on VM/SP r3-r5. <br><pre>
+Use the IUCVTRAP command to trap specified CP and/or CMS responses
+for subsequent viewing or stacking onto the CMS program stack.
+ 
+syntax: IUCVTRAP { ON 
+                 | OFF
+                 | TYPE nnn
+                 | GRAB <( WAIT  <)> > }
+                 | EXTRACT <( WAIT  <)> > }
+ 
+Use the CP SET command to select the responses to be intercepted
+by IUCVTRAP. The following CP SET commands have explanations provided:
+ 
+ CP SET MSG IUCV     - specifies interception of incoming CP MESSAGES.
+ CP SET WNG IUCV     - intercept incoming CP WARNING messages.
+ CP SET EMSG IUCV    - intercept Error messages.
+ CP SET ACNT IUCV    - intercept Accounting messages.
+ CP SET IMSG IUCV    - intercept Informational messages.
+ CP SET SMSG IUCV    - intercept incoming Special Messages.
+ CP SET VMCONIO IUCV - intercept CMS generated console output.
+ CP SET CPCONIO IUCV - intercept CP generated console output.
+ 
+Type HELP CP SET for more information on the above mentioned command.
+ 
+When any of the above options are set to IUCV, IUCVTRAP may be used
+to intercept and save the trapped text in an internal stack. This
+stack can be interrogated with the IUCVTRAP TYPE  command, or
+the IUCVTRAP GRAB <( WAIT <)> > command. IUCVTRAP TYPE will dump
+the entire contents of the internal stack to the CMS console. The nnnn
+operand specifes the number of lines to be typed at the console. This
+is useful if there are many internally stacked lines.
+ 
+IUCVTRAP GRAB will stack LIFO the first trapped message that appears
+on the internal queue. Using the WAIT option, an exec can be used to
+wakeup whenever a message is received. If the WAIT option is not used
+and a GRAB is attempted with an empty internal stack, the message
+"* No messages available" is stacked. WAIT followed by a 3 digit number
+specifying a wait interval (in seconds) may also be used. When the timer
+expires, a return code 3 will be returned. If the WAIT is ended by a
+console attention, a return code 2 will be returned.
+ 
+IUCVTRAP ON initializes IUCVTRAP. IUCVTRAP ON ALL initializes IUCVTRAP
+for use with all classes of IUCV messages.
+ 
+IUCVTRAP EXTRACT works the same as GRAB, except that the message is
+placed in a EXEC2 or REXX variable named IUCVMSG.
+ 
+A full 255 characters will be stacked for each stacked line,
+although EXEC2 may only access
+the first 130 characters of each line.
+Rexx may access all 255.
+</pre>
 <br><br>Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <h1>SUPERMSG</h1>
 <br>
