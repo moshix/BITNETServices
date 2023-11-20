@@ -1,0 +1,638 @@
+         PRINT NOGEN                   * Suppress macro expansions      00001000
+         SPACE 3                                                        00002000
+*********************************************************************** 00003000
+*                                                                     * 00004000
+*       Copyright (c) 1983 Arthur J. Ecock, CUNY/UCC                  * 00005000
+*       All rights reserved                                           * 00006000
+*                                                                     * 00007000
+*********************************************************************** 00008000
+         SPACE 3                                                        00009000
+*********************************************************************** 00010000
+*                                                                     * 00011000
+* Module name: IUCVTRAP ON|OFF|TYPE <nnnn> |GRAB <(WAIT<)>>|QUERY     * 00012000
+*                                                                     * 00013000
+* Purpose: Trap various terminal outputs via IUCV.                    * 00014000
+*                                                                     * 00015000
+* Author: Arthur Ecock                                                * 00016000
+*                                                                     * 00017000
+* Version: 1                                                          * 00018000
+*                                                                     * 00019000
+* Date: 7 April 1983                                                  * 00020000
+*                                                                     * 00021000
+*********************************************************************** 00022000
+         SPACE ,                                                        00023000
+IUCVTRAP CSECT ,                       * Define main control section    00024000
+         SAVE  (14,12),,COPYRIGHT(C).1983.ARTHUR.J.ECOCK,CUNY/UCC       00025000
+         USING IUCVTRAP,R15            * Temp addressability            00026000
+         CNOP  0,4                     * Allign savearea to fullword    00027000
+         BAL   R15,*+76                * Branch around save area        00028000
+         DROP  R15                     * Drop temporary base register   00029000
+         USING SAVEAREA,R13,R12        * Define new global base regs    00030000
+SAVEAREA DC    18F'-1'                 * Register save area             00031000
+         ST    R15,8(,R13)             * Chain forward save area        00032000
+         ST    R13,4(,R15)             * Chain backward save area       00033000
+         LR    R13,R15                 * Load base register             00034000
+         LA    R12,2048(,R13)          * Load part of second base       00035000
+         LA    R12,2048(,R12)          * Add in the rest                00036000
+         STM   R12,R13,BASEREGS        * Save base register contents    00037000
+         USING NUCON,R0                * Nucleus constant area          00038000
+         USING TOKENS,R1               * Map parm list tokens           00039000
+         LA    R11,IUCVPARM            * Point to IUCV plist            00040000
+         USING IPARML,R11              * Map the IUCV plist             00041000
+         USING MSG,R9                  * MSG addressability             00042000
+         SPACE 3                                                        00043000
+         XC    RETCODE,RETCODE         * Clear return code              00044000
+         IPK                                                            00045000
+         ST    R2,USERKEY              * Save user's protect key        00046000
+         SPKA  0(R0)                   * And set PSW key 0              00047000
+         EJECT ,                                                        00048000
+*********************************************************************** 00049000
+*                                                                     * 00050000
+*        Check command syntax                                         * 00051000
+*                                                                     * 00052000
+*********************************************************************** 00053000
+         SPACE ,                                                        00054000
+         CLC   TOKEN1,FENCE            * Any parms ?                    00055000
+         BE    SYNTAX                  * Nope, display syntax message   00056000
+         CLC   =C'ON ',TOKEN1          * Is the parm "ON" ?             00057000
+         BE    STARTUP                 * Yes, go start things rolling   00058000
+         CLC   =C'OFF ',TOKEN1         * Is the parm "OFF" ?            00059000
+         BE    OFF                     * Yes, go do cleanup             00060000
+         CLC   =C'TYPE ',TOKEN1        * Is the parm "TYPE" ?           00061000
+         BE    TYPEIT                  * Yes, go dump the messages      00062000
+         CLC   =C'GRAB ',TOKEN1        * Is the parm "GRAB" ?           00063000
+         BE    GRAB                    * Yes, go stack first message    00064000
+         CLC   =C'Q ',TOKEN1           * Is the parm "Q" ?              00065000
+         BE    QUERY                   * Yes, go send QUERY response    00066000
+         CLC   =C'QUERY ',TOKEN1       * Is the parm "QUERY" ?          00067000
+         BE    QUERY                   * Yes, go send QUERY response    00068000
+         CLC   =C'RESET ',TOKEN1       * Is the parm "RESET" ?          00069000
+         BE    RESET                   * Yes, go do cleanup             00070000
+         CLM   R1,B'1000',X'FF'        * Is this a valid PURGE call ?   00071000
+         BNE   SYNTAX                  * Nope, display syntax message   00072000
+         CLC   =C'PURGE ',TOKEN1       * Is the parm "PURGE" ?          00073000
+         BE    RESET                   * Yes, go do cleanup             00074000
+         B     SYNTAX                  * Else, display syntax message   00075000
+         EJECT ,                                                        00076000
+*********************************************************************** 00077000
+*                                                                     * 00078000
+*        Set up the IUCVTRAP environment                              * 00079000
+*                                                                     * 00080000
+*********************************************************************** 00081000
+STARTUP  EQU   *                                                        00082000
+         TS    FLAG                    * Have we been here already ?    00083000
+         BNZ   ALREADY                 * Yep, send message              00084000
+         SPACE ,                                                        00085000
+         LH    R0,=H'-1'               * Load code to get console addr  00086000
+         DIAG  R0,R1,DEVTYPE           * Now get the device type stats  00087000
+         STH   R0,CONSOLE              * Save the console address       00088000
+         SPACE ,                                                        00089000
+         MVC   $EXTNPSW,EXTNPSW        * Save External New PSW          00090000
+         MVC   $IPLPSW,IPLPSW          * Save CMS IPL PSW               00091000
+         SPACE ,                                                        00092000
+         LA    R1,EXTFLIH              * Load address of our EXTFLIH    00093000
+         ST    R1,EXTNPSW+4            * And make CMS use it            00094000
+         SPACE ,                                                        00095000
+         STCTL C0,C0,OLDCR0            * Store contents of CR0          00096000
+         MVC   IUCVCR0,OLDCR0          * Make a copy for alteration     00097000
+         OI    IUCVCR0+3,IUCVBIT       * Enable IUCV interrupts         00098000
+         LCTL  C0,C0,IUCVCR0           * Now load altered CR0           00099000
+         SPACE ,                                                        00100000
+         IUCV  DCLBFR,PRMLIST=(R11),BUFFER=(R11)                        00101000
+         BNZ   IUCVERR                                                  00102000
+         SPACE ,                                                        00103000
+         XC    0(IPSIZE*8,R11),0(R11)  * Zero out IUCV parm list        00104000
+         SPACE ,                                                        00105000
+         IUCV  CONNECT,PRMLIST=(R11),USERID=MSGSYS                      00106000
+         BNZ   IUCVERR                                                  00107000
+         LINEDIT TEXT='IUCV trap in place'                              00108000
+EXIT     EQU   *                                                        00109000
+         L     R2,USERKEY              * Load user's protect key        00110000
+         SPKA  0(R2)                   * Change PSW key back for user   00111000
+         L     R15,RETCODE             * Load return code               00112000
+         L     R13,4(,R13)             * Load backward savearea PTR     00113000
+         RETURN (14,12),RC=(15)        * Load caller's registers & exit 00114000
+         SPACE 3                                                        00115000
+SYNTAX   EQU   *                                                        00116000
+         LINEDIT TEXT='Syntax: IUCVTRAP ON|OFF|TYPE <nnnn>|GRAB <(WAIT<*00117000
+               )>>'                                                     00118000
+         B     EXIT                    * Go exit                        00119000
+         EJECT ,                                                        00120000
+*********************************************************************** 00121000
+*        Process OFF option                                           * 00122000
+*********************************************************************** 00123000
+OFF      EQU   *                                                        00124000
+         CLI   FLAG,0                  * Was IUCVTRAP in place ?        00125000
+         BNZ   RESET                   * Yes, go remove it              00126000
+SAYOFF   EQU   *                                                        00127000
+         LINEDIT TEXT='IUCVTRAP has not been set'                       00128000
+         SPACE ,                                                        00129000
+         LA    R1,1                    * Load a bad return code         00130000
+         ST    R1,RETCODE              * Save it for exit               00131000
+         B     EXIT                    * Now return to caller           00132000
+         SPACE ,                                                        00133000
+*********************************************************************** 00134000
+*        Process RESET option                                         * 00135000
+*********************************************************************** 00136000
+RESET    EQU   *                                                        00137000
+         BAL   R10,CLEANUP             * Remove nucleus hooks           00138000
+         SPACE ,                                                        00139000
+         LINEDIT TEXT='IUCV trap has been removed'                      00140000
+         SPACE ,                                                        00141000
+         B     EXIT                    * And exit                       00142000
+         SPACE ,                                                        00143000
+*********************************************************************** 00144000
+*        Process TYPE <nnnn> option                                   * 00145000
+*********************************************************************** 00146000
+TYPEIT   EQU   *                                                        00147000
+         CLI   FLAG,0                  * Have we been initialized ?     00148000
+         BE    SAYOFF                  * Nope, display errmsg           00149000
+         SPACE ,                                                        00150000
+         CLC   TOKEN2,FENCE            * Check for a second parm        00151000
+         BE    TYPEIT2                 * Nothing there, continue        00152000
+         CLC   TOKEN3,FENCE            * Make sure we have a fence      00153000
+         BNE   SYNTAX                  * Nope, display syntax message   00154000
+         LA    R1,TOKEN2               * Point to parm                  00155000
+         CLI   4(R1),C' '              * Check max length = 4           00156000
+         BNE   SYNTAX                  * If number too big, send syntax 00157000
+         LA    R3,5                    * Else, load max + 1             00158000
+         LA    R4,0                    * Clear a work register          00159000
+         LR    R5,R4                   * Clear accumulator              00160000
+CVTLOOP  EQU   *                                                        00161000
+         CLI   0(R1),C' '              * Are we finished ?              00162000
+         BE    CVTDONE                 * Yes, continue                  00163000
+         CLI   0(R1),C'0'              * Is this a numeric digit ?      00164000
+         BL    SYNTAX                  * Nope, display syntax message   00165000
+         IC    R4,0(,R1)               * Grab the digit                 00166000
+         N     R4,=A(X'F')             * Mask out leftmost nybble       00167000
+         MH    R5,=H'10'               * Multiply accumulator by radix  00168000
+         AR    R5,R4                   * Accumulate sum                 00169000
+         LA    R1,1(,R1)               * Point to next digit            00170000
+         BCT   R3,CVTLOOP              * Go try to grab it              00171000
+         B     SYNTAX                  * Number too long, send syntax   00172000
+CVTDONE  EQU   *                                                        00173000
+         OI    FLAG2,TYPENUM           * Turn on special flag           00174000
+TYPEIT2  EQU   *                                                        00175000
+         BAL   R10,DUMPMSGS            * Go dump out all the MSGs       00176000
+         SPACE ,                                                        00177000
+         NI    FLAG2,255-TYPENUM       * Turn off special flag          00178000
+         TM    FLAG2,QUIESCED          * Were we quiesced ?             00179000
+         BNO   EXIT                    * Nope, exit                     00180000
+         SPACE ,                                                        00181000
+         BAL   R10,QCHECK              * Go try to resume               00182000
+         LA    R11,IUCVPARM            * Load plist base register       00183000
+         BAL   R10,RECEIVE             * And try to receive a msg       00184000
+         BZ    *-4                     * Keep going until no more       00185000
+         B     EXIT                    * Now exit                       00186000
+         EJECT ,                                                        00187000
+*********************************************************************** 00188000
+*        Process GRAB <(WAIT <)>> option                              * 00189000
+*********************************************************************** 00190000
+         SPACE ,                                                        00191000
+GRAB     EQU   *                                                        00192000
+         CLI   FLAG,0                  * Have we been initialized ?     00193000
+         BE    SAYOFF                  * Nope, then send errmsg         00194000
+         MVI   GRABFLAG,0              * Clear GRABFLAG                 00195000
+         CLC   TOKEN2,FENCE            * Were there any parms given ?   00196000
+         BE    GRABIT                  * Nope, do normal GRAB           00197000
+         CLC   =C'( ',TOKEN2           * Check for delimiter            00198000
+         BNE   SYNTAX                  * Not there, display syntax      00199000
+         CLC   =C'WAIT ',TOKEN3        * Check for "WAIT" option        00200000
+         BNE   SYNTAX                  * Not there, display syntax      00201000
+         CLC   TOKEN4,FENCE            * Look for a parm fence          00202000
+         BE    GRAB2                   * Got it, continue processing    00203000
+         CLC   =C') ',TOKEN4           * Look for a front gate at least 00204000
+         BNE   SYNTAX                  * Nope, display syntax message   00205000
+GRAB2    EQU   *                                                        00206000
+         OI    GRABFLAG,WAIT           * Turn on WAIT flag              00207000
+         MVC   $IONPSW,IONPSW          * Save CMS I/O New PSW           00208000
+         SPACE ,                                                        00209000
+         LA    R1,IOFLIH               * Load address of our IOFLIH     00210000
+         ST    R1,IONPSW+4             * And make CMS use it            00211000
+         LA    R1,GLOOP                * Else, point to wakeup addr     00212000
+         ST    R1,WAITPSW+4            * Save address in WAITPSW        00213000
+         EJECT ,                                                        00214000
+GRABIT   EQU   *                                                        00215000
+         MVC   STKBUFF,STKBUFF-1          * Clear STACK buffer          00216000
+         MVC   STKBUFF(L'DEFMSG),DEFMSG   * Move default msg to stack   00217000
+         LA    R1,L'DEFMSG                * Accumulate length of msg    00218000
+         STC   R1,STKLEN                  * Put length in CMS parm list 00219000
+         TM    GRABFLAG,WAIT              * Is the WAIT flag on ?       00220000
+         BNO   DOSTACK                    * No, stack default MSG       00221000
+         SSM   DISABLE                    * Disable interrupts          00222000
+GLOOP    EQU   *                                                        00223000
+         TM    GRABFLAG,HITATTN        * Was ATTN hit ?                 00224000
+         BO    GRABQUIT                * Yep, set special return code   00225000
+         SPACE ,                                                        00226000
+         ICM   R9,B'1111',MSGSTRT      * Load the MSG queue anchor      00227000
+         BNZ   BUILDIT                 * We have a queue, build line    00228000
+         SPACE ,                                                        00229000
+         BAL   R10,QCHECK              * Check quiesce flag             00230000
+         BZ    GLOOP                   * Return here if resumed         00231000
+         SPACE ,                                                        00232000
+         LPSW  WAITPSW                 * Else, go wait for a MSG        00233000
+         B     GLOOP                   * Just in case, return           00234000
+BUILDIT  EQU   *                                                        00235000
+         MVC   IONPSW,$IONPSW          * Restore CMS IONPSW             00236000
+         MVC   MSGSTRT,NEXT            * Remove MSG from queue          00237000
+         SSM   ENABLE                  * Enable interrupts              00238000
+         SPACE ,                                                        00239000
+         MVC   STKBUFF,STKBUFF-1       * Clear STACK buffer             00240000
+         MVI   STKSTAR,C'*'            * Move an asterisk to STACK msg  00241000
+         MVC   STKTIME,TIME            * Move the time                  00242000
+         MVC   STKTYPE,TYPE            * Move the type (MSG,WNG,etc)    00243000
+         MVC   STKFROM,=C'from'        * Move "from"                    00244000
+         MVC   STKUSER,USER            * Move the userid                00245000
+         MVI   STKCOLON,C':'           * Move text separator            00246000
+         SPACE ,                                                        00247000
+         L     R5,LENGTH               * Load the length of TEXT        00248000
+         BCTR  R5,R0                   * Decrement for move             00249000
+         EX    R5,STKMOVE              * MVC STKTEXT(*-*),TEXT          00250000
+         SPACE ,                                                        00251000
+         LA    R1,1+STKHDR(,R5)        * Accumulate length of msg       00252000
+         STC   R1,STKLEN               * Put length in CMS parm list    00253000
+         SPACE ,                                                        00254000
+         LR    R1,R9                   * Point to MSG element           00255000
+         SPACE ,                                                        00256000
+         DMSFRET DWORDS=LMSG,LOC=(1),TYPCALL=BALR                       00257000
+DOSTACK  EQU   *                                                        00258000
+         SSM   ENABLE                  * Enable interrupts              00259000
+         LA    R1,STKBUFF              * Load the buffer address        00260000
+         STCM  R1,B'0111',STKADDR      * Save the buffer address        00261000
+         SPACE ,                                                        00262000
+         LA    R1,STKCMD               * Point to STACK command         00263000
+         SVC   202                     * Ask CMS to stack the buffer    00264000
+         DC    AL4(1)                  * Dummy error return address     00265000
+         ST    R15,RETCODE             * Save return code for exit      00266000
+         B     EXIT                    * Now exit gracefully            00267000
+GRABQUIT EQU   *                                                        00268000
+         MVC   IONPSW,$IONPSW          * Restore CMS IONPSW             00269000
+         LA    R1,2                    * Load special return code       00270000
+         ST    R1,RETCODE              * Save it for later              00271000
+         B     EXIT                    * And go exit gracefully         00272000
+         EJECT ,                                                        00273000
+*********************************************************************** 00274000
+*        Process QUERY option                                         * 00275000
+*********************************************************************** 00276000
+QUERY    EQU   *                                                        00277000
+         CLC   TOKEN2,FENCE            * Is there a second parm ?       00278000
+         BNE   SYNTAX                  * Yes, display syntax message    00279000
+         LA    R2,=CL8'OFF'            * Else, point to OFF string      00280000
+         CLI   FLAG,0                  * Are we indeed OFF ?            00281000
+         BE    QWRITE                  * Yes, just as I thought         00282000
+         LA    R2,=CL8'ON'             * Else, we must be ON            00283000
+         TM    FLAG2,QUIESCED          * Are we QUIESCED ?              00284000
+         BNO   QWRITE                  * Nope, display ON               00285000
+         LA    R2,=CL8'Quiesced'       * Else, display QUIESCED         00286000
+QWRITE   EQU   *                                                        00287000
+         LINEDIT TEXT='IUCVTRAP is ........',SUB=(CHARA,(R2))           00288000
+         SPACE ,                                                        00289000
+         B     EXIT                    * Now return  to caller          00290000
+         SPACE ,                                                        00291000
+ALREADY  EQU   *                                                        00292000
+         LINEDIT TEXT='IUCV trap already in place. Use OFF option to re*00293000
+               move trap'                                               00294000
+         SPACE ,                                                        00295000
+         LA    R1,1                    * Load a bad return code         00296000
+         ST    R1,RETCODE              * Save it for exit               00297000
+         B     EXIT                    * Now return to caller           00298000
+IUCVERR  EQU   *                                                        00299000
+         BALR  R3,R0                   * Get the condition code         00300000
+         LA    R2,0                    * Clear work register            00301000
+         SLL   R3,2                    * Shift out the ILC              00302000
+         SLDL  R2,2                    * Shift the condition code -> R2 00303000
+         SPACE ,                                                        00304000
+         LINEDIT TEXT='IUCV error, CC = ........, IPRCODE = ..',RENT=NO*00305000
+               ,SUB=(DEC,(R2),HEX4A,IPRCODE)                            00306000
+         SPACE ,                                                        00307000
+         ST    R2,RETCODE              * Save return code for exit      00308000
+         B     RESET                   * And go cleanup                 00309000
+         DROP  R1                      * No longer need TOKENS          00310000
+         LTORG ,                       * Literal pool                   00311000
+         TITLE 'Console interrupt handler'                              00312000
+*********************************************************************** 00313000
+*                                                                     * 00314000
+*        First level I/O interrupt handler                            * 00315000
+*                                                                     * 00316000
+*********************************************************************** 00317000
+IOFLIH   DS    0H                                                       00318000
+         ST    R15,IONPSW+4            * Save contents of R15           00319000
+         BALR  R15,R0                  * Load temporary base register   00320000
+         USING IOFLIH1,R15             * Set addressability for IOFLIH  00321000
+IOFLIH1  EQU   *                                                        00322000
+         STM   R0,R14,INTSAVE          * Save caller's registers        00323000
+         MVC   INTSVR15,IONPSW+4       * Save caller's R15 also         00324000
+         LR    R1,R15                  * Copy base register value       00325000
+         SH    R1,=AL2(IOFLIH1-IOFLIH) * Bump back to start of FLIH     00326000
+         ST    R1,IONPSW+4             * And save it back into IONPSW   00327000
+         LM    R12,R13,BASEREGS        * Load global base registers     00328000
+         DROP  R15                     * Drop temporary base register   00329000
+         USING SAVEAREA,R13,R12        * Define global addressability   00330000
+         SPACE ,                                                        00331000
+         CLC   CONSOLE,IOOPSW+2        * Is this the console ?          00332000
+         BNE   INTPASS                 * Nope, pass interrupt to CMS    00333000
+         TM    CSW+4,ATTN              * Was this an ATTN interrupt ?   00334000
+         BNO   INTPASS                 * Nope, ignore it                00335000
+         SPACE ,                                                        00336000
+         TM    GRABFLAG,WAIT           * Is the WAIT flag on ?          00337000
+         BNO   INTRET1                 * Nope, don't wakeup anybody     00338000
+         NI    IOOPSW+1,255-WAITBIT    * Turn off wait bit in IOOPSW    00339000
+         OI    GRABFLAG,HITATTN        * Turn on HITATTN FLAG           00340000
+INTRET1  EQU   *                                                        00341000
+         LM    R0,R15,INTSAVE          * Reload caller's registers      00342000
+         LPSW  IOOPSW                  * And return                     00343000
+INTPASS  EQU   *                                                        00344000
+         MVC   IPLPSW,$IONPSW          * Move CMS' I/O New PSW to NUCON 00345000
+         LM    R0,R15,INTSAVE          * Reload caller's registers      00346000
+         LPSW  IPLPSW                  * And pass the interrupt along   00347000
+         SPACE 3                                                        00348000
+         LTORG ,                       * Literal pool                   00349000
+         TITLE 'External first level interrupt handler'                 00350000
+*********************************************************************** 00351000
+*                                                                     * 00352000
+*        External signal sevice task                                  * 00353000
+*                                                                     * 00354000
+*********************************************************************** 00355000
+EXTFLIH  DS    0H                                                       00356000
+         ST    R15,EXTNPSW+4           * Save contents of R15           00357000
+         BALR  R15,R0                  * Load temporary base register   00358000
+         USING EXTFLIH1,R15            * Set addressability for EXTFLIH 00359000
+EXTFLIH1 EQU   *                                                        00360000
+         STM   R0,R14,EXTSAVE          * Save caller's registers        00361000
+         MVC   EXTSVR15,EXTNPSW+4      * Save caller's R15 also         00362000
+         LR    R1,R15                  * Copy base register value       00363000
+         SH    R1,=AL2(EXTFLIH1-EXTFLIH) * Bump back to start of FLIH   00364000
+         ST    R1,EXTNPSW+4            * And save it back into EXTNPSW  00365000
+         LM    R12,R13,BASEREGS        * Load global base registers     00366000
+         DROP  R15                     * Drop temporary base register   00367000
+         USING SAVEAREA,R13,R12        * Define global addressability   00368000
+         LA    R11,IUCVPARM            * Load the parm list address     00369000
+         USING IPARML,R11              * Map the IUCV parm list         00370000
+         SPACE 2                                                        00371000
+         CLC   IUCVINT,EXTOPSW+2       * IUCV interrupt ?               00372000
+         BNE   EXTPASS                 * Nope, send it to CMS           00373000
+         CLC   SPECIAL,EXTOPSW+2       * Special escape code            00374000
+         BE    EXTSEVER                * Yes, exit forthwith            00375000
+         SPACE ,                                                        00376000
+         CLI   IPTYPE,IPTYPSV          * Has path been severed ?        00377000
+         BE    EXTSEVER                * Yes, go do cleanup             00378000
+         SPACE ,                                                        00379000
+         CLI   IPTYPE,IPTYPMP          * Is this a priority msg ?       00380000
+         BE    RLOOP                   * Yes, go receive it             00381000
+         CLI   IPTYPE,IPTYPMNP         * Non-priority msg ?             00382000
+         BNE   EXTRET                  * Nope, totally ignore it        00383000
+RLOOP    EQU   *                                                        00384000
+         BAL   R10,RECEIVE             * Go issue an IUCV RECEIVE       00385000
+         BZ    RLOOP                   * Now go look for some more      00386000
+EXTRET   EQU   *                                                        00387000
+         TM    GRABFLAG,WAIT           * Is GRABFLAG wait bit on ?      00388000
+         BNO   *+8                     * Nope, normal return            00389000
+         NI    EXTOPSW+1,255-WAITBIT   * Else, turn off PSW wait bit    00390000
+         LM    R0,R15,EXTSAVE          * Reload caller's registers      00391000
+         LPSW  EXTOPSW                 * Return to caller               00392000
+EXTSEVER EQU   *                                                        00393000
+         BAL   R10,CLEANUP             * Go do cleanup                  00394000
+         LINEDIT TEXT='IUCVTRAP path has been severed',DISP=SIO         00395000
+         B     EXTRET                  * Return to caller               00396000
+EXTPASS  EQU   *                                                        00397000
+         MVC   IPLPSW,$EXTNPSW         * Move CMS EXTNPSW               00398000
+         LM    R0,R15,EXTSAVE          * Reload caller's registers      00399000
+         LPSW  IPLPSW                  * Pass interrupt to CMS          00400000
+         EJECT ,                                                        00401000
+*********************************************************************** 00402000
+*                                                                     * 00403000
+*        IUCV Receive routine    (R11 points to IUCVPARM on entry)    * 00404000
+*                                (Returns CC=0 if MSG found)          * 00405000
+*                                                                     * 00406000
+*********************************************************************** 00407000
+RECEIVE  EQU   *                                                        00408000
+         TM    FLAG2,QUIESCED          * Were we quiesced ?             00409000
+         BOR   R10                     * Yes, just return               00410000
+         SPACE ,                                                        00411000
+         DMSFREE DWORDS=LMSG,TYPCALL=BALR,ERR=QUIESCE                   00412000
+         SPACE ,                                                        00413000
+         LR    R9,R1                   * Load MSG base address          00414000
+         SPACE ,                                                        00415000
+         MVI   0(R9),C' '              * Set up for clear               00416000
+         MVC   1(LMSG*8-1,R9),0(R9)    * Clear the msg element          00417000
+         SPACE ,                                                        00418000
+         LA    R2,L'MSGTEXT            * Load buffer length             00419000
+         XC    0(IPSIZE*8,R11),0(R11)  * Clear plist for IUCV           00420000
+         MVC   MSGTEXT,MSGTEXT-1       * CLear message area             00421000
+         SPACE ,                                                        00422000
+         IUCV  RECEIVE,BUFFER=MSGTEXT,BUFLEN=((R2),4),PRMLIST=(R11)     00423000
+         BC    CC2,NOMSGS              * No messages                    00424000
+         SPACE ,                                                        00425000
+         S     R2,IPBFLN1F             * Subtract residual length       00426000
+         SH    R2,=H'8'                * Subtract length of userid      00427000
+         L     R3,IPTRGCLS             * Load target class              00428000
+         LA    R4,=CL4'Msg'            * Point to message string        00429000
+         CH    R3,=H'1'                * Is this a CP MESSAGE ?         00430000
+         BE    WRITELN                 * Yes, go print message          00431000
+         LA    R4,=CL4'Wng'            * Point to warning string        00432000
+         CH    R3,=H'2'                * Is this a CP WARNING ?         00433000
+         BE    WRITELN                 * Yes, go print message          00434000
+         LA    R4,=CL4'Smsg'           * Point to smsg string           00435000
+         CH    R3,=H'4'                * Is this a CP SMSG ?            00436000
+         BE    WRITELN                 * Yes, go print message          00437000
+         LA    R4,=CL4'Scif'           * Point to scif string           00438000
+         CH    R3,=H'8'                * Is this a SCIF message ?       00439000
+         BE    WRITELN                 * Yes, go print message          00440000
+         LA    R4,=CL4'Text'           * Else, it must be text          00441000
+         EJECT ,                                                        00442000
+WRITELN  EQU   *                                                        00443000
+         LA    R1,DIAGTIME             * Point to DIAGNOSE work area    00444000
+         DIAG  R1,R0,X'000C'           * Get the correct time           00445000
+         SPACE ,                                                        00446000
+         XC    NEXT,NEXT               * Set next pointer to 0          00447000
+         ST    R2,LENGTH               * Save the text length           00448000
+         MVC   TIME,CURRTIME           * Move the time to msg           00449000
+         MVC   TYPE,0(R4)              * Move the type of msg           00450000
+         MVC   USER,MSGTEXT            * Move the userid                00451000
+         MVC   TEXT,MSGTEXT+8          * Move the message text          00452000
+         SPACE ,                                                        00453000
+         ICM   R0,B'1111',MSGSTRT      * Is there a MSG queue ?         00454000
+         BNZ   CHAINIT                 * Yes, go chain to the end       00455000
+         ST    R9,MSGSTRT              * Else, make this the anchor     00456000
+         CLI   *+1,0                   * Set CC = 0                     00457000
+         BR    R10                     * Return to caller               00458000
+CHAINIT  EQU   *                                                        00459000
+         LR    R2,R0                   * Copy anchor                    00460000
+         ICM   R0,B'1111',NEXT-MSG(R2) * Look for end of chain          00461000
+         BNZ   CHAINIT                 * Not found, try next one        00462000
+         ST    R9,NEXT-MSG(R2)         * Chain MSG to end of queue      00463000
+         CLI   *+1,0                   * Set CC = 0                     00464000
+         BR    R10                     * Return to caller               00465000
+QUIESCE  EQU   *                                                        00466000
+         OI    FLAG2,QUIESCED          * Set quiesce flag               00467000
+         CLI   *,0                     * Set non zero return call       00468000
+         BR    R10                     * Now return to caller           00469000
+NOMSGS   EQU   *                                                        00470000
+         LR    R1,R9                   * Copy storage pointer           00471000
+         SPACE ,                                                        00472000
+         DMSFRET DWORDS=LMSG,LOC=(1),TYPCALL=BALR                       00473000
+         SPACE ,                                                        00474000
+         CLI   *,0                     * Set non-zero condition code    00475000
+         BR    R10                     * And return to caller           00476000
+         EJECT ,                                                        00477000
+*********************************************************************** 00478000
+*                                                                     * 00479000
+*        Reset QUIESCE state if possible                              * 00480000
+*                                                                     * 00481000
+*********************************************************************** 00482000
+QCHECK   EQU   *                                                        00483000
+         TM    FLAG2,QUIESCED          * Were we quiesced ?             00484000
+         BNO   QRETNZ                  * Nope, go set a non-zero CC     00485000
+         SPACE ,                                                        00486000
+         NI    FLAG2,255-QUIESCED      * Reset QUIESCE flag             00487000
+         LA    R11,IUCVPARM            * Load pointer to IUCV plist     00488000
+         SPACE ,                                                        00489000
+         B     RECEIVE                 * Go issue an IUCV RECEIVE       00490000
+QRETNZ   EQU   *                                                        00491000
+         CLI   *,0                     * Set a non-zero condition code  00492000
+         BR    R10                     * And return to caller           00493000
+         EJECT ,                                                        00494000
+*********************************************************************** 00495000
+*                                                                     * 00496000
+*        Cleanup routine: remove hooks, free storage, etc.            * 00497000
+*                                                                     * 00498000
+*********************************************************************** 00499000
+CLEANUP  EQU   *                                                        00500000
+         CLI   FLAG,0                  * Have we been started yet ?     00501000
+         BER   R10                     * Nope, just exit                00502000
+         SPACE ,                                                        00503000
+         MVC   EXTNPSW,$EXTNPSW        * Put back CMS' EXTFLIH address  00504000
+         MVC   IPLPSW,$IPLPSW          * Put back CMS' IPL PSW          00505000
+         LCTL  C0,C0,OLDCR0            * Reload original CR0            00506000
+         MVI   FLAG,0                  * Reset flag byte                00507000
+         MVI   FLAG2,0                 * Reset flag byte 2              00508000
+         SPACE ,                                                        00509000
+         IUCV  SEVER,PRMLIST=(R11),ALL=YES                              00510000
+         SPACE ,                                                        00511000
+         IUCV  RTRVBFR                 * Retrieve the buffer            00512000
+         SPACE ,                                                        00513000
+         TM    GRABFLAG,WAIT           * Was the WAIT bit on ?          00514000
+         BNO   DUMPMSGS                * Nope, dump out the messages    00515000
+         MVC   IONPSW,$IONPSW          * Else, put back CMS' IONPSW     00516000
+DUMPMSGS EQU   *                                                        00517000
+         ICM   R2,B'1111',MSGSTRT      * Load MSG chain anchor          00518000
+         XC    MSGSTRT,MSGSTRT         * Zap the MSG queue anchor       00519000
+FREELOOP EQU   *                                                        00520000
+         LTR   R9,R2                   * Copy storage address           00521000
+         BZR   R10                     * Nothing left, return           00522000
+         ICM   R2,B'1111',NEXT-MSG(R2) * Load ptr to next MSG           00523000
+         ST    R2,MSGSTRT              * Save new chain anchor          00524000
+         SPACE ,                                                        00525000
+         LINEDIT TEXT='........ .... from ........: ...................*00526000
+               ........................................................*00527000
+               ...............',DOT=NO,RENT=NO,SUB=(CHARA,TIME,CHARA,TY*00528000
+               PE,CHARA,USER,CHARA,(TEXT,80)),COMP=NO                   00529000
+         SPACE ,                                                        00530000
+         LR    R1,R9                   * Copy MSG element address       00531000
+         SPACE ,                                                        00532000
+         DMSFRET DWORDS=LMSG,LOC=(1),TYPCALL=BALR                       00533000
+         SPACE ,                                                        00534000
+         TM    FLAG2,TYPENUM           * Is numeric option in use ?     00535000
+         BNO   FREELOOP                * Nope, dump everything          00536000
+         BCT   R5,FREELOOP             * Else, type what is wanted      00537000
+         BR    R10                     * Free the rest of the chain     00538000
+         LTORG ,                       * Literal pool                   00539000
+         TITLE 'Data areas and control blocks'                          00540000
+$EXTNPSW DS    D                       * CMS' EXTNPSW                   00541000
+$IONPSW  DS    D                       * CMS' IONPSW                    00542000
+$IPLPSW  DS    D                       * CMS' IPL PSW                   00543000
+         SPACE ,                                                        00544000
+WAITPSW  DC    X'FF020000',A(*-*)      * Wait PSW                       00545000
+EXTSAVE  DS    16F                     * Register save area for EXTFLIH 00546000
+EXTSVR15 EQU   EXTSAVE+(15*4),4        * Register 15 in save area       00547000
+INTSAVE  DS    16F                     * Register save area for IOFLIH  00548000
+INTSVR15 EQU   INTSAVE+(15*4),4        * Register 15 in save area       00549000
+         SPACE ,                                                        00550000
+FENCE    DC    8X'FF'                  * CMS parm fence                 00551000
+         SPACE ,                                                        00552000
+IUCVPARM DS    5D                      * IUCV parm list                 00553000
+MSGSYS   DC    CL8'*MSG'               * Connect to *MSG service        00554000
+         SPACE ,                                                        00555000
+STKCMD   DS    0D                      * CMS command to stack MSG       00556000
+         DC    CL8'ATTN'               * ATTN command                   00557000
+         DC    CL4'LIFO'               * Last-In-First-Out              00558000
+STKLEN   DC    AL1(*-*)                * Length of MSG buffer           00559000
+STKADDR  DC    AL3(*-*)                * Address of MSG buffer          00560000
+         SPACE ,                                                        00561000
+BASEREGS DS    2F                      * Global base register contents  00562000
+USERKEY  DS    F                       * User's original PSW key        00563000
+MSGSTRT  DC    F'0'                    * MSG queue anchor               00564000
+RETCODE  DC    F'0'                    * Return code to use for EXIT    00565000
+STKMOVE  MVC   STKTEXT(*-*),TEXT       * Move text to STACK buffer      00566000
+FREESTOR DS    F                       * Free storage area address      00567000
+PARMREG  DS    F                       * CMS command line parm pointer  00568000
+OLDCR0   DS    F                       * User's original CR0            00569000
+IUCVCR0  DS    F                       * CR0 with IUCV enabled          00570000
+IUCVBIT  EQU   X'02'                   * IUCV enable bit                00571000
+         SPACE ,                                                        00572000
+CONSOLE  DS    H                       * Console address                00573000
+IUCVINT  DC    X'4000'                 * IUCV interrupt code            00574000
+SPECIAL  DC    X'0040'                 * Special exit/escape code       00575000
+FLAG     DC    X'00'                   * Flag byte                      00576000
+FLAG2    DC    X'00'                   * Flag byte 2                    00577000
+QUIESCED EQU   X'80'                   * IUCVTRAP quiesced              00578000
+TYPENUM  EQU   X'40'                   * Numeric option of TYPE command 00579000
+         SPACE ,                                                        00580000
+GRABFLAG DC    X'00'                   * Flag byte for GRAB option      00581000
+WAIT     EQU   X'80'                   * Wait required                  00582000
+HITATTN  EQU   X'40'                   * ATTN hit                       00583000
+         SPACE ,                                                        00584000
+WAITBIT  EQU   X'02'                   * Wait bit for PSW               00585000
+DEVTYPE  EQU   X'24'                   * Device type DIAGNOSE code      00586000
+ATTN     EQU   X'80'                   * Attention                      00587000
+         SPACE ,                                                        00588000
+ENABLE   DC    X'FF'                   * Enable interrupts              00589000
+DISABLE  DC    X'00'                   * Disable interrupts             00590000
+         SPACE ,                                                        00591000
+CC0      EQU   8                       * Condition code 0               00592000
+CC1      EQU   4                       * "         "    1               00593000
+CC2      EQU   2                       * "         "    2               00594000
+CC3      EQU   1                       * "         "    3               00595000
+         SPACE ,                                                        00596000
+DEFMSG   DC    C'* No messages available'                               00597000
+         SPACE ,                                                        00598000
+         DC    C' '                    * Blank to clear msg buffer      00599000
+STKBUFF  DC    CL250' '                * Buffer for MSG stacking        00600000
+         ORG   STKBUFF                                                  00601000
+STKSTAR  DS    C                       * An asterisk                    00602000
+         DS    C                       * Blank                          00603000
+STKTIME  DS    CL8                     * Time field                     00604000
+         DS    C                       * Blank                          00605000
+STKTYPE  DS    CL4                     * Type of message (MSG,WNG,etc)  00606000
+         DS    C                       * Blank                          00607000
+STKFROM  DS    CL4                     * "from"                         00608000
+         DS    C                       * Blank                          00609000
+STKUSER  DS    CL8                     * Userid                         00610000
+STKCOLON DS    C                       * ":"                            00611000
+         DS    C                       * Blank                          00612000
+STKHDR   EQU   *-STKBUFF               * Length of header portion       00613000
+STKTEXT  DS    (L'STKBUFF-STKHDR)C     * Message text                   00614000
+         ORG   ,                                                        00615000
+         DC    C' '                    * Blank to clear msg buffer      00616000
+MSGTEXT  DC    CL250' '                * IUCV receiving buffer          00617000
+         SPACE ,                                                        00618000
+MSG      DSECT ,                                                        00619000
+NEXT     DS    F                       * Next msg element               00620000
+LENGTH   DS    F                       * Length of text                 00621000
+TIME     DS    CL8                     * Time of message                00622000
+TYPE     DS    CL4                     * Type of message                00623000
+USER     DS    CL8                     * Userid                         00624000
+TEXT     DS    CL128                   * Message text                   00625000
+LMSG     EQU   (*-MSG+7)/8             * Length in double words         00626000
+         SPACE ,                                                        00627000
+TOKENS   DSECT ,                       * CMS command line tokens        00628000
+TOKEN0   DS    CL8                     * Command name                   00629000
+TOKEN1   DS    CL8                     * Token #1                       00630000
+TOKEN2   DS    CL8                     * "     #2                       00631000
+TOKEN3   DS    CL8                     * "     #3                       00632000
+TOKEN4   DS    CL8                     * "     #4                       00633000
+         SPACE ,                                                        00634000
+         COPY  IPARML                  * IUCV parm list mapping         00635000
+         REGEQU ,                      * Register equates               00636000
+         NUCON ,                       * Nucleus constant area          00637000
+         END   IUCVTRAP                * That's all folks !!!           00638000
