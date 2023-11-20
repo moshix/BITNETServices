@@ -3,7 +3,7 @@
 [![View SBOM](https://img.shields.io/badge/sbom.sh-viewSBOM-blue?link=https%3A%2F%2Fsbom.sh%2F0ff42f94-545a-4ffe-a7d0-4da9d6b24c2b)](https://sbom.sh/0ff42f94-545a-4ffe-a7d0-4da9d6b24c2b)
 <br>
 
-# Modern Implementations of Traditional BITNET Services RELAY CHAT, TRICKLE, LOOKUP, LISTSERV, ELIZA, QBIT, MTRAP, YWAKEUP, NSCAN
+# Modern Implementations of Traditional BITNET Services RELAY CHAT, TRICKLE, LOOKUP, LISTSERV, ELIZA, QBIT, MTRAP, YWAKEUP, NSCAN, IUCVTRAP
 
 
 <h1>RELAY CHAT Implementation</h1>
@@ -161,9 +161,13 @@ This chat server is named simplechat, but it is anything but simple. It's actual
 <br>
 Now also with SSL and pub/priv key support!
 <br><br>
-Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
+
+<h1>IUCVTRAP</h1>
+<br>
+This is a IUCVTRAP implementation for VM/SP and VM/XA. It assembles fine and it is a better WAKEUP for VM. XYZZY can be made to work with this. Check out the source. 
+<br><br>Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED:October 13, 2023 - Tel Aviv<br>
+UPDATED:November 19, 2023 - Milan<br>
 Moshix
 
