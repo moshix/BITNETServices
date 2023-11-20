@@ -1,0 +1,125 @@
+*READ  CLR3270  ASSEMBLE A1 MNT191  8/28/85  13:50                      CLR00010
+* SOURCE FOR A PROGRAM TO CLEAR A 3270 SCREEN FROM CMS                  CLR00020
+* FROM LEN FISCHER _ TRAX SOFTWORKS (TRX/LEN) IN RESPONSE TO            CLR00030
+* PROB REXX1.  PROBABLY ORIGINALLY FROM SOME PUBLIC DOMAIN TAPE.        CLR00040
+CLR3270  TITLE 'CLEAR 3270 TERMINAL SCREEN'                             CLR00050
+*                                                                       CLR00060
+CLR3270  CSECT                                                          CLR00070
+*                                                                       CLR00080
+         REGEQU                                                         CLR00090
+*                                                                       CLR00100
+         SAVE  (14,12),,*                                               CLR00110
+         LR    R12,R15                                                  CLR00120
+         USE   CLR3270,R12                                              CLR00130
+*                                                                       CLR00140
+         L     R1,@FM1          -1 => CONS ADDR                         CLR00150
+         DIAG  R1,R14,X'24'     FROM CP                                 CLR00160
+         STH   R1,CONSADDR+2                                            CLR00170
+*                                                                       CLR00180
+         LA    R1,CCWCLEAR      GET DIAG 58-19 CCW                      CLR00190
+         L     R2,CONSADDR   DISPLAY ADDRESS CUU                        CLR00200
+         SSM   @F0           SET NO INTERRUPTION                        CLR00210
+WAITDISP DS    0H                                                       CLR00220
+         TIO   0(R2)         RESET ALL PENDING INTERRUPTIONS            CLR00230
+         BC    6,WAITDISP    AND LOOP IF SOME MORE                      CLR00240
+*                                                                       CLR00250
+* ISSUE DIAGNOSE                                                        CLR00260
+*                                                                       CLR00270
+DIAG     DS    0H                                                       CLR00280
+         DIAG  R1,R2,X'0058' ISSUE DIAGNOSE                             CLR00290
+         BC    8,TIO1        ALL OK GO WAIT FOR THE END OF INPUT/OUTPUT CLR00300
+         BC    2,DIAG        BUSY REISSUE DIAGNOSE                      CLR00310
+         BC    4,CHKCSW      GO LOOK AT CSW                             CLR00320
+         BC    1,RESETSCR    ERROR IF DISPLAY IS NOT OPERATIONAL        CLR00330
+*                                                                       CLR00340
+* WAIT FOR THE END OF THE INPUT/OUTPUT AND CHECK CSW                    CLR00350
+*                                                                       CLR00360
+TIO1     DS    0H                                                       CLR00370
+         TIO   0(R2)         WAIT FOR THE END OF INPUT/OUTPUT           CLR00380
+         BC    8,CHKCSW      OK GO ON                                   CLR00390
+         BC    2,TIO1        BUSY KEEP LOOPING                          CLR00400
+         BC    1,RESETSCR    ERROR IF NOT OPERATIONNEL                  CLR00410
+         TM    CSWUS,X'B0'   CSW STORED + ATTN CTLUNIT END BUSY         CLR00420
+         BNZ   TIO1          YES THEN HANDLE AS BUSY                    CLR00430
+CHKCSW   DS    0H                                                       CLR00440
+         CLI   CSWCS,X'00'   SOME PROBLEM WITH THE CHANNEL ?            CLR00450
+         BNE   RESETSCR      YES NOTHING WE CAN DO                      CLR00460
+         LH    R0,CSWCOUNT   GET RESIDUAL COUNT                         CLR00470
+         CLI   CSWUS,X'0C'   DID WE GET CE+DE ?                         CLR00480
+         BE    GOTCEDE       YES WE ARE FINISHED                        CLR00490
+         CLI   CSWUS,X'08'   DID WE GET CE ONLY ?                       CLR00500
+         BE    TIO2          YES GO WAIT FOR DE                         CLR00510
+         CLI   CSWUS,X'8E'   IS THIS ERROR CODE '8E' FROM CP ?          CLR00520
+         BE    SCRERR        YES GO TELL THE CALLER                     CLR00530
+         TM    CSWUS,X'02'   UNIT CHECK ?                               CLR00540
+         BO    SENSE         YES GO DO A SENSE                          CLR00550
+         TM    CSWUS,X'B0'   ATTN OR CTL UNIT END OR BUSY ?             CLR00560
+         BNZ   DIAG          IF YES REISSUE THE DIAGNOSE                CLR00570
+         TM    CSWUS,X'0C'   DID WE GET AT LEAST CE OR DE ?             CLR00580
+         BZ    DIAG          NO REISSUE THE DIAGNOSE                    CLR00590
+TIO2     DS    0H                                                       CLR00600
+         TIO   0(R2)         WAIT FOR DE                                CLR00610
+         BC    2,TIO2        BUSY KEEP LOOPING                          CLR00620
+         BC    1,RESETSCR    ERROR IF NOT OPERATIONAL                   CLR00630
+*                                                                       CLR00640
+* ALL OK EXIT                                                           CLR00650
+*                                                                       CLR00660
+GOTCEDE  DS    0H                                                       CLR00670
+         SR    R15,R15       RC = 0                                     CLR00680
+IOEXIT   EQU   *                                                        CLR00690
+         RETURN (14,12),RC=(15)                                         CLR00700
+         SPACE 3                                                        CLR00710
+*                                                                       CLR00720
+* ERRORS                                                                CLR00730
+*                                                                       CLR00740
+SCRERR   DS    0H                                                       CLR00750
+         LA    R15,4         SET RC  = 0                                CLR00760
+         B     IOEXIT        EXIT                                       CLR00770
+*                                                                       CLR00780
+* SENSE                                                                 CLR00790
+*                                                                       CLR00800
+SENSE    DS    0H                                                       CLR00810
+         LA    R1,SENSECCW        PARM TO DIAGIO                        CLR00820
+         B     DIAG               READ SENSE BYTE                       CLR00830
+**       SSM   @FM1               TAKE INT NOW (X'FF')                  CLR00840
+RESETSCR DS    0H                                                       CLR00850
+         L     R2,CONSADDR        GET DISPLAY ADDRESS CUU               CLR00860
+         DIAG  R2,R3,X'0024'      IS IT STILL THERE                     CLR00870
+         BC    2,GOTCEDE          EXIT IF DISC.                         CLR00880
+         LA    R15,8                                                    CLR00890
+         B     IOEXIT             RETURN WITH ERROR CODE                CLR00900
+*                                                                       CLR00910
+         DS    0D                                                       CLR00920
+CCWCLEAR DC    AL1(DGCLEAR),AL3(0),AL1(SILI),X'FF',AL2(1)               CLR00930
+SENSECCW CCW   IOSENSE,SENSAREA,SILI,1                                  CLR00940
+SENSAREA DC    X'00'                                                    CLR00950
+CONSADDR DC    F'0'                                                     CLR00960
+*                                                                       CLR00970
+@FM1     DC    F'-1'                                                    CLR00980
+@F0      DC    F'0'                                                     CLR00990
+*                                                                       CLR01000
+CD       EQU   X'80'  CHAIN DATA                                        CLR01010
+CC       EQU   X'40'  CHAIN COMMAND                                     CLR01020
+SILI     EQU   X'20'  SUPRS INC LEN                                     CLR01030
+SKIP     EQU   X'10'  SKIP TRANSFER                                     CLR01040
+*                     DIAG 58 EQUATES                                   CLR01050
+IOSENSE  EQU   X'04'  SENSE OPERATION                                   CLR01060
+DGCLEAR  EQU   X'19'  CLEAR (NON-FULL SCREEN)                           CLR01070
+DGWRITE  EQU   X'29'  WRITE                                             CLR01080
+DGREAD   EQU   X'2A'  READ                                              CLR01090
+*                                                                       CLR01100
+CSWUS    EQU   X'44'               UNIT STATUS ADDRESS                  CLR01110
+CSWUSCP  EQU   X'8E'               UNIT STATUS RETN'D BY CP IF CP READ  CLR01120
+CSWUSOK  EQU   X'0C'               NORMAL UNIT STATUS                   CLR01130
+CSWUSATN EQU   X'80'               ATTENTION STATUS                     CLR01140
+*                                                                       CLR01150
+CSWCS    EQU   X'45'               CHANNEL STATUS ADDRESS               CLR01160
+CSWCOUNT EQU   X'46'               RESIDUAL COUNT ADDRESS               CLR01170
+*                                                                       CLR01180
+         LTORG                                                          CLR01190
+*                                                                       CLR01200
+         END                                                            CLR01210
+                                                                        CLR01220
+*** CREATED 12/30/88 14:32:27 BY TRX/LEN ***                            CLR01230
+                                                                        CLR01240
+ 
