@@ -164,7 +164,8 @@ Now also with SSL and pub/priv key support!
 
 <h1>IUCVTRAP</h1>
 <br>
-This is a IUCVTRAP implementation for VM/SP and VM/XA. It assembles fine and it is a better WAKEUP for VM. XYZZY can be made to work with this. Check out the source. 
+This is a IUCVTRAP implementation for VM/SP and VM/XA. It assembles fine and it is a better WAKEUP for VM. XYZZY can be made to work with this. Check out the source. <br>
+Included is also iucvtrap_VMsp3.vmarc which is a version that assembles cleanly on VM/SP r3-r5. 
 <br><br>Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
