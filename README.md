@@ -167,6 +167,26 @@ Now also with SSL and pub/priv key support!
 This is a IUCVTRAP implementation for VM/SP and VM/XA. It assembles fine and it is a better WAKEUP for VM. XYZZY can be made to work with this. Check out the source. <br>
 Included is also iucvtrap_VMsp3.vmarc which is a version that assembles cleanly on VM/SP r3-r5. 
 <br><br>Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
+<h1>SUPERMSG</h1>
+<br>
+This command retreives data from the IUCV  *MSG system service. Through
+judicious use of options on the CP SET command, some or all virtual machine
+console traffic can be directed to the *MSG system service and subsequently
+processed by an exec or program.
+Also handels output of virtual machine commands (e.g.  LISTDS, MACLIB, TSTLIB
+etc.) which do not provide a stack option.<br>
+Author: Barry Leiba<br>
+ IBM Corporation, Building 181, 2p23, F.S.D. 18100 Frederick Pike<br>
+ Gaithersburg, MD. 20879<br>
+    SUPERMSG SCRIPT   B1 V         68         40          2<br>
+    SUPERMSG MODULE   B2 V       3832          3          4<br>
+    SUPERMSG MACLIB   B2 F         80        454         36<br>
+    SUPERMSG LISTING  B1 F        121       3445        408<br>
+    SUPERMSG HELPCMS  B1 F         80        211         17<br>
+    MH       EXEC     B2 V        119        144          4<br>
+    CPSET    EXEC     B2 V         53         29          1<br>
+    SUPERMSG ASSEMBLE B1 F         80        634         50<br>
+Date: 86 04 08<br>
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
 UPDATED:November 19, 2023 - Milan<br>
