@@ -2,12 +2,18 @@
 /*                                                                    */
 /*                       ++  X  Y  Z  Z  Y  ++                        */
 /*                          ---------------                           */
-/*                            Release 2.5                             */
+/*                            Release 2.6                             */
 /*                     A "Deluxe" Chatting Exec                       */
 /*          Created by David Bolen (Mithrandir) - DB3L@CMUCCVMA       */
 /*             Copyright (c) 1986,1987 - All Rights Reserved          */
-/*              Requires: XYZIUCV MODULE  and one of                  */
+/*             Copyright (c) 2023  by moshix for enhacements          */
+/*              Requires: WAKEUP  MODULE  and one of                  */
 /*                        VMFCLEAR MODULE / CLRSCRN MODULE            */
+/*                                                                    */
+/*                       Made to work with normal WAKEUP              */
+/*                              in 2023 by moshix                     */
+/*                           and enhanced for RELAY CHAT              */
+/*                                                                    */
 /*                                                                    */
 /*  Special thanks to the following people for help with both initial */
 /*  debugging and for testing later releases:                         */
@@ -25,41 +31,36 @@
 /*                                                                    */
 /*  Refer to end of exec for Program History.                         */
 /*--------------------------------------------------------------------*/
- 
+
 parse arg parameters
 signal on halt
 signal on syntax
 TimerInit = time('R')
 call Initialize
- 
+
 /*--------------------------------------------------------------------*/
 /*                         Main Program Loop                          */
 /*--------------------------------------------------------------------*/
 do forever
-  'xyziucv wait 60'
+ 'wakeup +60 (iucvmsg QUIET'
+/*'xyziucv wait 60'*/
   msgtype = rc
-  if (setting.clock = 'Y') | (clock_alarm ^= '') then
+  if (setting.clock = 'Y') | (clock_alarm ¬= '') then
     call clock_tick
-  if msgtype = clockend then iterate
+  if rc      = 2        then iterate
   parse pull line
-  select
-    when (msgtype = console) then
-      call Outgoing line
-    when (msgtype = normal) then
-      call Incoming line
-    otherwise
-      call Confused line
-  end /* select */
+  if rc = 5 then call Incoming line
+                 call Outgoing line   /* must be outgoing */
   HookReturn = 0; HookUser = '' /* reset any possible hook */
 end /* do forever */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*   Routine to convert any legal "id" into an internal id "packet"   */
 /*--------------------------------------------------------------------*/
 convert:
-  parse arg conv_line '!' local_nick .
-  if (local_nick ^= '') then convert_cache = ''
+  parse arg conv_line '¬' local_nick .
+  if (local_nick ¬= '') then convert_cache = ''
   conv_count = conv_count + 1
   conv_line = translate(strip(conv_line))
   if (translate(local_nick,'abcdefghijklmnopqrstuvwxyz',,
@@ -67,19 +68,19 @@ convert:
     then upper local_nick
   if (words(conv_line) = 3) & (word(conv_line,2) = 'AT') then
     conv_line = word(conv_line,1)'@'word(conv_line,3)
-  if (index(conv_line,'@') ^= 0) then conv_line = space(conv_line,0)
-  if (words(conv_line) ^= 1) then return 'ERROR'
+  if (index(conv_line,'@') ¬= 0) then conv_line = space(conv_line,0)
+  if (words(conv_line) ¬= 1) then return 'ERROR'
   if (left(conv_line,1) = '.') then return 'ERROR'
- 
+
   cindex = find(convert_cache,conv_line)
-  if (cindex ^= 0) then return word(convert_cache,cindex+1)
+  if (cindex ¬= 0) then return word(convert_cache,cindex+1)
   if ( (words(convert_cache)/2) > setting.convsize ) then
     convert_cache = subword(convert_cache,3)
- 
+
   parse var conv_line conv_user '@' conv_node
   if (conv_user = '') then return 'ERROR'
- 
-  if (index(conv_user,'%') ^= 0) then do
+
+  if (index(conv_user,'%') ¬= 0) then do
     parse var conv_user conv_user '%' rest
     rest = translate(rest,' ','%') conv_node
     conv_node = word(rest,1)
@@ -87,18 +88,18 @@ convert:
     route.conv_node = strip(subword(rest,2))
     if (find(routings,conv_node) = 0) then routings = routings conv_node
   end
-  if (conv_node ^= '') then do
+  if (conv_node ¬= '') then do
     conv_nick  = 'NONE'
     conv_found = 0
     do conv_index = 1 to num_talking
-      parse var talking.conv_index tuser '@' tnode '!' tnick
+      parse var talking.conv_index tuser '@' tnode '¬' tnick
       if (tuser = conv_user) & (tnode = conv_node) then do
         conv_nick  = tnick
         conv_found = 1
         leave conv_index
       end /* if */
     end /* do */
-    if (^conv_found) then do
+    if (¬conv_found) then do
       makebuf ; bufnum = rc
       'namefind :userid' conv_user ':node' conv_node,
                 ':nick (stack file' setting.namefile
@@ -118,10 +119,10 @@ convert:
         cindex = strip(conv_user,'L','0')
         if (local_nick = '') then return talking.cindex
           else do
-            parse var talking.cindex tuser '@' tnode '!' tnick
+            parse var talking.cindex tuser '@' tnode '¬' tnick
             convert_cache = convert_cache conv_line,
-                              tuser'@'tnode'!'local_nick
-            return tuser'@'tnode'!'local_nick
+                              tuser'@'tnode'¬'local_nick
+            return tuser'@'tnode'¬'local_nick
           end
       end
       else if (conv_user < 0) & (-conv_user <= num_ignoring) then do
@@ -133,7 +134,7 @@ convert:
     makebuf ; bufnum = rc
     conv_found = 0
     do conv_index = 1 to num_talking
-      parse var talking.conv_index tuser '@' tnode '!' tnick
+      parse var talking.conv_index tuser '@' tnode '¬' tnick
       if (tuser = conv_user) | (translate(tnick) = conv_user) then do
         conv_user  = tuser
         conv_node  = tnode
@@ -142,7 +143,7 @@ convert:
         leave conv_index
       end /* if */
     end /* do */
-    if (^conv_found) then do
+    if (¬conv_found) then do
       'namefind :nick' conv_user,
                ':nick :userid :node (stack file' setting.namefile
       if (rc = 0) then do
@@ -166,16 +167,16 @@ convert:
     dropbuf bufnum
   end /* check single word */
   dropbuf bufnum
-  if (local_nick ^= '') then conv_nick = local_nick
+  if (local_nick ¬= '') then conv_nick = local_nick
   if (conv_nick = 'NONE') & (translate(conv_line) = 'AUTHOR') then do
     conv_user = author_user;  conv_node = author_node
     conv_nick = translate('David$Bolen$-$XYZZY$Author','01'x,'$')
   end
-  creturn = space(conv_user'@'conv_node'!'conv_nick,0)
+  creturn = space(conv_user'@'conv_node'¬'conv_nick,0)
   convert_cache = convert_cache conv_line creturn
 return creturn
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /* Routine to convert 24 hour time string to something nicer..        */
 /*--------------------------------------------------------------------*/
@@ -183,18 +184,18 @@ convert_time:
   arg hour':'min':'sec
   if left(hour,1) = '0' then hour = right(hour,1)
   if length(min) = 1 then min = '0'min
-  if (sec ^= '') then out1 = ':'sec ; else out1 = ''
+  if (sec ¬= '') then out1 = ':'sec ; else out1 = ''
   select
     when (hour = 0) & (min = 0) then out = 'Midnight'
-    when (hour = 0) & (min ^= 0) then out = 12':'min || out1 'am'
+    when (hour = 0) & (min ¬= 0) then out = 12':'min || out1 'am'
     when (hour = 12) & (min = 0) then out = 'Noon'
     when (hour > 0) & (hour < 12) then out = hour':'min || out1 'am'
     when (hour > 12) then out = (hour-12)':'min || out1 'pm'
     otherwise out = hour':'min || out1 'pm'
   end /* select */
 return out
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /* Clock tick routine - occurs each command or at least once a minute */
 /*--------------------------------------------------------------------*/
@@ -202,11 +203,11 @@ clock_tick:
   clock_time = left(time(),5)
   parse var clock_time hr ':' min
   if (setting.clock = 'Y') then do
-    if ((min > 29) & (min < 33) & (clock_shown ^= 30)) |,
-       ((min < 03) & (clock_shown ^= 00)) then do
-      if (setting.beepcmd ^= '') then
+    if ((min > 29) & (min < 33) & (clock_shown ¬= 30)) |,
+       ((min < 03) & (clock_shown ¬= 00)) then do
+      if (setting.beepcmd ¬= '') then
         interpret "'" || setting.beepcmd || "'"
-      if (setting.beepchar ^= '') then call sendl setting.beepchar
+      if (setting.beepchar ¬= '') then call sendl setting.beepchar
       call sendl ''
       call sendl hi || '****** Time is now:',
                  convert_time(clock_time) '******' || lo
@@ -217,14 +218,14 @@ clock_tick:
         clock_shown = 30
     end /* if */
   end /* if setting.clock */
-  if (clock_alarm ^= '') & (^showed_alarm) then do
+  if (clock_alarm ¬= '') & (¬showed_alarm) then do
     parse var clock_alarm ahr ':' amin
     diff = min - amin
     if (abs(ahr) = abs(hr)) & (diff >= 0) &,
-       (diff < 3) & (^showed_alarm) then do
-      if (setting.beepcmd ^= '') then
+       (diff < 3) & (¬showed_alarm) then do
+      if (setting.beepcmd ¬= '') then
         interpret "'" || setting.beepcmd || "'"
-      if (setting.beepchar ^= '') then call sendl setting.beepchar
+      if (setting.beepchar ¬= '') then call sendl setting.beepchar
       atime = convert_time(clock_time)
       call sendl ''
       call sendl hi || '********************************'|| lo
@@ -236,21 +237,21 @@ clock_tick:
     end /* alarm */
   end
 return /* clock_tick */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*                 Handler for incoming messages                      */
 /*--------------------------------------------------------------------*/
- 
+
 Incoming:
   parse arg in_line
-  if (hook.hooklowlevel.astx ^= '') then do
+  if (hook.hooklowlevel.astx ¬= '') then do
     in_packet = '' ; in_msg = in_line
     call call_hook hook.hooklowlevel.astx
     if HookReturn then return
   end /* if */
   in_line = left(in_line,8) substr(in_line,9)
-  if (word(in_line,1) ^= net_machine) then do
+  if (word(in_line,1) ¬= net_machine) then do
     in_packet = convert(word(in_line,1) '@' xyzzy_node)
     in_msg = subword(in_line,2)
     call incoming_convo in_packet in_msg
@@ -262,10 +263,10 @@ Incoming:
       rest = 'FROM' subword(rest,2)
     if ( (xyzzy_node = 'CLVM') | (xyzzy_node = 'UCSFVM') ) &,
        ( (index(rest,':') <= 10) | (index(rest,'(') <= 10) ) &,
-       ( word(rest,1) ^= 'CPQ:' ) then
+       ( word(rest,1) ¬= 'CPQ:' ) then
      rest = 'FROM' rest
     loc = index(rest,'):')
-    if ( (loc ^= 0) & (loc < index(rest,':')) ) then do
+    if ( (loc ¬= 0) & (loc < index(rest,':')) ) then do
       parse var rest 'FROM' node '(' user '):' in_msg
       in_packet = convert(user'@'node)
       if (in_packet = 'ERROR') then do
@@ -275,27 +276,27 @@ Incoming:
       call incoming_convo in_packet strip(in_msg,'L')
       return
     end /* normal msg */
-    if (index(rest,'FROM') ^= 0) then
+    if (index(rest,'FROM') ¬= 0) then
       parse var rest 'FROM' node ':' in_msg
     else do
       node = xyzzy_node ; in_msg = rest
     end
     node = strip(node)
-    in_packet = 'RSCS@'node'!NONE'   /* for expansion routines */
+    in_packet = 'RSCS@'node'¬NONE'   /* for expansion routines */
     if (find(hook_index.hookrscs,node) = 0) then node = astx
-    if (hook.hookrscs.node ^= '') then
+    if (hook.hookrscs.node ¬= '') then
       call call_hook hook.hookrscs.node
     if HookReturn then return
- 
+
     select
-      when (index(rest,'CPQ:') ^= 0) then do
+      when (index(rest,'CPQ:') ¬= 0) then do
         call incoming_query rest
       end /* incoming query */
-      when (index(rest,'SPOOLED') ^= 0)&(index(rest,'ORG') ^= 0) then do
+      when (index(rest,'SPOOLED') ¬= 0)&(index(rest,'ORG') ¬= 0) then do
         call incoming_file rest
       end /* incoming file */
-      when (index(translate(rest),'FILE') ^= 0) |,
-           (index(translate(rest),'SENT ON LINK') ^= 0)
+      when (index(translate(rest),'FILE') ¬= 0) |,
+           (index(translate(rest),'SENT ON LINK') ¬= 0)
        then do   /* second check was so we also trap MVS messages */
         call file_transmission rest
       end /* file transmission */
@@ -305,8 +306,8 @@ Incoming:
     end /* select */
   end /* else */
 return /* Incoming */
- 
- 
+
+
 /* handle incoming messages */
 incoming_convo:
   parse arg in_packet in_msg
@@ -322,14 +323,14 @@ incoming_convo:
   end /* if */
   ilocate = locate('ignoring' in_packet)
   tlocate = locate('talking' in_packet)
-  parse var in_packet hindex '!' .
+  parse var in_packet hindex '¬' .
   hook_cmd = ''
-  if (tlocate ^= 0) then do
+  if (tlocate ¬= 0) then do
     hook_cmd = hook.hooktalking.hindex
     if (find(hook_index.hooktalking,hindex) = 0) then
       hook_cmd = hook.hooktalking.astx
   end
-  if (ilocate ^= 0) then do
+  if (ilocate ¬= 0) then do
     hook_cmd = hook.hookignoring.hindex
     if (find(hook_index.hookignoring,hindex) = 0) then
       hook_cmd = hook.hookignoring.astx
@@ -339,7 +340,7 @@ incoming_convo:
     if (find(hook_index.hookmessage,hindex) = 0) then
       hook_cmd = hook.hookmessage.astx
   end
-  if (hook_cmd ^= '') then
+  if (hook_cmd ¬= '') then
     call call_hook hook_cmd
   if HookReturn then return
   test = author_user'@'author_node
@@ -347,17 +348,17 @@ incoming_convo:
     then do
       tlocate = 1  ;  in_msg = substr(in_msg,2)
     end
-  if ((setting.ignoreall = 'N') & (ilocate = 0)) | (tlocate ^= 0) then do
+  if ((setting.ignoreall = 'N') & (ilocate = 0)) | (tlocate ¬= 0) then do
     if ((setting.timemark = 'Y') &,
        ((time('E') - old_time) > setting.timedelay)) then
       call display 'NODISPLAY' '('date() '-' time()')'
     old_time = time('E')
     call display in_packet in_msg
   end /* not ignoring */
-  else if (left(word(in_msg,1),1) ^= '*') then do
-    parse var in_packet log_user '@' log_node '!' log_nick
+  else if (left(word(in_msg,1),1) ¬= '*') then do
+    parse var in_packet log_user '@' log_node '¬' log_nick
     log_string = date() time()
-    if (log_nick ^= 'NONE') then
+    if (log_nick ¬= 'NONE') then
       log_string = log_string 'from' log_nick ': '
     else
       log_string = log_string 'from' '('log_node')'log_user ': '
@@ -365,7 +366,7 @@ incoming_convo:
       'EXECIO 1 DISKW XYZZY IGNLOG A0 (FINIS STRING' log_string in_msg
       ignore_logged = 1   /* at least one message has been logged */
     end /* if log message */
-    if (log_node ^= old_log_node) | (log_user ^= old_log_user) |,
+    if (log_node ¬= old_log_node) | (log_user ¬= old_log_user) |,
        ((time('E') - old_log_time) > setting.igndelay) then do
       old_log_node = log_node
       old_log_user = log_user
@@ -385,7 +386,7 @@ incoming_convo:
     old_log_time = time('E')
   end /* ignoring */
 return /* incoming_msg */
- 
+
 /* Handler for incoming query returns */
 incoming_query:
   parse arg line
@@ -398,7 +399,7 @@ incoming_query:
     parse var rest 'FROM' node ':' 'CPQ:' user extra
   end /* else */
   qlocate = index(user,'-')
-  if (qlocate ^= 0) & (length(user) > 8) then do
+  if (qlocate ¬= 0) & (length(user) > 8) then do
     extra = substr(user,qlocate) extra
     user = substr(user,1,qlocate-1)
   end /* if */
@@ -414,8 +415,8 @@ incoming_query:
     return
   end /* if error */
   display_allowed = 0
-  if (index(extra,'DSC') ^= 0) then dsc = 1 ; else dsc = 0
-  if (index(extra,'NOT') ^= 0) then not = 1 ; else not = 0
+  if (index(extra,'DSC') ¬= 0) then dsc = 1 ; else dsc = 0
+  if (index(extra,'NOT') ¬= 0) then not = 1 ; else not = 0
   if (setting.querydsc = 'Y') & (dsc) then do
     extra = 'Disconnected'
     display_allowed = 1
@@ -424,8 +425,8 @@ incoming_query:
     extra = 'Not logged in'
     display_allowed = 1
   end /* if not logged on */
-  else if (setting.querylog = 'Y') & (^dsc) & (^not) then do
-    if (index(extra,'-') ^= 0) then
+  else if (setting.querylog = 'Y') & (¬dsc) & (¬not) then do
+    if (index(extra,'-') ¬= 0) then
       extra = 'Logged in ('strip(substr(extra,index(extra,'-')+1))')'
     else
       extra = 'Logged in ('strip(substr(extra,index(extra,' ')+1))')'
@@ -438,22 +439,22 @@ incoming_query:
     setting.rnick = old_setting
   end /* if */
 return /* incoming_query */
- 
+
 /* Routine to handle incoming file messages */
 incoming_file:
   parse arg 'FILE (' file_id ')' . 'ORG ' from_node,
             '(' from_user ')' from_info
   file_packet = convert(from_user'@'from_node)
-  parse var file_packet user '@' node '!' nick
-  if (nick ^= 'NONE') then header = nick
+  parse var file_packet user '@' node '¬' nick
+  if (nick ¬= 'NONE') then header = nick
     else header = user'@'node
   old_show = setting.shownick
   setting.shownick = 'Y'
-  call display 'junk@junk!Received',
+  call display 'junk@junk¬Received',
              'File' file_id 'from' header', sent' from_info
   setting.shownick = old_show
 return /* incoming_file */
- 
+
 /* Routine to handle file transmission messages */
 file_transmission:
   parse arg rest
@@ -472,7 +473,7 @@ file_transmission:
   if right(remain,9) = 'NOT FOUND' then do
     parse var remain 'FILE' orgid 'NOT FOUND'
     orgid = strip(orgid)
-    if (file_query.orgid ^= 'FILE_QUERY.'orgid) then do
+    if (file_query.orgid ¬= 'FILE_QUERY.'orgid) then do
       drop file_query.orgid
       return
     end
@@ -502,9 +503,9 @@ file_transmission:
       parse var info 'LINK' pndlink
       if (files.orgid = '') then
         files_index = files_index orgid
-      if (files.orgid ^= '') then
+      if (files.orgid ¬= '') then
         parse var files.orgid '(' destuser '@' destnode .
-      if (destuser ^= '') then more = ', destination',
+      if (destuser ¬= '') then more = ', destination',
                                strip(destuser)' @ 'strip(destnode)
         else more = ''
       files.orgid = 'Pending on link' strip(pndlink) || more
@@ -512,7 +513,7 @@ file_transmission:
     end /* pending */
     when (stat = 'ON') & (left(prefix,4) = 'SENT') then do
       parse var info 'LINK' link ' TO ' destination
-      if (index(destination,'(') ^= 0) then
+      if (index(destination,'(') ¬= 0) then
         parse var destination destnode'('destuser')' .
       else
         parse var destination destnode destuser
@@ -526,12 +527,12 @@ file_transmission:
         files.orgid = '* Reached destination ('destuser' @ 'destnode')'
         files_time.orgid = dtime
         if (setting.fnotify = 'Y') then do
-          if (files_header.orgid ^= files_header.default) then
+          if (files_header.orgid ¬= files_header.default) then
             info = subword(files_header.orgid,1,2)
           else info = 'id' orgid
           beep_prefix = ''
           if (setting.beep = 'Y') then do
-            if (setting.beepcmd ^= '') then
+            if (setting.beepcmd ¬= '') then
               interpret "'" || setting.beepcmd || "'"
             beep_prefix = setting.beepchar
           end
@@ -547,7 +548,7 @@ file_transmission:
     end /* file sent across link */
     when (stat = 'ON') & (left(prefix,6) = 'UNABLE') then do
       parse var info 'LINK' link 'TO' destination
-      if (index(destination,'(') ^= 0) then
+      if (index(destination,'(') ¬= 0) then
         parse var destination destnode'('destuser')' .
       else
         parse var destination destnode destuser
@@ -570,7 +571,7 @@ file_transmission:
         parse var rest 'FILE' orgid 'PR' priority 'CL',
                        class . 'NA' fn ft .
         orgid = strip(orgid) ; priority = strip(priority)
-        if (file_query.orgid ^= 'FILE_QUERY.'orgid) then  do
+        if (file_query.orgid ¬= 'FILE_QUERY.'orgid) then  do
           files_header.orgid = fn ft', Priority' priority', Class' class
           drop file_query.orgid
         end
@@ -588,7 +589,7 @@ file_transmission:
     setting.jmsg = oldsetting
   end
 return /* file_transmission */
- 
+
 /* Routine to handle incoming general rscs messages */
 incoming_rscs:
   parse arg rscs_msg
@@ -596,23 +597,23 @@ incoming_rscs:
     return
   rindex = index(translate(rscs_msg),'FROM')
   from = xyzzy_node
-  if (rindex ^= 0) then do
+  if (rindex ¬= 0) then do
     rscs_msg = substr(rscs_msg,rindex+4)
     parse var rscs_msg from ':' rscs_msg
     from = strip(from) ; rscs_msg = strip(rscs_msg)
   end /* if */
   if left(word(rscs_msg,1),3) = 'DMT' then
     rscs_msg = subword(rscs_msg,2)
-  call display '@'from'!('from')' strip(rscs_msg)
+  call display '@'from'¬('from')' strip(rscs_msg)
 return /* incoming_rscs */
- 
- 
+
+
 /* Routine to handle the linking to an external HOOK */
 call_hook:
   parse arg command
   hookqueue = queued()
-  parse var in_packet usernode '!' .
-  if (index(command,setting.expandch) ^= 0) then
+  parse var in_packet usernode '¬' .
+  if (index(command,setting.expandch) ¬= 0) then
       cmd = expand_line(command)
   else
       cmd = command usernode in_msg
@@ -625,29 +626,29 @@ call_hook:
   end
   enable_output = 1
 return /* call_hook */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*    Routine to expand a line (using user/node macro characters)     */
 /*--------------------------------------------------------------------*/
 Expand_Line:
   parse arg out_line
   new_line = ''
-  if (current > 0) then xpacket = talking.current ; else xpacket = '@!'
-  parse var in_packet luser '@' lnode '!' lnick
+  if (current > 0) then xpacket = talking.current ; else xpacket = '@¬'
+  parse var in_packet luser '@' lnode '¬' lnick
   location = index(out_line,setting.expandch,1)
-  do while (location ^= 0)
+  do while (location ¬= 0)
     new_line = new_line || left(out_line,location-1)
     comd = substr(out_line,location+1,2) ; xid = ''
     out_line = substr(out_line,location+3)
-    if (translate(left(comd,1)) = 'I') & (index(out_line,'.') ^= 0) &,
-       (index('FUNK',translate(substr(comd,2,1))) ^= 0) then do
+    if (translate(left(comd,1)) = 'I') & (index(out_line,'.') ¬= 0) &,
+       (index('FUNK',translate(substr(comd,2,1))) ¬= 0) then do
       parse var out_line xid '.' out_line
       cmd = 'C' || translate(substr(comd,2))
     end /* if */
       else cmd = translate(comd)
-    if (xid = '') then parse var xpacket xuser '@' xnode '!' xnick
-      else parse value convert(xid) with xuser '@' xnode '!' xnick
+    if (xid = '') then parse var xpacket xuser '@' xnode '¬' xnick
+      else parse value convert(xid) with xuser '@' xnode '¬' xnick
     select
       when (left(comd,1) = setting.expandch) then
         new_line = new_line || comd
@@ -665,15 +666,15 @@ Expand_Line:
       when (cmd = 'LM') then new_line = new_line || in_msg
       otherwise do
         new_line = new_line || setting.expandch || comd
-        if (xid ^= '') then new_line = new_line || xid || '.'
+        if (xid ¬= '') then new_line = new_line || xid || '.'
       end /* otherwise */
     end /* select */
     location = index(out_line,setting.expandch,1)
   end /* while */
   new_line = new_line || out_line
 return new_line /* expand_line */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*      Handler for outgoing messages (messages typed on console)     */
 /*--------------------------------------------------------------------*/
@@ -704,28 +705,28 @@ Outgoing:
     end /* otherwise */
   end /* select */
 return /* Outgoing */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*            Routine to send out a message to someone                */
 /*--------------------------------------------------------------------*/
 send:
   parse arg send_info send_msg
-  parse var send_info send_user '@' send_node '!' send_nick
+  parse var send_info send_user '@' send_node '¬' send_nick
   OkToWrap = 1 ; OkToPrefix = 1
   special = setting.nowrap || setting.noprefix
-  do while (index(special,left(send_msg,1),1) ^= 0)
+  do while (index(special,left(send_msg,1),1) ¬= 0)
     if (left(send_msg,1) = setting.nowrap) then OkToWrap = 0
     if (left(send_msg,1) = setting.noprefix) then OkToPrefix = 0
     send_msg = right(send_msg,length(send_msg)-1)
   end /* while */
   send_prefix = setting.mprefix
-  if ( ((index(send_user,'RELAY') ^= 0) |,
-        (index(translate(send_nick),'RELAY') ^= 0))  &,
-        (setting.rprefix = 'Y') ) | ^(OkToPrefix) then
+  if ( ((index(send_user,'RELAY') ¬= 0) |,
+        (index(translate(send_nick),'RELAY') ¬= 0))  &,
+        (setting.rprefix = 'Y') ) | ¬(OkToPrefix) then
      send_prefix = ''
   send_msg = strip(send_prefix send_msg)
-  if (setting.history ^= 0) then
+  if (setting.history ¬= 0) then
     call add_history 'ME' send_info send_msg
   if (translate(left(send_msg,2)) = '/M') then do
     private_header = subword(send_msg,1,2)
@@ -735,12 +736,12 @@ send:
     private_header = ''
   to_rscs = net_machine
   maxout = setting.outsize
-  if (find(routings,send_node) ^= 0) | (left(routings,1) = '*') then
+  if (find(routings,send_node) ¬= 0) | (left(routings,1) = '*') then
     do i = words(route.send_node) to 1 by -1
       to_rscs = to_rscs 'CMD' word(route.send_node,i)
     end
   header = send_node send_user private_header
-  if (maxout ^= 0) & (OkToWrap) then
+  if (maxout ¬= 0) & (OkToWrap) then
     do while (length(send_msg) > maxout)
       if (maxout <= 10) then start = 1
         else start = maxout - 10
@@ -760,8 +761,8 @@ send:
   else
     address command cp 'SMSG' to_rscs 'MSG' header send_msg
 return /* send */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*          Routine to display a message to the user (local)          */
 /*--------------------------------------------------------------------*/
@@ -771,38 +772,38 @@ sendl:
     if (HookUser = '') then say sendl_msg
       else call send HookUser sendl_msg
 return /* sendl */
- 
+
 /*--------------------------------------------------------------------*/
 /*      Routine to display a message from someone on the screen       */
 /*--------------------------------------------------------------------*/
 display:
   parse arg display_info display_msg
   display_msg = strip(display_msg)
-  if (setting.history ^= 0) then
+  if (setting.history ¬= 0) then
     call add_history display_info display_msg
-  parse var display_info display_user '@' display_node '!' display_nick
-  if ((index(display_user,'RELAY') ^= 0) |,
-      (index(translate(display_nick),'RELAY') ^= 0))  &,
+  parse var display_info display_user '@' display_node '¬' display_nick
+  if ((index(display_user,'RELAY') ¬= 0) |,
+      (index(translate(display_nick),'RELAY') ¬= 0))  &,
      (setting.rnick = 'N') then
         header = ''
   else if (display_info = 'NODISPLAY') then
     header = ''
-  else if (left(display_nick,4) ^= 'NONE') &,
+  else if (left(display_nick,4) ¬= 'NONE') &,
           (setting.shownick = 'Y') then
              header = display_nick ':'
   else if (setting.dispform = 'Y') then
     header = '(' || display_node || ')' || display_user ':'
   else
     header = display_user '@' display_node ':'
- 
+
   if ((setting.beep = 'Y') &,
      ((time('E') - old_beep) > setting.beepdelay)) then do
-    if (setting.beepcmd ^= '') then
+    if (setting.beepcmd ¬= '') then
       interpret "'" || setting.beepcmd || "'"
-    if (setting.beepchar ^= '') then call sendl setting.beepchar
+    if (setting.beepchar ¬= '') then call sendl setting.beepchar
   end /* if */
   old_beep = time('E')
- 
+
   hprefix = ''
   do while (length(display_msg) > setting.insize)
     if (setting.insize <= 10) then start = 1
@@ -815,16 +816,16 @@ display:
   end /* do */
   call disp_msg display_msg
 return /* display */
- 
+
 /* Used by display to actually show message */
 disp_msg:
   parse arg msg
-  if (header ^= '') then front = header || hprefix
+  if (header ¬= '') then front = header || hprefix
     else front = strip(hprefix)
-  if (front ^= '') then call sendl hi || front || lo || msg
+  if (front ¬= '') then call sendl hi || front || lo || msg
     else call sendl msg
 return
- 
+
 /* routine to add another line to the history saved */
 add_history:
   parse arg argument
@@ -837,7 +838,7 @@ add_history:
   temp = history_base + history_saved
   history.temp = argument
 return /* add_history */
- 
+
 /*--------------------------------------------------------------------*/
 /*      Routine to find a name packet in an array of name packets     */
 /*--------------------------------------------------------------------*/
@@ -848,7 +849,7 @@ locate:
   select
     when (find_type = 'TALKING') then do
       do while (index <= num_talking) & (found = 0)
-        flocate = index(talking.index,'!')
+        flocate = index(talking.index,'¬')
         if translate(left(talking.index,flocate-1)) =,
            translate(left(find_item,flocate-1))
           then found = index
@@ -858,7 +859,7 @@ locate:
     when (find_type = 'IGNORING') then do
       do while (index <= num_ignoring) & (found = 0)
         flocate = index(ignoring.index,'*')
-        if (flocate = 0) then flocate = index(ignoring.index,'!')
+        if (flocate = 0) then flocate = index(ignoring.index,'¬')
         if translate(left(ignoring.index,flocate-1)) =,
            translate(left(find_item,flocate-1))
           then found = index
@@ -868,8 +869,8 @@ locate:
     otherwise nop
   end /* select */
 return found /* locate */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*     Routine to add a new name packet into the specified name set   */
 /*--------------------------------------------------------------------*/
@@ -880,8 +881,8 @@ add:
   string = add_type'.num_'add_type '= add_item'
   interpret string
 return /* add */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*     Routine to delete a name packet from the specified name set    */
 /*--------------------------------------------------------------------*/
@@ -890,7 +891,7 @@ delete:
   string = 'del_num = num_'del_type
   interpret string
   spot = locate(del_type del_item)
-  if (spot ^= 0) then do
+  if (spot ¬= 0) then do
     do index = spot to del_num
       string = del_type'.'index '=' del_type'.'index+1
       interpret string
@@ -900,8 +901,8 @@ delete:
     convert_cache = ''
   end /* if */
 return /* delete */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*         Routine to expand a packet into a displayable line         */
 /*--------------------------------------------------------------------*/
@@ -915,27 +916,27 @@ expand:
     exp_return = 'CMS (all msgs are cms commands)'
   else do
     elocate = index(exp_packet,'*')
-    if (elocate ^= 0) then do
+    if (elocate ¬= 0) then do
       exp_return = 'All users with ids beginning in',
                    substr(exp_packet,1,elocate-1)
     end /* if */
     else do
-      parse var exp_packet user '@' node '!' nick
-      if (nick ^= 'NONE') then suffix = ' ('nick')'; else suffix = ''
+      parse var exp_packet user '@' node '¬' nick
+      if (nick ¬= 'NONE') then suffix = ' ('nick')'; else suffix = ''
       exp_return = user '@' node suffix
     end /* else */
   end /* else if defined */
 return exp_return /* expand_packet */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*          Handler for confusing messages from XYZIUCV               */
 /*--------------------------------------------------------------------*/
 confused:
   arg confused_line
-  call warning 'Invalid return from XYZIUCV:' confused_line
+  call warning 'Invalid RETURN from XYZIUCV:' confused_line
 return /* confused */
- 
+
 /*--------------------------------------------------------------------*/
 /*               Parser for program (.) commands                      */
 /*--------------------------------------------------------------------*/
@@ -950,14 +951,14 @@ parse_command:
     parguments = subword(arguments,3)
   end /* if */
   upper comnd
-  if (abbrev('XYZZY',comnd,1)) & (debug_mode ^= 0) then do
+  if (abbrev('XYZZY',comnd,1)) & (debug_mode ¬= 0) then do
     call cmd_xyzzy arguments ; return
   end
-  parse value convert(pcomnd) with puser '@' pnode '!' pnick
-  if (puser ^= 'ERROR') &,
-     ((pnick ^= 'NONE') |,
-      (pnode ^= xyzzy_node) |,
-      (index(pcomnd,'@') ^= 0) |,
+  parse value convert(pcomnd) with puser '@' pnode '¬' pnick
+  if (puser ¬= 'ERROR') &,
+     ((pnick ¬= 'NONE') |,
+      (pnode ¬= xyzzy_node) |,
+      (index(pcomnd,'@') ¬= 0) |,
       (datatype(pcomnd) = 'NUM') |,
       (match_command(comnd) = 'NONE')),
   then do
@@ -966,15 +967,15 @@ parse_command:
     arguments = pcomnd parguments
   end /* if .id */
   routine = match_command(comnd)
-  if (routine ^= 'NONE') then do
+  if (routine ¬= 'NONE') then do
     string = 'call cmd_'routine 'arguments'
     interpret string
   end /* if */
   else
     call error 'Invalid command:' comnd
 return /* parse_command */
- 
- 
+
+
 /* Routine to return the variable command set to the matched command */
 /* or equal to 'NONE' if no command match was found                  */
 match_command:
@@ -984,7 +985,7 @@ match_command:
     then return 'NONE'
   else index = cmd_index.schar
   found = 0
-  do while (cmd.index ^= "CMD."index) & (^found)
+  do while (cmd.index ¬= "CMD."index) & (¬found)
     command = cmd.index
     min_char=verify(command,alphacaps)-1
     if min_char=-1 then min_char=length(command)
@@ -993,11 +994,11 @@ match_command:
       found = 1
     index=index+1
   end /* do */
-  if (^found) then return 'NONE'
+  if (¬found) then return 'NONE'
 else
 return command
- 
- 
+
+
 /* Debugging command - not referenced in HELP */
 cmd_xyzzy:
   parse arg line
@@ -1009,8 +1010,8 @@ cmd_xyzzy:
     signal on syntax
   end
 return /* cmd_xyzzy */
- 
- 
+
+
 /* Exit back to CMS */
 cmd_exit:     /* exit and stop are same commands.. also come here */
 cmd_stop:     /* upon program interrupt (halt:)                   */
@@ -1030,19 +1031,20 @@ halt:
   'set msg on'
   'set imescape' old_imescape
   'set timer on'    /* since our timer use changes it to REAL */
-  if (oldpf.1 ^= 'OLDPF.1') then do
+  if (oldpf.1 ¬= 'OLDPF.1') then do
     'CP SET' oldpf.1  /* restore used PFkeys */
     'CP SET' oldpf.3
   end
   'set cmstype ht'
-  'xyziucv stop'
+  'WAKEUP RESET'
+/*'xyziucv stop'*/
   'state GLOBALV MODULE *'
   saverc = rc
   'set cmstype rt'
   if (saverc = 0) then do
     'globalv select xyzzy purge'
     if (current > 0) then do
-      temp = index(talking.current,'!')-1
+      temp = index(talking.current,'¬')-1
       if (temp = -1) then temp = length(talking.current)
       parameters = left(talking.current,temp)
       'globalv select xyzzy put parameters'
@@ -1055,15 +1057,15 @@ halt:
   else
     exit 0
 return /* cmd_exit - just for completeness */
- 
+
 /* general help routine */
 cmd_help:
 cmd_?:
   arg arguments
   check = match_command(arguments)
-  if (check ^= 'NONE') then do
+  if (check ¬= 'NONE') then do
     index = 1
-    do while (cmd.index ^= check)
+    do while (cmd.index ¬= check)
       index = index + 1
     end
     call sendl hi || left(cmd.index,10) || lo ' -- ' help.index
@@ -1075,7 +1077,7 @@ cmd_?:
     call sendl left('',27) hi 'XYZZY Commands' lo
     call sendl ''
     index = 1; displayed = 0; line = ''
-    do while (cmd.index ^= 'CMD.'index)
+    do while (cmd.index ¬= 'CMD.'index)
       line = line || left(cmd.index,15)
       displayed = displayed + 1
       if (displayed // 5 = 0) then do
@@ -1083,7 +1085,7 @@ cmd_?:
       end
       index = index + 1;
     end
-    if (line ^= '') then call sendl '     'line
+    if (line ¬= '') then call sendl '     'line
     call sendl ''
     call sendl '     Use  HELP * for full listing'
     call sendl '          HELP xxx* for listing of commands starting',
@@ -1100,7 +1102,7 @@ cmd_?:
     call sendl 'may be used:'
     call sendl ''
     index = 1
-    do while (ihelp.index ^= 'IHELP.'index)
+    do while (ihelp.index ¬= 'IHELP.'index)
       call sendl '     'ihelp.index
       index = index + 1
     end
@@ -1109,7 +1111,7 @@ cmd_?:
   if right(arguments,1) = '*' then
     arguments = left(arguments,length(arguments)-1)
   index = 1; displayed = 0;
-  do while (cmd.index ^= 'CMD.'index)
+  do while (cmd.index ¬= 'CMD.'index)
     if (arguments = '') |,
        (left(translate(cmd.index),length(arguments))=arguments) then do
       if (displayed//8 = 0) then do
@@ -1124,12 +1126,12 @@ cmd_?:
       call sendl hi || left(cmd.index,10) || lo ' -- ' help.index
       call sendl left('',20) 'Syntax:' syntax.index
       displayed = displayed + 1
-      if (displayed//8 = 0) & (cmd.index ^= '?') then do
+      if (displayed//8 = 0) & (cmd.index ¬= '?') then do
         call sendl ' '
         call sendl left('',12),
                    hi 'Press ENTER for more or continue typing to end' lo
         pull junk
-        if (junk ^= '') then do
+        if (junk ¬= '') then do
           interpret clear_module
           call outgoing junk
           return
@@ -1143,21 +1145,21 @@ cmd_?:
   else
     call sendl '-- End of List --'
 return /* help */
- 
- 
+
+
 /* routine to expand a routing string into a displayable one */
 routing:
   arg node
   out = ''
-  if (route.node ^= 'ROUTE.'node) then do
+  if (route.node ¬= 'ROUTE.'node) then do
     do r = words(route.node) to 1 by -1
       out = out || word(route.node,r) || '->'
     end
     return left(out,length(out)-2)
   end
 return 'No routing exists.'  /* default - routing */
- 
- 
+
+
 /* List users known to the program */
 cmd_list:
   arg arg1
@@ -1184,8 +1186,8 @@ cmd_list:
       do index = 1 to num_talking
         if (index = current) then prefix = hi'*'
           else prefix =' 'lo
-        parse var talking.index . '@' unode '!' .
-        if (find(routings,unode) ^= 0) then
+        parse var talking.index . '@' unode '¬' .
+        if (find(routings,unode) ¬= 0) then
           extra = '  Routing:' routing(unode)
         else extra = ''
         call sendl prefix left(index,2) || ') ' expand(talking.index),
@@ -1207,15 +1209,15 @@ cmd_list:
     end /* else */
   end /* if ignoring */
 return /* cmd_list */
- 
+
 /* Routine to check that a * wildcard isn't used in an "id" when */
 /* the id isn't being used in the ignoring list                  */
 check_wildcard:
   arg wild_id
-  if (index(wild_id,'*') ^= 0) then
+  if (index(wild_id,'*') ¬= 0) then
     return 1
 return 0 /* check_wildcard */
- 
+
 /* Routine to add a new user to list */
 cmd_add:
   parse arg arguments
@@ -1223,7 +1225,7 @@ cmd_add:
   location = locate('talking' new_packet)
   if (new_packet = 'ERROR') | (check_wildcard(arguments)) then
     call error 'Illegal id specified during Add.'
-  else if (location ^= 0) then do
+  else if (location ¬= 0) then do
     call error 'Id already in list as #'location'.'
   end /* else */
   else do
@@ -1232,8 +1234,8 @@ cmd_add:
     call check_other 'ignoring' new_packet
   end /* else */
 return /* cmd_add */
- 
- 
+
+
 bump_current:
   arg blocation
   if (blocation = current) then do
@@ -1252,7 +1254,7 @@ bump_current:
   if (blocation < current) then  /* possibly adjust current */
     current = current - 1
 return /* bump_current */
- 
+
 check_other:
   parse arg type check_packet
   if (type = 'ignoring') then do
@@ -1262,7 +1264,7 @@ check_other:
     extra1 = 'ignore' ; extra2 = 'talking to'
   end /* else */
   clocation = locate(type check_packet)
-  if (clocation ^= 0) then do
+  if (clocation ¬= 0) then do
     call delete type check_packet
     call sendl 'Since you''ve decided to' extra1 expand(check_packet)
     call sendl 'who you are also' extra2', I''ve removed the user from',
@@ -1271,8 +1273,8 @@ check_other:
       call bump_current clocation
   end /* if */
 return /* check_ignore */
- 
- 
+
+
 /* Routine to delete a person from the list */
 cmd_delete:
   arg arguments
@@ -1296,13 +1298,13 @@ cmd_delete:
   call sendl expand(del_packet) 'has been removed from the talking list.'
   call bump_current location
 return /* cmd_delete */
- 
- 
+
+
 /* function to check if a given string is a valid setting abbrev */
 check_setting:
   arg check_option
   check_index = 1 ; check_found = 0
-  do while (check_index <= words(settings)) & (^check_found)
+  do while (check_index <= words(settings)) & (¬check_found)
     cset = word(settings,check_index)
     min_char=verify(cset,alphacaps)-1
     if min_char=-1 then min_char=length(cset)
@@ -1311,10 +1313,10 @@ check_setting:
       check_found=1
     check_index = check_index+1
   end /* do */
-  if ^check_found then return 'ERROR'
+  if ¬check_found then return 'ERROR'
 return cset
- 
- 
+
+
 /* Routine to convert setting into displayable form */
 convert_setting:
   arg setting
@@ -1325,15 +1327,15 @@ convert_setting:
     when (settype.setting = 'N') then
       cvt_value = setting.setting
     when (settype.setting = 'C') then
-      if (verify(setting.setting,xrange('00'x,'3F'x),'M') ^= 0)
+      if (verify(setting.setting,xrange('00'x,'3F'x),'M') ¬= 0)
         then cvt_value = "'" || c2x(setting.setting) || "'x"
       else
         cvt_value = "'" || setting.setting || "'"
     otherwise nop
   end /* select */
 return cvt_value
- 
- 
+
+
 /* Procedure to display the current settings */
 cmd_set:
   parse arg option opt_value '=' rest
@@ -1341,7 +1343,7 @@ cmd_set:
     call cmd_show
     return
   end
-  if (opt_value = '') & (rest ^= '') then opt_value = rest
+  if (opt_value = '') & (rest ¬= '') then opt_value = rest
   opt_value = strip(opt_value)
   new_value = translate(space(opt_value,0))
   option = strip(option)
@@ -1357,14 +1359,14 @@ cmd_set:
   option = translate(set)
   invalid = 1
   select
-    when (settype.option = 'Y') & ^( abbrev('YES',new_value,1) |,
+    when (settype.option = 'Y') & ¬( abbrev('YES',new_value,1) |,
          abbrev('NO',new_value,1) | abbrev('ON',new_value,2) |,
          abbrev('OFF',new_value,2) ) then
       call error 'Invalid setting.  Yes/No or ON/OFF required.'
-    when (settype.option = 'N') & ^(datatype(new_value,'W')) then
+    when (settype.option = 'N') & ¬(datatype(new_value,'W')) then
       call error 'Invalid setting.  Numeric value required.'
     when (settype.option = 'C') & (right(new_value,1) = 'X') then do
-      if ^(datatype(left(new_value,length(new_value)-1),'X')) then
+      if ¬(datatype(left(new_value,length(new_value)-1),'X')) then
         call error 'Invalid hexadecimal string.'
       else invalid = 0
     end
@@ -1390,13 +1392,13 @@ cmd_set:
   if (option = 'HIGH') then hi = setting.high
   if (option = 'LOW') then lo = setting.low
 return /* cmd_set */
- 
- 
+
+
 /* Routine to query a setting */
 cmd_show:
 cmd_qsetting:
   arg options
-  if (options ^= '') & (right(options,1) ^= '*') then do
+  if (options ¬= '') & (right(options,1) ¬= '*') then do
     set = check_setting(options)
     if (set = 'ERROR') then
       options = options'*'
@@ -1435,7 +1437,7 @@ cmd_qsetting:
                    left(cur_value,53) || lo
         cur_value = substr(cur_value,54)
         displayed = displayed + 1
-        do while (cur_value ^= '')
+        do while (cur_value ¬= '')
           call sendl left('',21) || hi || left(cur_value,53) || lo
           cur_value = substr(cur_value,54)
           displayed = displayed + 1
@@ -1448,7 +1450,7 @@ cmd_qsetting:
         call sendl left('',12),
                    hi 'Press ENTER for more or continue typing to end' lo
         pull junk
-        if (junk ^= '') then do
+        if (junk ¬= '') then do
           interpret clear_module
           call outgoing junk
           return
@@ -1461,8 +1463,8 @@ cmd_qsetting:
   else
     call sendl '-- End of List --'
 return /* cmd_qsetting */
- 
- 
+
+
 /* Routine to switch current user to another user */
 cmd_switch:
   parse arg arguments
@@ -1478,7 +1480,7 @@ cmd_switch:
   end
   else
     talking.location = switch_packet
-  if (location ^= current) then do
+  if (location ¬= current) then do
     call sendl 'Switching to' location || ')' expand(switch_packet)
     current = location
     call check_other 'ignoring' switch_packet
@@ -1486,7 +1488,7 @@ cmd_switch:
   else call sendl 'You are already talking to',
                   location || ')' expand(switch_packet)
 return /* cmd_switch */
- 
+
 /* Routine to send a message to a user other than current */
 cmd_send:
   parse arg send_to send_msg
@@ -1499,8 +1501,8 @@ cmd_send:
     call error 'No message specified in SEND.'
     return
   end
-  parse var send_to send_to '!' temp  /* ignore temporary nicknames */
-  if (temp ^= '') then note = '     (temporary nickname ignored)'
+  parse var send_to send_to '¬' temp  /* ignore temporary nicknames */
+  if (temp ¬= '') then note = '     (temporary nickname ignored)'
     else note = ''
   send_packet = convert(send_to)
   if (send_packet = 'ERROR') | (check_wildcard(send_to)) then do
@@ -1511,7 +1513,7 @@ cmd_send:
   if (setting.notify = 'Y') then
     call sendl 'Message sent to' expand(send_packet) note
 return /* cmd_send */
- 
+
 /* Routine to add a new user to the ignoring list */
 cmd_ignore:
   parse arg arguments
@@ -1520,15 +1522,15 @@ cmd_ignore:
     call sendl 'Now ignoring all users not in talking list.'
     return
   end /* if */
-  if (index(arguments,'*') ^= 0) then
+  if (index(arguments,'*') ¬= 0) then
     new_packet = translate(arguments)
   else
     new_packet = convert(arguments)
-  parse var new_packet user '@' node '!' nick
+  parse var new_packet user '@' node '¬' nick
   location = locate('ignoring' new_packet)
   if (new_packet = 'ERROR') then
     call error 'Illegal id specified during IGNORE.'
-  else if (location ^= 0) then
+  else if (location ¬= 0) then
     call error 'Id already in list as #'location'.'
   else if (user = xyzzy_user) & (node = xyzzy_node) then
     call ignore_yourself  /* ha ha ha ha */
@@ -1538,27 +1540,30 @@ cmd_ignore:
     call check_other 'talking' new_packet
   end /* else */
 return /* cmd_ignore */
- 
+
 /* Routine for people who actually want to ignore themselves :-) */
 ignore_yourself:
   call sendl 'Well, I think ignoring yourself is stupid, but if it''s'
-  call sendl 'what you really want, well then... ok - you got it!'
+  call sendl 'what you really want, well then... ok - you got it¬'
   ignore_done = 0
   do until (ignore_done)
     ignore_index = 1
-    do until (ignore_index > 6)
-      'xyziucv wait 30'
+    do (ignore_index > 6)
+      'wakeup +1'
+/*    'xyziucv wait 30'*/
       msgtype = rc
-      if msgtype = clockend then iterate
-      parse pull line
-      select
-        when (msgtype = console) then
+      if rc      = 2        then iterate
+/*    parse pull line   */
+
+      if  rc  = 1   then  do
           ignore_index = (ignore_index + 1)
-        when (msgtype = normal) then
+      end
+
+      if  rc  = 5   then do
+          parse pull line
           call Incoming line
-        otherwise
-         call Confused line
-      end /* select */
+      end
+
     end /* do */
     call sendl 'I''m getting lonely.. you still want me to ignore you?'
     pull answer
@@ -1566,9 +1571,9 @@ ignore_yourself:
       else ignore_done = 0
   end /* do */
   call sendl 'Ah, finally come to your senses... good.. now let''s get'
-  call sendl 'back to the matter at hand.. chatting!'
+  call sendl 'back to the matter at hand.. chatting¬'
 return /* ignore_yourself */
- 
+
 /* Routine to delete a person from the ignoring list */
 cmd_noignore:
   arg arguments
@@ -1592,7 +1597,7 @@ cmd_noignore:
   call delete 'ignoring' del_packet
   call sendl expand(del_packet) 'is no longer being ignored.'
 return /* cmd_noignore */
- 
+
 /* routine to allow the execution of CMS commands */
 cmd_dcl:
 cmd_cms:
@@ -1610,13 +1615,13 @@ cmd_cms:
     else if (rc < 0) then extra = '('rc')'
       else extra = ''
   'set cmstype rt'
-  'set imescape !'
+  'set imescape ¬'
   'finis * * *'
   call sendl '(Xyzzy) R'extra';'
   dropbuf newbuf
   convert_cache = ''    /* in case mods were made */
 return /* cmd_cms */
- 
+
 /* routine to allow the execution of CP commands */
 cmd_cp:
   arg arguments
@@ -1628,12 +1633,12 @@ cmd_cp:
     else if (rc < 0) then extra = '('rc')'
      else extra = ''
   'set cmstype rt'
-  'set imescape !'
+  'set imescape ¬'
   call sendl '(Xyzzy) R'extra';'
   dropbuf newbuf
   convert_cache = ''    /* in case mods were made */
 return /* cmd_cp */
- 
+
 /* routine to add another line to the history saved */
 add_history:
   parse arg argument
@@ -1646,21 +1651,21 @@ add_history:
   temp = history_base + history_saved
   history.temp = argument
 return /* add_history */
- 
+
 /* Routine to display a given number of history items */
 cmd_history:
   arg argument '(' option ',' modifier
   all = 0 ; h_packet = ''
-  if (option ^= '') then do
+  if (option ¬= '') then do
     if abbrev('ALL',modifier,1) then all = 1
     if (argument = '') then argument = '*'
-    if (^all) then do
+    if (¬all) then do
       h_packet = convert(option)
       if (h_packet = 'ERROR') then do
         call error 'Invalid id in HISTORY command.'
         return
       end /* if */
-      parse var h_packet h_packet '!' .
+      parse var h_packet h_packet '¬' .
     end /* if option */
     else
       h_packet = '*'  /* so it doesn't match anything */
@@ -1686,30 +1691,30 @@ cmd_history:
   do hindex = (top - amount_display + 1) to top
     parse var history.hindex hist_packet hist_msg
     if (hist_packet = 'ME') then do
-      parse var hist_msg user '@' node '!' nick hist_msg
+      parse var hist_msg user '@' node '¬' nick hist_msg
       if (h_packet = '') | (h_packet = user'@'node) |,
-         ( (all) & (index(translate(hist_msg),option) ^= 0) ) then do
-        if (nick ^= 'NONE') then to = nick; else to = user'@'node
+         ( (all) & (index(translate(hist_msg),option) ¬= 0) ) then do
+        if (nick ¬= 'NONE') then to = nick; else to = user'@'node
         call sendl '(to' to')' hist_msg
       end /* if ok to show */
     end /* if */
     else do
-      parse var hist_packet check '!' .
+      parse var hist_packet check '¬' .
       if (h_packet = '') | (h_packet = check) |,
-         ( (all) & (index(translate(hist_msg),option) ^= 0) ) then
+         ( (all) & (index(translate(hist_msg),option) ¬= 0) ) then
         call display hist_packet hist_msg
     end /* else */
   end /* do index */
   call sendl '------- End Message History -------'
   parse var old_settings setting.history setting.beep
 return /* cmd_history */
- 
+
 /* Routine to display current user */
 cmd_who:
   arg arguments   /* ignored */
   call sendl 'Currently sending to:' expand(talking.current)
 return /* cmd_who */
- 
+
 /* Routine to send out a query on a user */
 cmd_query:
   parse arg arguments
@@ -1718,9 +1723,9 @@ cmd_query:
     call error 'Invalid id specified in QUERY.'
     return
   end /* if */
-  parse var query_packet user '@' node '!' nick
+  parse var query_packet user '@' node '¬' nick
   to_rscs = net_machine
-  if (find(routings,node) ^= 0) | (left(routings,1) = '*') then do
+  if (find(routings,node) ¬= 0) | (left(routings,1) = '*') then do
     do i = words(route.node) to 1 by -1
       to_rscs = to_rscs 'CMD' word(route.node,i)
     end
@@ -1731,7 +1736,7 @@ cmd_query:
     address command cp 'SMSG' to_rscs 'CMD' node 'CPQ U' user
   call sendl 'Query sent.'
 return /* cmd_query */
- 
+
 /* Routine to display the current date and time */
 cmd_time:
   arg arguments   /* ignored */
@@ -1742,7 +1747,7 @@ cmd_time:
   call sendl date('W') || ',' date('M') day',' year '-',
              convert_time(time())
 return /* cmd_time */
- 
+
 /* Routine to change a user in the talking list to a new user */
 cmd_change:
   parse arg from to
@@ -1769,31 +1774,31 @@ cmd_change:
     call error 'Specified id not in talking list:' from
     return
   end /* if not found */
-  if (tindex ^= 0) & (tindex ^= findex) then do
+  if (tindex ¬= 0) & (tindex ¬= findex) then do
     call error 'New id already in talking list:' to
     return
   end /* if to is found */
   talking.findex = to_packet
   call sendl 'Number' findex 'changed to' expand(to_packet)
 return /* cmd_change */
- 
+
 /* Routine to send out queries for users in your names file */
 cmd_namezon:
   arg namezon_node "(" options
   options = translate(options,' ',',-')
-  if (find(options,'DSC') ^= 0) then setting.querydsc = 'Y'
-  if (find(options,'NOT') ^= 0) then setting.querynot = 'Y'
-  if (find(options,'LOG') ^= 0) then setting.querylog = 'Y'
-  if (find(options,'NODSC') ^= 0) then setting.querydsc = 'N'
-  if (find(options,'NONOT') ^= 0) then setting.querynot = 'N'
-  if (find(options,'NOLOG') ^= 0) then setting.querylog = 'N'
+  if (find(options,'DSC') ¬= 0) then setting.querydsc = 'Y'
+  if (find(options,'NOT') ¬= 0) then setting.querynot = 'Y'
+  if (find(options,'LOG') ¬= 0) then setting.querylog = 'Y'
+  if (find(options,'NODSC') ¬= 0) then setting.querydsc = 'N'
+  if (find(options,'NONOT') ¬= 0) then setting.querynot = 'N'
+  if (find(options,'NOLOG') ¬= 0) then setting.querylog = 'N'
   namezon_node = strip(namezon_node,'B')
   if (namezon_node = '') then namezon_node = xyzzy_node
   'set cmstype ht'
   'state' setting.namefile 'names *'
   ret=rc
   'set cmstype rt'
-  if (ret ^= 0) then do
+  if (ret ¬= 0) then do
     call error setting.namefile 'NAMES not located on an accessed disk.'
     call error 'NAMEZON command not done.'
     return
@@ -1802,7 +1807,7 @@ cmd_namezon:
   namezonbuf = rc
   namezqueued = queued()
   'EXECIO * DISKR' setting.namefile 'NAMES * (FINIS'
-  if (rc ^= 0) then do
+  if (rc ¬= 0) then do
     call error 'EXECIO error reading names file. Return Code:' rc
     dropbuf namezonbuf
     return
@@ -1810,30 +1815,30 @@ cmd_namezon:
   queries = 0;  line = '';
   do while( queued() > namezqueued)
     pull line
-    if (strip(line) ^= '') then do
+    if (strip(line) ¬= '') then do
       if (queued() > namezqueued) then
         do until (left(translate(rest),5) = ':NICK') |,
                  (queued() = namezqueued)
           pull rest
           rest = strip(rest)
-          if (left(translate(rest),5) ^= ':NICK') then line = line rest
+          if (left(translate(rest),5) ¬= ':NICK') then line = line rest
             else push rest   /* place back on stack */
         end
       parse var line ':USERID.' user .
       parse var line ':NODE.' node .
         if (node = '') then node = xyzzy_node
       parse var line ':XYZZY.' xyzopt .
-      if (user ^= '') &,
+      if (user ¬= '') &,
          (find(xyzopt,'NOQUERY') = 0) &,
-         (find(namezon_node,'^'node) = 0) &,
-         ( (find(namezon_node,node) ^= 0) |,
-           (find(namezon_node,'*') ^= 0) |,
-           (find(namezon_node,'ALL') ^= 0) ) then do
+         (find(namezon_node,'¬'node) = 0) &,
+         ( (find(namezon_node,node) ¬= 0) |,
+           (find(namezon_node,'*') ¬= 0) |,
+           (find(namezon_node,'ALL') ¬= 0) ) then do
         if (node = xyzzy_node) then
           address command cp 'SMSG' net_machine 'CPQ U' user
         else do
           to_rscs = net_machine
-          if (find(routings,node) ^= 0) | (left(routings,1) = '*') then
+          if (find(routings,node) ¬= 0) | (left(routings,1) = '*') then
             do i = words(route.node) to 1 by -1
               to_rscs = to_rscs 'CMD' word(route.node,i)
             end
@@ -1847,7 +1852,7 @@ cmd_namezon:
   if (queries = 0) then call sendl 'No queries sent.'
     else call sendl queries 'queries sent out.'
 return /* cmd_namezon */
- 
+
 /* Routine to send an RSCS command to another node */
 cmd_cmd:
   arg node command
@@ -1856,7 +1861,7 @@ cmd_cmd:
     return
   end /* if */
   to_rscs = net_machine
-  if (find(routings,node) ^= 0) | (left(routings,1) = '*') then do
+  if (find(routings,node) ¬= 0) | (left(routings,1) = '*') then do
     do i = words(route.node) to 1 by -1
       to_rscs = to_rscs 'CMD' word(route.node,i)
     end
@@ -1866,7 +1871,7 @@ cmd_cmd:
   else
     address command cp 'SMSG' to_rscs 'CMD' node command
 return /* cmd_cmd */
- 
+
 /* Routine to send a message to all defined users */
 cmd_group:
   parse arg group_msg
@@ -1886,7 +1891,7 @@ cmd_group:
   if (setting.group = 'Y') then
     call sendl 'Message sent to all defined users.'
 return /* cmd_group */
- 
+
 /* Routine to display names file information on a person */
 cmd_wi:
 cmd_find:
@@ -1901,11 +1906,11 @@ cmd_find:
   'state' setting.namefile 'names *'
   saverc = rc
   'set cmstype rt'
-  if (saverc ^= 0) then do
+  if (saverc ¬= 0) then do
     call sendl '(NAMES file not located on accessed disk)'
     return
   end
-  parse var wi_packet user '@' node '!' nick
+  parse var wi_packet user '@' node '¬' nick
   makebuf
   whobuf = rc
   whoqueued = queued()
@@ -1922,10 +1927,10 @@ cmd_find:
     translate(translate(substr(tag,2)),,
     'abcdefghijklmnopqrstuvwxyz',,
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-    if (translate(tag) ^= 'USERID') & (translate(tag) ^= 'NODE') &,
-       (translate(tag) ^= 'NICK') |,
+    if (translate(tag) ¬= 'USERID') & (translate(tag) ¬= 'NODE') &,
+       (translate(tag) ¬= 'NICK') |,
        ( (translate(tag) = 'NICK') &,
-         (translate(tagval) ^= translate(nick)) ) then do
+         (translate(tagval) ¬= translate(nick)) ) then do
       if (at_top) then do
         call sendl 'NAMES file information:' ; at_top = 0;
       end
@@ -1935,7 +1940,7 @@ cmd_find:
   if (at_top) then call sendl '(No additional NAMES file information)'
   dropbuf whobuf
 return /* cmd_wi */
- 
+
 /* Routine to handle logging of console I/O to a spool file */
 cmd_log:
   arg arguments
@@ -1984,11 +1989,11 @@ cmd_log:
     end /* otherwise */
   end /* select */
 return /* cmd_log */
- 
+
 /* Routine to hold several lines and send them all at once */
 cmd_hold:
   arg arguments
-  if (arguments ^= '') then do
+  if (arguments ¬= '') then do
     hold_packet = convert(arguments)
     if (hold_packet = 'ERROR') | (check_wildcard(arguments)) then do
       call error 'Invalid id in HOLD.'
@@ -2001,7 +2006,7 @@ cmd_hold:
   call sendl '.Q to abort sending the message.'
   call sendl '------------------------------------------------'
   h_index = 1 ; done = 0 ; abort = 0
-  do while (^done)
+  do while (¬done)
     parse pull hold_msg.h_index
     if (translate(hold_msg.h_index) = '.Q') |,
        (hold_msg.h_index = '') then
@@ -2009,7 +2014,7 @@ cmd_hold:
     else
       h_index = h_index + 1
   end /* do */
-  if (translate(hold_msg.h_index) ^= '.Q') then do
+  if (translate(hold_msg.h_index) ¬= '.Q') then do
     do hold = 1 to (h_index-1)
       if (current = group_send) then
         call cmd_group hold_msg.hold
@@ -2022,8 +2027,8 @@ cmd_hold:
   end /* if-do */
   else call sendl 'Message aborted.'
 return /* cmd_hold */
- 
- 
+
+
 /* Routine to interpret a set of stored lines as your typing */
 cmd_macro:
   arg file '(' moption
@@ -2037,11 +2042,11 @@ cmd_macro:
   'state' file
   ret = rc
   'set cmstype rt'
-  if (ret ^= 0) then do
+  if (ret ¬= 0) then do
     call error 'Unable to locate' file 'on an accessed disk.'
     return
   end /* if */
-  if ^(abbrev('DISPLAY',moption,1)) then
+  if ¬(abbrev('DISPLAY',moption,1)) then
     enable_output = 0
   makebuf
   macrobuf = rc
@@ -2050,26 +2055,26 @@ cmd_macro:
   'execio * diskr' file '(finis'
   ret = rc
   'set cmstype rt'
-  if (ret ^= 0) then do
+  if (ret ¬= 0) then do
     call error 'EXECIO Error in reading macro' file '. RetCode:' ret
     return
   end /* if */
   do queued() - macroqueued
     parse pull macro_line
     macro_line = strip(macro_line,'T')
-    if left(macro_line,1) ^= '*' then
+    if left(macro_line,1) ¬= '*' then
       call outgoing macro_line
   end /* do */
   enable_output = 1
   dropbuf macrobuf
-  if ^(abbrev('QUIET',moption,5)) then
+  if ¬(abbrev('QUIET',moption,5)) then
     call sendl 'Macro file' file 'executed.'
 return /* cmd_macro */
- 
+
 /* Routine to handle sending an id file to a user */
 cmd_id:
   arg arguments
-  if (arguments ^= '') then do
+  if (arguments ¬= '') then do
     if (setting.idfile = '') then do
       call error 'ID file hasn''t been set.  ID command ignored.'
       return
@@ -2083,18 +2088,18 @@ cmd_id:
     'STATE' setting.idfile
     ret = rc
     'set cmstype rt'
-    if (ret ^= 0) then do
+    if (ret ¬= 0) then do
       call error 'Unable to locate id file' setting.idfile'.'
       return
     end /* if */
-    parse var id_packet user '@' node '!' nick
+    parse var id_packet user '@' node '¬' nick
     'SENDFILE' setting.idfile user 'AT' node
     call sendl 'ID file sent.'
   end /* if arguments */
   else call error 'No destination id specified in ID'
 return /* cmd_id */
- 
- 
+
+
 /* Routine to examine/reset the "alarm" */
 cmd_alarm:
   arg new_time
@@ -2122,17 +2127,17 @@ cmd_alarm:
   if (min = '') then do
     min = 0
     position = verify(hour,'0123456789')
-    if (position ^= 0) then do
+    if (position ¬= 0) then do
       min = min || substr(hour,position)
       hour = left(hour,position-1)
     end
   end /* if min */
   position = verify(min,'0123456789')
-  if (position ^= 0) then do
+  if (position ¬= 0) then do
     modifier = strip(substr(min,position))
     min = left(min,position-1)
   end
-  if (^datatype(hour,'W')) | (^datatype(min,'W')) | (hour < 0) |,
+  if (¬datatype(hour,'W')) | (¬datatype(min,'W')) | (hour < 0) |,
      (hour > 23) | (min < 0) | (min > 59) then do
     call error 'Invalid alarm setting.'
     return
@@ -2157,17 +2162,17 @@ cmd_alarm:
   clock_alarm = hour':'min
   call sendl 'Alarm is now set at:' convert_time(clock_alarm)
 return /* cmd_alarm */
- 
- 
+
+
 /* Routine to display all known file status */
 cmd_files:
   arg options qualifier
-  if (options = 'RESET') & (qualifier ^= '') then options = 'CLEAR'
-  if (options = 'RESET') & (files_index ^= '') then do
+  if (options = 'RESET') & (qualifier ¬= '') then options = 'CLEAR'
+  if (options = 'RESET') & (files_index ¬= '') then do
     new_index = ''
     do i = 1 to words(files_index)
       pos = word(files_index,i)
-      if left(files.pos,1) ^= '*' then
+      if left(files.pos,1) ¬= '*' then
         new_index = new_index pos
       else do
         files.pos = ''
@@ -2179,12 +2184,12 @@ cmd_files:
     call sendl 'Files that reached their destination have been removed.'
     return
   end /* if reset */
-  if (options = 'CLEAR') & (files_index ^= '') then do
+  if (options = 'CLEAR') & (files_index ¬= '') then do
     result = ''
     do i = 1 to words(files_index)
       pos = word(files_index,i)
       comp = translate(files.pos)
-      if (qualifier = '') | (index(comp,qualifier) ^= 0) |,
+      if (qualifier = '') | (index(comp,qualifier) ¬= 0) |,
          (pos = qualifier) then do
         files.pos = ''
         files_header.pos = ''
@@ -2207,24 +2212,24 @@ cmd_files:
   do i = 1 to words(files_index)
     pos = word(files_index,i)
     comp = translate(files.pos)
-    if (options = '') | (index(comp,options) ^= 0) | (pos = options)
+    if (options = '') | (index(comp,options) ¬= 0) | (pos = options)
       then do
         first = files_time.pos; second = files.pos
-        if (files_header.pos ^= '') then
+        if (files_header.pos ¬= '') then
           first = files_header.pos files_time.pos
         call sendl 'File' pos ':' first
-        if (second ^= '') then call sendl left('',length(pos)+7) second
+        if (second ¬= '') then call sendl left('',length(pos)+7) second
       end
   end
   call sendl '---------- End File Status ---------'
 return
- 
- 
+
+
 /* Routine to add given id to your names file */
 cmd_addnick:
   parse arg id '(' full_name ',' notebook
   add_packet = convert(id); upper notebook
-  parse var add_packet user '@' node '!' nick
+  parse var add_packet user '@' node '¬' nick
   if (add_packet = 'ERROR') | (right(add_packet,4) = 'NONE') then do
     call error 'Invalid id or missing nickname in ADDNICK.'
     return
@@ -2254,17 +2259,17 @@ cmd_addnick:
     'execio 1 DISKR' setting.namefile 'NAMES' mode lines '(finis'
     ret = rc
     'set cmstype rt'
-    if (ret ^= 0) then do
+    if (ret ¬= 0) then do
       call error 'Error while checking names file.. command aborted.'
       return
     end
     pull lastline
-    if strip(lastline) ^= '' then do
+    if strip(lastline) ¬= '' then do
       'set cmstype ht'
       'execio 1 DISKW' setting.namefile 'NAMES' mode '(finis string  '
       ret = rc
       'set cmstype rt'
-      if (ret ^= 0) then do
+      if (ret ¬= 0) then do
         call error 'Error while writing to names file..command aborted'
         return
       end
@@ -2273,28 +2278,28 @@ cmd_addnick:
     else mode = 'A'   /* create a new names file on disk A */
   line1 = ':nick.'left(nick,8) ':userid.'left(user,8),
           ':node.'left(node,8)
-  if (notebook ^= '') then line1 = line1 ':notebook.'left(notebook,8)
-  if (full_name ^= '') then line2 = left('',14) ':name.'full_name
+  if (notebook ¬= '') then line1 = line1 ':notebook.'left(notebook,8)
+  if (full_name ¬= '') then line2 = left('',14) ':name.'full_name
     else line2 = ''
   'set cmstype ht'
   'execio 1 diskw' setting.namefile 'NAMES' mode '(string' line1
-  if (line2 ^= '') then
+  if (line2 ¬= '') then
     'execio 1 diskw' setting.namefile 'NAMES' mode '(string' line2
   'finis' setting.namefile 'NAMES' mode
   ret=rc
   'set cmstype rt'
-  if (ret ^= 0) then do
+  if (ret ¬= 0) then do
     call error 'Error while updating names file.... command aborted.'
     return
   end
-  if (full_name ^= '') then last = '('full_name')'
+  if (full_name ¬= '') then last = '('full_name')'
     else last = ''
-  if (notebook ^= '') then last = last', notebook' notebook
+  if (notebook ¬= '') then last = last', notebook' notebook
   call sendl user '@' node 'is now in your names file as',
              nick last
 return /* cmd_addnick */
- 
- 
+
+
 /* Routine to handle the routing of bitnet messages through nodes */
 cmd_route:
   arg node option
@@ -2314,7 +2319,7 @@ cmd_route:
         call sendl '---------- End of routing list ---------'
       end
     end /* when */
-    when (node ^= '') & (option = '') then
+    when (node ¬= '') & (option = '') then
       call sendl 'Routing for' node ':' routing(node)
     when option = 'RESET' then do
       if (node = '*') then do
@@ -2322,7 +2327,7 @@ cmd_route:
         call sendl 'All routings have been reset.'
       end
       else
-      if (find(routings,node) ^= 0) then do
+      if (find(routings,node) ¬= 0) then do
         routings = delword(routings,find(routings,node),1)
         call sendl 'Routing for' node 'removed.'
       end
@@ -2344,8 +2349,8 @@ cmd_route:
     end
   end /* select */
 return /* cmd_route */
- 
- 
+
+
 /* Handler for external command "hooks" for specific users */
 cmd_hooks:
   parse arg htype in_id hcommand
@@ -2354,11 +2359,11 @@ cmd_hooks:
     do x = 1 to words(hook_types)
       index = translate(word(hook_types,x))
       hindex = 'HOOK' || index
-      if ( (words(hook_index.hindex) > 0) | (hook.hindex.astx ^= '') ) &,
+      if ( (words(hook_index.hindex) > 0) | (hook.hindex.astx ¬= '') ) &,
         ( (htype = '') |,
           (abbrev(translate(index),translate(htype),1)) ) then do
         call sendl hi || index 'hooks:' || lo
-        if (hook.hindex.astx ^= '') then
+        if (hook.hindex.astx ¬= '') then
           call sendl left('   Default ',20,'.') hook.hindex.astx
         do i = 1 to words(hook_index.hindex)
           index = word(hook_index.hindex,i)
@@ -2367,23 +2372,23 @@ cmd_hooks:
         found = 1
       end /* if */
     end /* do */
-    if (^found) then call sendl 'No external hooks currently defined.'
+    if (¬found) then call sendl 'No external hooks currently defined.'
     return
   end /* if */
- 
+
   if (in_id = '') | (hcommand = '') then do
     call error 'Missing information in HOOK command.'
     call error 'You must specify hook id and command.'
     return
   end
- 
+
   found = 0 ; x = 1
-  do while (^found) & (x <= words(hook_types))
+  do while (¬found) & (x <= words(hook_types))
     index = 'HOOK' || translate(word(hook_types,x))
     if abbrev(substr(index,5),translate(htype),1) then do
       found = 1
-      if (hook_key.index ^= 'C') then key = translate(in_id) ; else do
-        parse value convert(in_id) with key '!' .
+      if (hook_key.index ¬= 'C') then key = translate(in_id) ; else do
+        parse value convert(in_id) with key '¬' .
         if (key = 'ERROR') then do
           call error 'Invalid id specified in HOOK:' in_id
           return
@@ -2393,8 +2398,8 @@ cmd_hooks:
         key = '*' ; info = 'Default' word(hook_types,x) 'hook'
       end
         else info = word(hook_types,x) 'hook for' key
-      if (translate(hcommand) ^= 'RESET') then do
-        if (key ^= '*') & (find(hook_index.index,key) = 0) then
+      if (translate(hcommand) ¬= 'RESET') then do
+        if (key ¬= '*') & (find(hook_index.index,key) = 0) then
           hook_index.index = hook_index.index key
         hook.index.key = hcommand
         call sendl info 'set to "'hcommand'"'
@@ -2406,33 +2411,33 @@ cmd_hooks:
           call error 'Specified hook not located.'
           return
         end
-        if (loc ^= 0) then
+        if (loc ¬= 0) then
           hook_index.index = delword(hook_index.index,loc)
         hook.index.key = ''
         call sendl info 'has been reset'
       end /* else */
- 
+
     end /* if */
     x = x + 1
   end /* while */
-  if (^found) then call error 'Invalid hook type specified:' htype
+  if (¬found) then call error 'Invalid hook type specified:' htype
 return /* cmd_hooks */
- 
- 
+
+
 /* Cute addition - kitchen sink */
 cmd_sink:
   call sendl 'This is to officially recognize that this program has',
              'everything, including a'
   call sendl left('',27) hi || 'Kitchen Sink' || lo
 return /* cmd_sink */
- 
- 
+
+
 /* Routine to display the current version of XYZZY */
 cmd_version:
   call sendl xyzzy_version
 return
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*                  Program Error/Warning handlers                    */
 /*--------------------------------------------------------------------*/
@@ -2440,40 +2445,40 @@ Error:
   parse arg errortext
   say '** Error:' errortext
 return /* Standard Error */
- 
+
 Warning:
   parse arg wngtext
   say '** Warning:' wngtext
 return /* Standard Warning */
- 
+
 Abort:
   parse arg aborttext
   say '** Fatal Error:' aborttext
   say '   Program terminating.'
   call cmd_exit -1
 return /* Kind of worthless, but for completeness... */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*                       Initialization Routine                       */
 /*--------------------------------------------------------------------*/
 Initialize:
- 
+
 /* Warn and abort if messages are already set to IUCV */
 parse value diag('08','QUERY SET') with . msg_setting .
-if (index(msg_setting,'IUCV') ^= 0) then do
+if (index(msg_setting,'IUCV') ¬= 0) then do
   say '** Your messages are already being trapped by another    **'
   say '** program. Please stop that program before using XYZZY. **'
   say '** If there is no other program that should be trapping  **'
   say '** your messages, typing SET MSG ON will turn it off.    **'
   exit
 end /* do */
- 
+
 /* Set up some constants for the program to use */
 conv_count = 0
-xyzzy_version = '* XYZZY - Release 2.5 *'
-author_user = 'DB3L'
-author_node = 'CMUCCVMA'
+xyzzy_version = '* XYZZY - Release 2.6 *'
+author_user = 'MOSHIX'
+author_node = 'zvm72msh'
 normal   = 0     /* definitions for return codes from XYZIUCV */
 console  = 1
 clockend = 2
@@ -2510,15 +2515,15 @@ hook_index. = ''
 hook. = ''
 HookReturn = 0
 HookUser = ''
- 
+
 /* Figure out who we are */
 "id (stack"
 pull xyzzy_user . xyzzy_node . net_machine .
- 
- 
+
+
 'query imescape (stack'
 pull '=' old_imescape
-'set imescape !'
+'set imescape ¬'
 'set cmstype ht'
 'state xyzzy ignlog a0'
 if (rc = 0) then do
@@ -2537,31 +2542,31 @@ if (clear_module = '') then do
   call abort 'You must have VMFCLEAR or CLRSCRN on an accessed ',
              'disk to run XYZZY.'
 end /* if */
-'state xyziucv module *'
-if (rc ^= 0) then do
-  call abort 'You must have XYZIUCV on an accessed disk to run XYZZY.'
+'state wakeup  module *'
+if (rc ¬= 0) then do
+  call abort 'You must have WAKUP   on an accessed disk to run XYZZY.'
 end /* if */
- 
-/* Knock out any possible competitors :-) */
+
+/* Knock out any possible competitors :-)
 'nucxdrop ywakeup'
 'nucxdrop wakeup'
-'nucxdrop iucvtrap'
- 
+'nucxdrop iucvtrap' */
+
 /* In case they screwed with settings */
 'set cpconio off'
 'set vmconio off'
 'set smsg off'
- 
-/* Install XYZIUCV - start IUCV trapping */
+
+/* Install XYZIUCV - start IUCV trapping
 'nucxload xyziucv (system service'
-'xyziucv start'
+'xyziucv start' */
 'set wng iucv'  /* also trap warnings */
 'set cmstype rt'
- 
+
 /* Initialize the talking and ignoring arrays */
 num_talking  = 0
 num_ignoring = 0
- 
+
 /* Initialize program "settings" */
 settings = 'Beep BEEPCHar BEEPCMd BEEPDelay Clock CMdchar COnvsize'
 settings = settings 'Dispform Expand EXPANDCh FIletrack FMsg FNotify'
@@ -2571,7 +2576,7 @@ settings = settings 'MPrefix MSglocal NAmefile NOPrefix NOTify NOWrap'
 settings = settings 'NUmhist Outsize Pfkeys QUERYDsc QUERYLog QUERYNot'
 settings = settings 'RNick RPrefix SHownick Timemark TIMEDelay'
 settings = settings 'XDirectory'
- 
+
 setting.beep      = 'N'            ; settype.beep      = 'Y'
 setting.beepchar  = ''             ; settype.beepchar  = 'C'
 if (xyzzy_node = 'CMUCCVMA') then setting.beepcmd   = 'CP BEEP'
@@ -2622,7 +2627,7 @@ setting.shownick  = 'Y'            ; settype.shownick  = 'Y'
 setting.timemark  = 'N'            ; settype.timemark  = 'Y'
 setting.timedelay = 1              ; settype.timedelay = 'N'
 setting.xdirectory= ''             ; settype.xdirectory= 'C'
- 
+
 sethelp.beep      = 'Beep upon display of incoming message'
 sethelp.beepchar  = 'Character to use to cause the terminal to beep'
 sethelp.beepcmd   = 'Command to issue a console beep (if available)'
@@ -2667,7 +2672,7 @@ sethelp.shownick  = 'Display nicknames when possible'
 sethelp.timemark  = 'Display date and time before incoming messages'
 sethelp.timedelay = 'Delay for two msgs to have two time stamps (secs)'
 sethelp.xdirectory= 'Not used.  For compability with XYZZY-VAX'
- 
+
 /* Set up index array to speed up command searches */
 cmd_index.A = 1
 cmd_index.C = 4
@@ -2687,7 +2692,7 @@ cmd_index.T = 36
 cmd_index.V = 37
 cmd_index.W = 38
 cmd_index.? = 40
- 
+
 /* Initialize program command array */
 cmd.1  = 'Add'      ; syntax.1  = 'Add id'
 cmd.2  = 'ADDNick'
@@ -2736,7 +2741,7 @@ cmd.37 = 'Version'  ; syntax.37 = 'Version (no arguments)'
 cmd.38 = 'Who'      ; syntax.38 = 'Who (no arguments)'
 cmd.39 = 'WI'       ; syntax.39 = 'WI id'
 cmd.40 = '?'        ; syntax.40 = '? (nothing) | (partial command)<*>'
- 
+
 help.1  = 'Add a new user to the list of users known to the program'
 help.2  = 'Add person to names file, optionally with full name/notebook'
 help.3  = 'Set/Examine/Reset time when XYZZY should notify you.'
@@ -2777,8 +2782,8 @@ help.37 = 'Displays the current version of xyzzy'
 help.38 = 'Display name of person to whom messages are currently sent'
 help.39 = 'Displays names file information on a person (WI = WhoIs)'
 help.40 = '(Same as HELP command)'
- 
- 
+
+
 ihelp.1='Nickname      - Nickname which is found in your NAMES file'
 ihelp.2='                or a local nickname in use within XYZZY'
 ihelp.3='User          - User at your local node or a user who is in'
@@ -2787,10 +2792,10 @@ ihelp.5='User@Node     - User at a remote node as specified'
 ihelp.6='User AT Node  - Same as User@Node except using the word "AT"'
 ihelp.7='#             - Number of person in the XYZZY "talking" list'
 ihelp.8=''
-ihelp.9='Any of the above forms may be optionally followed by "!nick"'
+ihelp.9='Any of the above forms may be optionally followed by "¬nick"'
 ihelp.10='where nick is a temporary nickname for use within XYZZY.'
- 
- 
+
+
 /* Parse initial arguments */
 if (parameters = '') then do
   'set cmstype ht'
@@ -2811,7 +2816,7 @@ if cur_packet = 'ERROR' then
 call add 'talking' cur_packet     /* insert into list of people */
 current = 1  /* start talking to primary person */
 interpret clear_module
- 
+
 /* Process profile if present */
 set cmstype ht
 "state PROFILE XYZZY *"
@@ -2820,13 +2825,13 @@ set cmstype rt
 if (ret = 0) then do
   call cmd_macro 'PROFILE (QUIET'
 end /* if profile */
- 
+
 /* Warn about non-existent names file */
 'set cmstype ht'
 "state" setting.namefile "names *"
 ret = rc
 'set cmstype rt'
-if (ret ^= 0) then do
+if (ret ¬= 0) then do
   call sendl 'WARNING:' setting.namefile,
              'NAMES was not located on an accessed disk.'
   call sendl '         Until a names file is created, or the NAMEFILE',
@@ -2835,7 +2840,7 @@ if (ret ^= 0) then do
              'nicknames may be used.'
   call sendl ''
 end /* if no names file */
- 
+
 /* Check on the PFkeys we're gonna change */
 if (setting.pfkeys = 'Y') then do
   'execio * CP (string QUERY PF1'
@@ -2851,18 +2856,18 @@ if (setting.pfkeys = 'Y') then do
     else 'CP SET PF1 IMMED .HELP'
   'CP SET PF3 IMMED .EXIT'
 end /* pfkeys */
- 
+
 /* All set up... start talking */
 call sendl left('',trunc((80-length(xyzzy_version)+2)/2)) ||,
                 hi || xyzzy_version || lo
-intro_line = 'Created by David Bolen (DB3L@CMUCCVMA)  -  ' ||,
+intro_line = 'Enhanced by moshix (moshix@zvm72msh)    -  ' ||,
              'Type .HELP for command list'
 call sendl left('',trunc((80-length(intro_line))/2)) || intro_line
 call sendl left('',80,'-')
 call sendl 'Sending to:' expand(talking.current)
 return /* Initialize */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*                     Handler for program bugs                       */
 /*--------------------------------------------------------------------*/
@@ -2887,7 +2892,7 @@ syntax:
   'close punch name XYZZY BUGRPT'
   'spool pun OFF'
   say ''
-  say '***** Syntax error in XYZZY! *****'
+  say '***** Syntax error in XYZZY¬ *****'
   say ''
   say 'A bug report has just been placed in your reader.  If this error'
   say 'is not the result of a local modification, please send the bug'
@@ -2896,8 +2901,8 @@ syntax:
   signal off syntax   /* prevent looping */
   call cmd_exit -1
 return /* syntax - never gets this far */
- 
- 
+
+
 /*--------------------------------------------------------------------*/
 /*  Program History                                                   */
 /*       1.0   -   March 15, 1986 - Initial Program Release           */
@@ -2964,4 +2969,7 @@ return /* syntax - never gets this far */
 /*                                  changes except fixing up NAMEZON  */
 /*                                  command and some doc changes.     */
 /*                                                                    */
+/*       2.6   -   November 2,2023- Adapt for WAKEUP and for RELAYCHAT*/
+/*                                                                    */
+/*                                  command and some doc changes.     */
 /*--------------------------------------------------------------------*/
