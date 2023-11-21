@@ -6,7 +6,8 @@
 /*                     A "Deluxe" Chatting Exec                       */
 /*          Created by David Bolen (Mithrandir) - DB3L@CMUCCVMA       */
 /*             Copyright (c) 1986,1987 - All Rights Reserved          */
-/*              Requires: XYZIUCV MODULE  and one of                  */
+/*             Copyright (c) 2023  by moshix for enhacements          */
+/*              Requires: WAKEUP  MODULE  and one of                  */
 /*                        VMFCLEAR MODULE / CLRSCRN MODULE            */
 /*                                                                    */
 /*                       Made to work with normal WAKEUP              */
@@ -2475,9 +2476,9 @@ end /* do */
 
 /* Set up some constants for the program to use */
 conv_count = 0
-xyzzy_version = '* XYZZY - Release 2.5 *'
-author_user = 'DB3L'
-author_node = 'CMUCCVMA'
+xyzzy_version = '* XYZZY - Release 2.6 *'
+author_user = 'MOSHIX'
+author_node = 'zvm72msh'
 normal   = 0     /* definitions for return codes from XYZIUCV */
 console  = 1
 clockend = 2
@@ -2859,7 +2860,7 @@ end /* pfkeys */
 /* All set up... start talking */
 call sendl left('',trunc((80-length(xyzzy_version)+2)/2)) ||,
                 hi || xyzzy_version || lo
-intro_line = 'Created by David Bolen (DB3L@CMUCCVMA)  -  ' ||,
+intro_line = 'Enhanced by moshix (moshix@zvm72msh)    -  ' ||,
              'Type .HELP for command list'
 call sendl left('',trunc((80-length(intro_line))/2)) || intro_line
 call sendl left('',80,'-')
@@ -2969,6 +2970,6 @@ return /* syntax - never gets this far */
 /*                                  command and some doc changes.     */
 /*                                                                    */
 /*       2.6   -   November 2,2023- Adapt for WAKEUP and for RELAYCHAT*/
-/*                                  Now works on VM/SP 5              */
+/*                                                                    */
 /*                                  command and some doc changes.     */
 /*--------------------------------------------------------------------*/
