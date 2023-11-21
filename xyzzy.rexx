@@ -30,6 +30,8 @@
 /*  or to make comments on the program.                               */
 /*                                                                    */
 /*  Refer to end of exec for Program History.                         */
+/*                                                                    */
+/*          defaults set tell msgcmd msgnoh                           */
 /*--------------------------------------------------------------------*/
 
 parse arg parameters
@@ -37,7 +39,9 @@ signal on halt
 signal on syntax
 TimerInit = time('R')
 call Initialize
-
+'defaults set tell msgcmd msgnoh'
+/* 'SET VMCONIO IUCV'
+   'SET CPCONIO IUCV'  */
 /*--------------------------------------------------------------------*/
 /*                         Main Program Loop                          */
 /*--------------------------------------------------------------------*/
@@ -47,13 +51,24 @@ do forever
   msgtype = rc
   if (setting.clock = 'Y') | (clock_alarm ¬= '') then
     call clock_tick
-  if rc      = 2        then iterate
+  if msgtype = clockend then iterate
   parse pull line
-  if rc = 5 then call Incoming line
-                 call Outgoing line   /* must be outgoing */
+ if line = ".STOP" then do
+     CALL CMD_STOP
+ end
+  select
+    when (msgtype = 1      ) then
+      call Outgoing line
+    when (msgtype = 5     ) then
+      call Incoming line
+    otherwise
+      call Outgoing line
+  end /* select */
   HookReturn = 0; HookUser = '' /* reset any possible hook */
-end /* do forever */
 
+
+
+end /* do forever */
 
 /*--------------------------------------------------------------------*/
 /*   Routine to convert any legal "id" into an internal id "packet"   */
@@ -691,6 +706,7 @@ Outgoing:
     end /* when command */
     otherwise do  /* it's a message */
       if (current = nobody_send) then do /* no-one to send to */
+        say 'NOBODY triggered!'
         call error 'You are not currently talking to anyone.'
         return
       end /* if not talking to anyone */
