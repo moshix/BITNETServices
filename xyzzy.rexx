@@ -1565,12 +1565,12 @@ ignore_yourself:
   do until (ignore_done)
     ignore_index = 1
     do (ignore_index > 6)
-      'wakeup +1'
+      'wakeup +30'
 /*    'xyziucv wait 30'*/
       msgtype = rc
       if rc      = 2        then iterate
 /*    parse pull line   */
-
+/*
       if  rc  = 1   then  do
           ignore_index = (ignore_index + 1)
       end
@@ -1578,7 +1578,17 @@ ignore_yourself:
       if  rc  = 5   then do
           parse pull line
           call Incoming line
-      end
+      end  */
+
+  select
+        when (msgtype = console) then
+          ignore_index = (ignore_index + 1)
+        when (msgtype = normal) then
+          call Incoming line
+        otherwise
+         call Incoming line
+      end /* select */
+
 
     end /* do */
     call sendl 'I''m getting lonely.. you still want me to ignore you?'
