@@ -1,9 +1,9 @@
 /*--------------------------------------------------------------------*/
 /*                                                                    */
 /*                       ++  X  Y  Z  Z  Y  ++                        */
-/*                          ---------------                           */
+/*                          --FOR WAKEUP-------------                 */
 /*                            Release 2.5                             */
-/*                     A "Deluxe" Chatting Exec                       */
+/*                     A "Deluxe" Chatting Exec FOR WAKEUP            */
 /*          Created by David Bolen (Mithrandir) - DB3L@CMUCCVMA       */
 /*             Copyright (c) 1986,1987 - All Rights Reserved          */
 /*              Requires: WAKEUP MODULE  and one of                   */
