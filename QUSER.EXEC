@@ -1,0 +1,184 @@
+/ QUSER ------------------------------------------------------------/
+trace o
+parse arg argstring
+argstring = strip(argstring)
+if substr(argstring,1,1) = '?' then do
+say 'Use the "QUSER" command to query the status of a computer user'
+say 'on your computer or on other computers that are connected to'
+say 'your computer via the RSCS network. The format of the command'
+ say 'is: '
+say ' QUSER userid <AT <nodeid>> <(<Timeout timeout> <STack><)>>'
+say ' Default: yournode 1 (seconds) '
+ exit 1
+end
+/ Who am I, anyway? /
+address command 'IDENTIFY ( LIFO'
+parse upper pull userid . locnode . rscsid .
+/ Split arguments into parameters and options /
+parse upper var argstring parameters '(' options ')' rest
+/ Parse the parameters /
+parse var parameters quser at qnode rest
+if quser='' then call error 24 'No names specified'
+if at¬='AT' & at¬='' then call error 24 'Invalid parameters specified'
+if rest¬='' then call error 24 'Invalid parameters specified'
+if qnode='' then qnode = locnode
+if length(quser)>8 then call error 24 'Invalid user' quser
+if length(qnode)>8 then call error 24 'Invalid node' qnode
+/ Parse the options /
+timeout = 1
+stack =
+do forever
+parse var options token options
+ select
+when token='' then leave
+when abbrev('STACK',token,2)=1 then stack = 1
+when abbrev('TIMEOUT',token,1)=1 then do
+timeout_error = '2 Invalid timeout'
+parse var options timeout options
+if datatype(timeout)¬='NUM' then call error timeout_error
+timeout = format(timeout,,)
+if timeout<1 | timeout > 36 then call error timeout_error
+ end
+otherwise call error 2 'Invalid option'
+
+ end
+end
+/ Initialize the response line etc. /
+line = ''
+others =
+/ Load RXIUCVFN and initialize IUCV if needed /
+if qnode¬=locnode then do
+address command 'RXIUCVFN TEST'
+ notloaded=rc
+ select
+when notloaded= then nop
+when notloaded=1 then address command 'RXIUCVFN LOAD'
+otherwise call error 45 'Problems with loading RXIUCVFN'
+ end
+iucverror =
+iucvresponse = IUCV('QUERY','STATUS')
+if rc¬= then iucverror = 1
+if ¬iucverror then do
+parse upper var iucvresponse init .
+ select
+when (init='YES' | init='CMS') then iucvinit = 1
+when init='NO' then do
+iucvinit =
+iucvresponse = IUCV('INITIALIZE',1)
+ end
+otherwise iucverror = 1
+ end
+ end
+if ¬iucverror then do
+iucvresponse = IUCV('CONNECT','MSG',255)
+if rc= then parse upper var iucvresponse pathid .
+else iucverror = 1
+ end
+end
+/ Make the appropriate query for a local request /
+if qnode=locnode then do
+address command 'MAKEBUF'
+address command 'EXECIO 1 CP (LIFO STRING QUERY USER' quser
+if queued()> then parse pull line
+address command 'DROPBUF'
+end
+/ Make the appropriate query for a remote request /
+if qnode¬=locnode then do
+if ¬iucverror then do
+address command 'MAKEBUF'
+address command 'EXECIO 1 CP (LIFO STRING QUERY SET'
+if queued()> then parse pull msg savemsg .
+if msg¬='MSG' then savemsg = 'ON'
+savemsg = left(savemsg,4)
+address command 'DROPBUF'
+address command 'CP SET MSG IUCV'
+address command 'CP SMSG' rscsid 'CMD' qnode 'CPQ USER' quser
+found =
+wait = 1
+
+do while(¬found & ¬iucverror)
+  extint = IUCV('WAIT',timeout,wait)
+  if rc¬= then iucverror = 1
+  if extint¬='4' then leave
+  iucvresponse = IUCV('QUERY','NEXT',,pathid,1)
+  parse upper var iucvresponse cpending ctype .
+  if cpending> then do
+    select
+     when ctype=2 then nop
+     when ctype=3 then iucverror = 1
+     when ctype=9 then do
+      fromuser = IUCV('RECEIVE',pathid,1,8)
+if rc¬=5 then iucverror = 1
+fromuser = strip(fromuser)
+message = IUCV('RECEIVE',pathid,1)
+if rc¬= then iucverror = 1
+message = strip(message)
+if fromuser=rscsid then do
+parse var message text rest
+if left(text,6)='DMTRGX' then message = rest
+Parse var message next rest
+if next='FROM' then do
+parse var rest fromid rest
+parse var fromid msgnode '(' msguser '):' etc
+if msguser¬='' then do
+fromuser = msguser 'at' msgnode
+message = rest
+ end
+ end
+ end
+else fromuser = fromuser 'at' locnode
+if fromuser=rscsid then found = 1
+parse var message . ' CPQ: ' line
+if fromuser¬=rscsid | line='' then do
+say 'Message from' fromuser':'
+ say message
+others = 1
+ end
+ end
+ otherwise nop
+ end
+ end
+wait = IUCV('QUERY','NEXT',) + 1 / no valid type /
+ end
+address command 'CP SET MSG' savemsg
+do forever / because we do not want to loose anything /
+iucvresponse = IUCV('QUERY','NEXT',9,pathid,1)
+parse upper var iucvresponse cpending ctype .
+if ctype='' then leave
+fromuser = IUCV('RECEIVE',pathid,1,8)
+fromuser = strip(fromuser)
+message = IUCV('RECEIVE',pathid,1)
+message = strip(message)
+say 'Message from' fromuser':'
+ say message
+others = 1
+ end
+
+  end
+end
+/ Terminate IUCV and unload RXIUCVFN if needed /
+if qnode¬=locnode then do
+if ¬iucverror then iucvresponse = IUCV('SEVER',pathid)
+if ¬iucverror & ¬iucvinit then iucvresponse = IUCV('TERM')
+if notloaded then address command 'NUCXDROP RXIUCVFN'
+if iucverror then call error 5 'IUCV problems'
+end
+/ Give the user an answer /
+parse var line text rest
+if left(text,6) = 'DMKCQY' then line = rest
+if others then say ' '
+if qnode ¬=locnode & line='' then do
+say 'The appropriate answer may arrive later as a message!'
+ select
+when extint='4' then call error 6 'No correct message found'
+when extint='8' then call error 6 'Timeout occurred'
+otherwise call error 6 'Other external interrupt stopped query'
+ end
+end
+if stack then queue '' line
+else say line
+exit
+/ Error message and exit routine /
+error: parse arg return_code error_message
+say ' Error ' error_message
+ exit return_code
