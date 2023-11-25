@@ -1,4 +1,4 @@
-/* LISTSERV MAIL LISTSERV PROGRAM     */
+/* LISTSERV group mailing program      */
 /*                                     */
 /* An NJE (bitnet/HNET) list server    */
 /* for z/VM, VM/ESA and VM/SP          */
@@ -6,7 +6,7 @@
 /* copyright 2023-2024  by moshix      */
 /*                                     */
 /***************************************/
-/* execute this from RELAY VM before starting LISTSERV               */
+/* execute this from LISTSERV before starting the program            */
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
 
 /* configuraiton parameters - IMPORTANT                               */
@@ -17,14 +17,13 @@ maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
 shutdownpswd="999999999" /* any user with this passwd shuts down rver*/
 osversion="z/VM 7.2"     /* OS version for enquries and stats         */
-typehost="zPDT"          /* what kind of machine                      */
-hostloc  ="Milan,Italy"  /* where is this machine                     */
+typehost="z114"          /* what kind of machine                      */
+hostloc  ="Moonbasea"    /* where is this machine                     */
 sysopname="MOSHIX  "     /* who is the sysop for this listserv server */
-sysopemail="moshix@gmail" /* where to contact this systop             */
+sysopemail="m234xx@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-raterwatermark=12000      /* max msgs per minute set for this server  */
 debugmode=0               /* print debug info on RELAY console when 1 */
 log2file=1                /* all calls to log also in RELAY LOG A     */
                           /* make sure to not run out of space !!!    */
@@ -32,7 +31,7 @@ federation=0              /* is this chat server federating with others? */
 
 
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
-if relinit() /= 0 then signal xit /* initialize listserv   properly and run tests */
+if relinit() /= 0 then signal xit   /* initialize listserv properly and run tests */
 
 
 
@@ -64,32 +63,36 @@ if federation = 1 then call initfederation
 /* ******************************************************* */
 
   Do forever;
-     'wakeup +1 (CONS RDR NOREAD' /* QUIET wake up 1/min and also get memos */
+     'wakeup +2 (CONS RDR NOREAD' /* QUIET wake up 2 min and also get memos */
 
  /*    parse pull text   */
     CurrentTime=Extime()
      select
         when Rc = 2 then do
            /* timer has expired */
-      /*   CALL log('Checkout timer triggered at:  '||mytime()) */
+           /*   CALL log('Checkout timer triggered at:  '||mytime()) */
            CurrentTime=Extime()
            end
 
         when Rc = 4 then do;   /* we have a mail coming in!  */
-           parse pull text
-           if pos('From', text) > 0 then  do
-              parse var text type sender . nodeuser msg
-              parse var nodeuser node '(' userid '):'
-              CALL LOG('from '||userid||' @ '||node||' '||msg)
+              CALL LOG('Incoming mail!')
               receivedmsgs= receivedmsgs + 1
-              /* below line checks if high rate watermark is exceeded */
-              /* and if so.... exits!                                 */
-              call highrate (receivedmsgs)
-              uppuserid=TRANSLATE(userid)
-              if detector(msg) > 0 then call handlemsg  userid,node,msg
+                 /* Im only interested in files with CLASS=H so I query the reader to see
+                    if there is something for me
+                     try also for class H cp Q R CL H', */
+                       'PIPE (name GET_SPOOL)',
+                          '| cp Q R',
+                          '| take last',
+                          '| spec w2 1',
+                          '| var SpId'
+                       'PIPE (name CHECKRC)',
+                          '| reader FILE' SpId,
+                          '| stem PTERM.',
+                          '| take last',
+                          '| var check'
+               call handlemail PTERM, PTERM.0
 
-          end   /* of if */
-        end
+          end /* of when */
         when Rc = 6 then
           signal xit
         otherwise
@@ -113,6 +116,29 @@ parse ARG msg            /* what error are we checking for/  */
 if (msg = returnNJEmsg)  | (msg = returnNJEmsg2) | (msg = returnNJEmsg3) | ,
    (msg = returnNJEmsg4) | (msg= returnNJEmsg5) then return 1
 else return 0
+
+handlemail:
+/* handle all incoming email
+   first check if its a valid email from the headers
+*/
+receivedmails = receivedmails + 1
+mail = arg(1)
+interpret "x = "mail".0"
+say 'Received mail with number of lines: '||x
+do i = 1 to x
+/*  interpret "say "mail".i"  */
+content.i=interpret "say "mail".i"
+end
+
+
+
+
+
+return
+
+
+
+
 
 handlemsg:
 /* handle all incoming messages and send to proper method */
@@ -635,21 +661,14 @@ returnNJEmsg5="DMTPAF210E"/* RSCS DMTPAF210E Invalid location      */
 
 lastmsgreceived=0        /* log when last user message was recvd   */
 lastmsgwho='NOBODY'      /* log which user sent last chat msg      */
-loggedonusers = 0        /* online user at any given moment        */
-highestusers = 0         /* most users online at any given moment  */
 totmessages  = 0         /* total number of msgs sent              */
+correctmails = 0         /* number of correct mails received       */
+receivedmails = 0        /* number of received mails correct and wrong */
 otime = 0                /* overtime to log off users after n minutes */
 starttime=mytime()       /*  for /SYSTEM                           */
 starttimeSEC=ExTime()    /*  for msg rate  calculation             */
 logline = " "            /* initialize log line                    */
 receivedmsgs=0           /* number of messages received for stats and loop*/
-premsg.0=6               /* needed for loop detector to compare    */
-premsg.1=""
-premsg.2=""
-premsg.3=""
-premsg.4=""
-premsg.5=""
-premsg.6=""
 msgrotator=1             /* this will rotate the 7 prev msgs       */
 err1="currently NOT"
 err2="to logon on"
@@ -794,6 +813,13 @@ selftest:
       return 0
    end
 return -1
+
+
+
+
+
+
+
 
 
 
