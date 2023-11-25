@@ -11,9 +11,8 @@
 
 /* configuraiton parameters - IMPORTANT                               */
 
-listservversion="0.1.0"  /* must be configured!                       */
+listservversion="0.2.0"  /* must be configured!                       */
 timezone="CET"           /* adjust for your server IMPORTANT          */
-maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
 shutdownpswd="999999999" /* any user with this passwd shuts down rver*/
 osversion="z/VM 7.2"     /* OS version for enquries and stats         */
@@ -849,4 +848,5 @@ fnodes.1="zvm72msh"
 return 0
 
 /*  CHANGE HISTORY                                                   */
-/*  V0.1-0.9:  testing WAKEUP mechanism                              */
+/*  V0.1    :  testing WAKEUP mechanism                              */
+/*  V0.2    :  Parsing incoming emails into components               */
