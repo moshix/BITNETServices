@@ -10,7 +10,7 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
 
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="0.1.0" /* must be configured!                       */
+
 listservversion="0.1.0"  /* must be configured!                       */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
@@ -24,8 +24,8 @@ sysopemail="m234xx@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
-debugmode=0               /* print debug info on RELAY console when 1 */
-log2file=1                /* all calls to log also in RELAY LOG A     */
+debugmode=0               /* print debug info on LISTSERV console if 1*/
+log2file=1                /* all calls to log also in LISTSERV LOG A  */
                           /* make sure to not run out of space !!!    */
 federation=0              /* is this chat server federating with others? */
 
@@ -662,7 +662,7 @@ returnNJEmsg3="HCPMFS057I"/* RSCS not receiving message            */
 returnNJEmsg4="DMTPAF208E"/* Invalid user ID message               */
 returnNJEmsg5="DMTPAF210E"/* RSCS DMTPAF210E Invalid location      */
 
-
+relaychatversion=listservversion /* make it compatible with allcode */
 lastmsgreceived=0        /* log when last user message was recvd   */
 lastmsgwho='NOBODY'      /* log which user sent last chat msg      */
 totmessages  = 0         /* total number of msgs sent              */
