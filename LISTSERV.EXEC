@@ -9,12 +9,12 @@
 /* execute this from LISTSERV before starting the program            */
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
 
-/* configuraiton parameters - IMPORTANT                               */
+/* configuration parameters - IMPORTANT                               */
 
 listservversion="0.2.0"  /* must be configured!                       */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="999999999" /* any user with this passwd shuts down rver*/
+shutdownpswd="999999999" /* any user with this passwd shuts down srv  */
 osversion="z/VM 7.2"     /* OS version for enquries and stats         */
 typehost="z114"          /* what kind of machine                      */
 hostloc  ="Moonbasea"    /* where is this machine                     */
