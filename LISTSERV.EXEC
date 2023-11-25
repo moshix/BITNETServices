@@ -33,7 +33,7 @@ federation=0              /* is this chat server federating with others? */
 /*---------------CODE SECTION STARTS BELOW --------------------------*/
 if relinit() /= 0 then signal xit   /* initialize listserv properly and run tests */
 
-
+'PURGE RDR ALL'
 
 /* Invoke WAKEUP first so it will be ready to receive msgs */
 /* This call also issues a 'SET MSG IUCV' command.         */
@@ -90,7 +90,8 @@ if federation = 1 then call initfederation
                           '| stem PTERM.',
                           '| take last',
                           '| var check'
-               call handlemail PTERM, PTERM.0
+               call handlemail 'PTERM'
+               call synclistdisk /* write subscribers db to disk */
 
           end /* of when */
         when Rc = 6 then
@@ -121,22 +122,25 @@ handlemail:
 /* handle all incoming email
    first check if its a valid email from the headers
 */
-receivedmails = receivedmails + 1
-mail = arg(1)
-interpret "x = "mail".0"
-say 'Received mail with number of lines: '||x
-do i = 1 to x
-/*  interpret "say "mail".i"  */
-content.i=interpret "say "mail".i"
-end
-
-
-
-
+  parse arg instem
+  /* Copy STEM  */
+  do i=0 to value(instem'.0')
+     mail.i=value(instem'.'i)
+  end
+  lines=mail.0
+  lastline=lines-2 /* it seems the last line is 2 before lines... */
+  say '*** Lines in incoming mail: '||lines
+  /* Print mail STEM  */
+  do i=1 to mail.0
+     say mail.i
+  end
+  say '*** content line of email: '||mail.lines
 
 return
 
-
+synclistdisk:
+/* write subscriber list to disk, overwriting old db file each time */
+return
 
 
 
