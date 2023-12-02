@@ -48,13 +48,13 @@ Commands supported by RELAY EXEC:
 INSTALLATION
 ------------
 
-This program runs on z/VM, VM/ESA 2.x and VM/SP6. No version earlier than VM/SP rel6 is supported currently.  
+This program runs on z/VM, VM/ESA 2.x and VM/SP R4. No version earlier than VM/SP R4 is supported currently.  
 
 1. Upload RELAY EXEC to a VM account named RELAY with permissions G. 
 
 2. configure the first few environemnt-specific variables at the top of the program. Most important are NJE node name, time zone and sysop name
 
-3. for VM/ESA and up configure the compatibility variable to 2 .For VM/SP6, use compatibility=1
+3. for VM/ESA and up configure the compatibility variable to 2 .For VM/SP R4, use compatibility=1
 
 4. Give your RELAY virtual machine the necessary class to enable it to issue this command: 
    defaults set tell msgcmd msgnoh 
