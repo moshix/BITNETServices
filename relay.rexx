@@ -10,16 +10,16 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.9.0" /* must be configured!                       */
+relaychatversion="3.9.1" /* must be configured!                       */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
-shutdownpswd="99922399999" /* any user with this passwd shuts down rver*/
-osversion="VM/SPr3   "   /* OS version for enquries and stats         */
+shutdownpswd="992299999" /* any user with this passwd shuts down rver*/
+osversion="z/VM 7.2  "   /* OS version for enquries and stats         */
 typehost="Hercules"      /* what kind of machine                      */
-hostloc  ="Timbuktu"  /* where is this machine                     */
+hostloc  ="Timbuktu   "  /* where is this machine                     */
 sysopname="MOSHIX  "     /* who is the sysop for this chat server     */
-sysopemail="moshix@gmail" /* where to contact this systop             */
+sysopemail="dfasix@gmail" /* where to contact this systop             */
 compatibility=3           /* 1 VM/SP 6, 2=VM/ESA 3=z/VM and up        */
 sysopuser='MAINT'         /* sysop user who can force users out       */
 sysopnode=translate(localnode) /* sysop node automatically set        */
@@ -453,7 +453,7 @@ usrbenchmark:
   'TELL' userid 'AT' node '->                  '
   'TELL' userid 'AT' node '-> In seconds:      '
  
-  'TELL' userid 'AT' node '-> This system                   :  'sysperf
+  'TELL' userid 'AT' node '-> ****** This system ******     :  'sysperf
   'TELL' userid 'AT' node '-> IBM z114                      :  0.225'
   'TELL' userid 'AT' node '-> IBM zEC12                     :  0.230'
   'TELL' userid 'AT' node '-> IBM z/PDT on Xeon 3.5Ghz      :  0.850'
@@ -1288,3 +1288,4 @@ return 0
 /*  v3.7.0  :  Show when last message was sent and by whom           */
 /*  v3.8.0  :  Fix some cosmetic ugliness                            */
 /*  v3.9.0  :  Add last message option                               */
+/*  v3.9.1  :  Hight this system in /benchmark                       */
