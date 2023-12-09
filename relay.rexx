@@ -10,7 +10,7 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.9.1" /* must be configured!                       */
+relaychatversion="3.9.2" /* must be configured!                       */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
@@ -342,9 +342,15 @@ lastmsg:
    call CheckTimeout currentTime
  
    listuser = userid || "@"||node
-   'TELL' userid 'AT' node '-> Last chat message below:'
-   'TELL' userid 'AT' node '-> '|| lastone
-   totmessages = totmessages + 2
+ if lastone <> "" then do
+     'TELL' userid 'AT' node '-> Last chat message below:'
+     'TELL' userid 'AT' node '-> '|| lastone
+     totmessages = totmessages + 2
+ end
+ else do
+     'TELL' userid 'AT' node '-> **** Nobody has sent any messages yet :-(  ****'
+ end
+ 
 return
  
 logoffuser:
@@ -1288,4 +1294,5 @@ return 0
 /*  v3.7.0  :  Show when last message was sent and by whom           */
 /*  v3.8.0  :  Fix some cosmetic ugliness                            */
 /*  v3.9.0  :  Add last message option                               */
-/*  v3.9.1  :  Hight this system in /benchmark                       */
+/*  v3.9.1  :  Highlight this system better in /benchmark            */
+/*  v3.9.2  :  Handle /last in a more user friendly way              */
