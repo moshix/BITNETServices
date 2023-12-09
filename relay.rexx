@@ -10,7 +10,7 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
  
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.9.2" /* must be configured!                       */
+relaychatversion="3.9.3" /* must be configured!                       */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
@@ -246,7 +246,10 @@ end
     lastmsgreceived=Extime()               /* log this for /stats command */
     listuser = userid || "@"||node
     lastmsgwho=listuser                    /* log who sent last msg for /stats */
+ 
     lastone=listuser || " said: " || msg   /* for version 3.9.0 see bottom */
+    lastonetime=mytime()                   /* for version 3.9.2 see bottom */
+ 
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
              do ci=1 to words($.@)
@@ -343,12 +346,13 @@ lastmsg:
  
    listuser = userid || "@"||node
  if lastone <> "" then do
-     'TELL' userid 'AT' node '-> Last chat message below:'
+     'TELL' userid 'AT' node '-> Last chat message below was sent at: 'lastonetime
      'TELL' userid 'AT' node '-> '|| lastone
      totmessages = totmessages + 2
  end
  else do
      'TELL' userid 'AT' node '-> **** Nobody has sent any messages yet :-(  ****'
+     totmessages = totmessages + 1
  end
  
 return
@@ -540,8 +544,9 @@ helpuser:
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
 'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
 'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
+'TELL' userid 'AT' node ' messages with  -> Is a service message from RELAY CHAT '
  
-  totmessages = totmessages + 21
+  totmessages = totmessages + 22
 return
  
  
@@ -1075,6 +1080,7 @@ returnNJEmsg4="DMTPAF208E"/* Invalid user ID message               */
 returnNJEmsg5="DMTPAF210E"/* RSCS DMTPAF210E Invalid location      */
  
 lastone=""               /* the very last real chat msg            */
+lastonetime=""           /* human readable time stamp of last msg  */
 lastmsgreceived=0        /* log when last user message was recvd   */
 lastmsgwho='NOBODY'      /* log which user sent last chat msg      */
 loggedonusers = 0        /* online user at any given moment        */
@@ -1296,3 +1302,4 @@ return 0
 /*  v3.9.0  :  Add last message option                               */
 /*  v3.9.1  :  Highlight this system better in /benchmark            */
 /*  v3.9.2  :  Handle /last in a more user friendly way              */
+/*  v3.9.3  :  /last with time stamp                                 */
