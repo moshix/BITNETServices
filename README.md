@@ -353,6 +353,6 @@ Return^codes:^^^^^^^rc =    1 => IUCV error.
 </pre>
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED:November 19, 2023 - Milan<br>
+UPDATED:November 29, 2023 - Cutchogue, NY  <br>
 Moshix
 
