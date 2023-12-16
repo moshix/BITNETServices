@@ -1,25 +1,25 @@
 /**RELAY EXEC CHAT PROGRAM             */
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
-/* for VM/SP r4-r6                    */
+/* for z/VM, VM/ESA and VM/SP          */
 /*                                     */
 /*                                     */
 /*                                     */
-/* copyright 2020-2024   by moshix     */
+/* copyright 2020, 2024  by moshix     */
 /* Apache 2.0 license                  */
 /***************************************/
 
-/* configuraiton parameters - IMPORTANT */
-relaychatversion="2.4.0" /* needed for federation compatibility check */
+/* configuraiton parameters - IMPORTANT                              */
+relaychatversion="2.5.0" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT */
 maxdormant =  3000       /* max time user can be dormat */
-localnode ="MOSHIX"      /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="xxxxxxxxx" /* any user who sends this password shuts down the chat server*/
+localnode ="MOSadfaX"      /* IMPORTANT configure your RSCS node here!! */
+shutdownpswd="1adfdasf189" /* any user who sends this password shuts down the chat server*/
 osversion="VM/SP r5"     /* OS version for enquries and stats         */
 typehost="Hercules"      /* what kind of machine                      */
 hostloc  ="Chicago, IL" /* where is this machine                   */
-sysopname="Moshix  "     /* who is the sysop for this chat server     */
-sysopemail="moshix@gmail" /* where to contact this systop            */
+sysopname="Moadffaddf  "     /* who is the sysop for this chat server     */
+sysopemail="mosadf@gmail" /* where to contact this systop            */
 compatibility=1            /* 1 VM/SP 6, 2=VM/ESA and up              */
 
 if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
@@ -168,6 +168,10 @@ handlemsg:
       when (umsg = shutdownpswd) then do
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
+      end
+
+      when (umsg = "/VERSION") then do
+           call version   userid,node
       end
 
       otherwise
@@ -326,9 +330,10 @@ sendstats:
     'TELL' userid 'AT' node '-> Hihgest nr.  of users: 'highestusers
     'TELL' userid 'AT' node '-> total number of msgs : 'totmessages
     'TELL' userid 'AT' node '-> Server up since      : 'starttime' 'timezone
-    'TELL' userid 'AT' node '-> System CPU laod      :  'cpu' %'
+    'TELL' userid 'AT' node '-> System CPU load      :  'cpu' %'
+    'TELL' userid 'AT' node '-> RELAY CHAT version   :  'relaychatversion
 
-     totmessages = totmessages+ 5
+     totmessages = totmessages+ 6
 return
 
 helpuser:
@@ -346,12 +351,13 @@ helpuser:
   'TELL' userid 'AT' node '/LOGOFF to logoff and stop getting chat messages'
   'TELL' userid 'AT' node '/STATS for chat statistics'
   'TELL' userid 'AT' node '/SYSTEM for info aobut this host'
+  'TELL' userid 'AT' node '/VERSION to obtain the version of this RELAY CHAT system'
   'TELL' userid 'AT' node '              '
 /* 'TELL' userid 'AT' node '/ROOM 1-9 to join any room, default is room zero (0)'*/
   'TELL' userid 'AT' node ' messages with <-> are incoming chat messages...'
   'TELL' userid 'AT' node ' messages with   > are service messages from chat servers'
 
-  totmessages = totmessages + 11
+  totmessages = totmessages + 12
 return
 
 countusers:
@@ -367,6 +373,13 @@ countusers:
   end
 return onlineusers
 
+version:
+/* send version number to user */
+ parse ARG userid,node
+ listuser = userid"@"node
+ 'TELL' userid 'AT' node ' > Version of this RELAY CHAT system: 'relaychatversion
+ totmessages = totmessages + 1
+return
 
 announce:
 /* announce newly logged on user to all users */
