@@ -6,21 +6,25 @@
 /*                                     */
 /*                                     */
 /* copyright 2020, 2024  by moshix     */
-/* Apache 2.0 license                  */
+/* All rights reserved                 */
 /***************************************/
 
-/* configuraiton parameters - IMPORTANT                              */
-relaychatversion="2.5.0" /* needed for federation compatibility check */
+/* configuration parameters - IMPORTANT */
+relaychatversion="2.6.0" /* needed for federation compatibility check */
 timezone="CDT"           /* adjust for your server IMPORTANT */
 maxdormant =  3000       /* max time user can be dormat */
-localnode ="MOSadfaX"      /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="1adfdasf189" /* any user who sends this password shuts down the chat server*/
+localnode ="MOSHIX"      /* IMPORTANT configure your RSCS node here!! */
+shutdownpswd="12dfda189" /* any user who sends this password shuts down the chat server*/
 osversion="VM/SP r5"     /* OS version for enquries and stats         */
 typehost="Hercules"      /* what kind of machine                      */
 hostloc  ="Chicago, IL" /* where is this machine                   */
-sysopname="Moadffaddf  "     /* who is the sysop for this chat server     */
-sysopemail="mosadf@gmail" /* where to contact this systop            */
+sysopname="Mmmmmm  "     /* who is the sysop for this chat server     */
+sysopemail="madfaf@gmail" /* where to contact this systop            */
 compatibility=1            /* 1 VM/SP 6, 2=VM/ESA and up              */
+history.0=15              /* history goes back n  last chat lines */
+ushistory.0=15            /* user logon/logff history n entries   */
+historypointer=1         /* pointer to last entry in history     */
+ushistorypointer=1       /* pointer to last entry in user history*/
 
 if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
      sl = c2d(right(diag(0), 2))
@@ -82,12 +86,21 @@ totmessages  = 0         /* total number of msgs sent */
 otime = 0                /* overtime to log off users after n minutes */
 starttime=mytime()       /* time this server started */
 logline = " "            /* initialize log line      */
+
 /* some simple logging  for stats etc        */
+
 CALL     log('RELAY chat '||relaychatversion||' started. ')
 
 
 /* init double linked list of online users   */
 call @init
+if inithistory() = 0 then do               /* init history vars */
+    SAY   'History initialization passed'
+end
+
+
+
+
 
 
 /* Invoke WAKEUP first so it will be ready to receive msgs */
@@ -174,6 +187,14 @@ handlemsg:
            call version   userid,node
       end
 
+      when (umsg = "/HISTORY") then do
+            call history   userid,node
+      end
+
+      when (umsg = "/USERS") then do
+            call users   userid,node
+       end
+
       otherwise
            call sendchatmsg userid,node,msg
         end
@@ -191,8 +212,12 @@ sendchatmsg:
                 entry=word($.@,ci)
                 if entry='' then iterate
                 parse value entry with '/'cuser'@'cnode'('otime')'
+                hmsg=mytime()||'  'cuser||' @ '||cnode||' : '||msg
+                call inserthistory hmsg,historypointer
+                if  historypointer < history.0 then historypointer=historypointer +1
                   if userid ¬= cuser then do
-                     'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
+                    'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
+
                       totmessages = totmessages+ 1
                   end
              end
@@ -244,6 +269,52 @@ logoffuser:
   'TELL' userid 'AT' node '-> You are logged off now.'
   'TELL' userid 'AT' node '-> New total number of users: 'loggedonusers
    totmessages = totmessages + 2
+   histuser=mytime()||" User: "userid||" @ "||node||" logged off"
+   call insertusrhist histuser,ushistorypointer
+   if  ushistorypointer < ushistory.0 then ushistorypointer=ushistorypointer +1
+
+return
+
+
+history:
+/* show history of last 20 chat messages to /history or upon login */
+  parse ARG userid,node
+
+i=0
+found=0
+z=history.0
+ 'TELL 'userid' AT 'node '> Previous 'history.0' messages:'
+ totmessages = totmessages + 1
+do  i = 1 to z   by 1
+   if history.i /= "" then do
+       'TELL 'userid' AT 'node '> 'history.i
+       totmessages = totmessages + 1
+       found=found+1
+   end
+end
+if found < 1 then 'TELL 'userid' AT 'node '> ...bummer... no chat history so far...'
+       totmessages = totmessages + 1
+return
+
+
+users:
+/* show history of last user logons/logoffs                        */
+  parse ARG userid,node
+
+i=0
+found=0
+z=ushistory.0
+ 'TELL 'userid' AT 'node 'Previous 'ushistory.0' user events: '
+ totmessages = totmessages + 1
+do  i = 1 to z by 1
+   if ushistory.i /= "" then do
+       'TELL 'userid' AT 'node '> 'ushistory.i
+       totmessages = totmessages + 1
+       found=found+1
+   end
+end
+if found < 1 then 'TELL 'userid' AT 'node '> ...bummer... no events found so far.'
+       totmessages = totmessages + 1
 return
 
 
@@ -268,6 +339,10 @@ return
 
       'TELL' userid 'AT' node '-> Total number of users: 'loggedonusers
        call announce  userid, node /* announce to all users  of new user */
+       histuser=mytime()||" User: "userid||" @ "||node||" logged on "
+       call insertusrhist histuser,ushistorypointer
+       if  ushistorypointer < ushistory.0 then ushistorypointer=ushistorypointer +1
+
     end
     totmessages = totmessages+ 2
  return
@@ -585,3 +660,113 @@ parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
 
 
 return
+
+inithistory:
+history.1=""
+history.2=""
+history.3=""
+history.4=""
+history.5=""
+history.6=""
+history.7=""
+history.8=""
+history.9=""
+history.10=""
+history.11=""
+history.12=""
+history.13=""
+history.14=""
+history.15=""
+history.16=""
+history.17=""
+history.18=""
+history.19=""
+history.20=""
+
+ushistory.1=""
+ushistory.2=""
+ushistory.3=""
+ushistory.4=""
+ushistory.5=""
+ushistory.6=""
+ushistory.7=""
+ushistory.8=""
+ushistory.9=""
+ushistory.10=""
+ushistory.11=""
+ushistory.12=""
+ushistory.13=""
+ushistory.14=""
+ushistory.15=""
+ushistory.16=""
+ushistory.17=""
+ushistory.18=""
+ushistory.19=""
+ushistory.20=""
+return 0
+
+inserthistory:
+/* insert history item and scroll */
+parse ARG hmsg,pointer
+if pointer < history.0 then do
+ history.pointer = hmsg
+end
+
+if pointer >= history.0 then do
+/* ok, we need to scroll up */
+
+  do i = 1 to history.0
+      d = i + 1
+      history.i =history.d
+  end
+  history.z = hmsg/* insert msg at the bottom */
+end
+return 0
+
+insertusrhist:
+/* insert history item and scroll */
+parse ARG huser,usrpointer
+if usrpointer < ushistory.0 then do
+ ushistory.usrpointer = huser
+end
+
+if usrpointer >= ushistory.0 then do
+/* ok, we need to scroll up */
+
+  do i = 1 to ushistory.0
+      d = i + 1
+      ushistory.i =ushistory.d
+  end
+
+  ushistory.z = huser /* insert user at bottom */
+end
+return 0
+
+insertusrhist:
+/* insert history item and scroll */
+parse ARG huser,usrpointer
+if usrpointer < ushistory.0 then do
+ ushistory.usrpointer = huser
+end
+
+if usrpointer >= ushistory.0 then do
+/* ok, we need to scroll up */
+
+  do i = 1 to ushistory.0
+      d = i + 1
+      ushistory.i =ushistory.d
+  end
+
+  ushistory.z = huser /* insert user at bottom */
+end
+return 0
+
+
+
+
+
+
+
+
+
+
