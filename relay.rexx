@@ -1,4 +1,4 @@
-\/* RELAY EXEC CHAT REXX                */
+/* RELAY EXEC CHAT REXX                */
 /*                                     */
 /* An NJE (bitnet/HNET) chat server    */
 /* for z/VM, VM/ESA and VM/SP          */
@@ -10,7 +10,7 @@
 /* defaults set tell msgcmd msgnoh to remove host(user) in output    */
 
 /* configuraiton parameters - IMPORTANT                               */
-relaychatversion="3.9.4" /* must be configured!                       */
+relaychatversion="3.9.5" /* must be configured!                       */
 timezone="CET"           /* adjust for your server IMPORTANT          */
 maxdormant =1200         /* max time user can be dormant in seconds   */
 localnode=""             /* localnode is now autodetected as 2.7.1    */
@@ -294,7 +294,7 @@ end
  * -----------------------------------------------------------------
  */
 /* RMX if symbol('$Room.userid')<>'VAR' then do
-      'TELL ' userid 'AT' node 'You have not entered a room yet.'
+      'TELL ' userid 'AT' node '-> You have not entered a room yet.'
       return
    end
     myRoom=$Room.userid
@@ -319,7 +319,7 @@ sendwho:
    call CheckTimeout currentTime
 
    listuser = userid || "@"||node
-   'TELL' userid 'AT' node '->List of currently logged on users:'
+   'TELL' userid 'AT' node '-> List of currently logged on users:'
    totmessages = totmessages + 1
    do ci=1 to words($.@)
       entry=word($.@,ci)
@@ -327,11 +327,11 @@ sendwho:
       parse value entry with '/'cuser'@'cnode'('otime')'
       currenttime=Extime()
       lasttime=currenttime-otime
-      'TELL' userid 'AT' node '->' cuser'@'cnode'  - last seen: 'lasttime' seconds ago'
+      'TELL' userid 'AT' node '-> ' cuser'@'cnode'  - last seen: 'lasttime' seconds ago'
       totmessages = totmessages + 1
       userswho = userswho + 1
    end
-  'TELL' userid 'AT' node '->Total online right now: 'userswho
+  'TELL' userid 'AT' node '-> Total online right now: 'userswho
    loggedonusers = userswho
   totmessages = totmessages + 1
 return
@@ -543,8 +543,8 @@ helpuser:
 'TELL' userid 'AT' node '/BENCHMARK for performance information about this server'
 'TELL' userid 'AT' node '              '
 'TELL' userid 'AT' node ' messages with <-> are incoming chat messages from users'
-'TELL' userid 'AT' node ' messages with   > are service messages from other chat servers'
-'TELL' userid 'AT' node ' messages with --> means your message was sent to all other users'
+'TELL' userid 'AT' node ' messages with  <> means your message was sent to all other users'
+'TELL' userid 'AT' node ' messages with XX> are messages from federated RELAY chat servers'
 'TELL' userid 'AT' node ' messages with  -> Is a service message from RELAY CHAT '
 
   totmessages = totmessages + 22
@@ -564,7 +564,7 @@ enterRoom:
      $Room._user=_room
      if symbol('$Room._room')=='VAR' then $Room._room=$Room._room' '_user'@'_node
         else $Room._room=_user'@'_node
- if LEFT(_user,4) \= "$ROO" then  'TELL '_user' AT '_node 'You have entered room: '_room
+ if LEFT(_user,4) \= "$ROO" then  'TELL '_user' AT '_node '-> You have entered room: '_room
   end
   totmessages = totmessages + 1
 return 0
@@ -583,7 +583,7 @@ ShowRooms:
       if symbol('$Room.troom')<>'VAR' then iterate
       tusers=$Room.troom
           'TELL 'userid' AT 'node troom'       : has 'words(tusers)' user(s)'
-          'TELL' userid 'AT' node 'Users  : 'tusers
+          'TELL' userid 'AT' node '-> Users  : 'tusers
           totmessages = totmessages+2
   end
 return 0
@@ -598,7 +598,7 @@ exitRoom:
   do ci=1 to words($Room.myRoom)
      if word($Room.myRoom,ci)=_user'@'node then do
          if silentlogoff=0 then do
-             'TELL 'userid' AT 'node 'You left room: 'myRoom
+             'TELL 'userid' AT 'node '-> You left room: 'myRoom
              totmessages = totmessages + 1
          end
         iterate
@@ -630,16 +630,16 @@ history:
 i=0
 found=0
 z=history.0
- 'TELL 'userid' AT 'node '> Previous 'history.0' messages:'
+ 'TELL 'userid' AT 'node '-> Previous 'history.0' messages:'
  totmessages = totmessages + 1
 do  i = 1 to z   by 1
    if history.i /= "" then do
-       'TELL 'userid' AT 'node '> 'history.i
+       'TELL 'userid' AT 'node '-> 'history.i
        totmessages = totmessages + 1
        found=found+1
    end
 end
-if found < 1 then 'TELL 'userid' AT 'node '> ...bummer... no chat history so far...'
+if found < 1 then 'TELL 'userid' AT 'node '-> ...bummer... no chat history so far...'
        totmessages = totmessages + 1
 return
 
@@ -667,7 +667,7 @@ return
 version:
 /* send to requestor the current RELAY CHAT version                */
   parse ARG userid,node
-'TELL' userid 'AT' node '> RELAY CHAT for z/VM, VM/ESA, VM/SP, MVS 3.8 NJE   V'relaychatversion
+'TELL' userid 'AT' node '-> RELAY CHAT for z/VM, VM/ESA, VM/SP, MVS 3.8 NJE   V'relaychatversion
 totmessages = totmessages + 1
 return
 
@@ -1305,3 +1305,4 @@ return 0
 /*  v3.9.2  :  Handle /last in a more user friendly way              */
 /*  v3.9.3  :  /last with time stamp                                 */
 /*  v3.9.4  :  Added IBM MP/3000 performance number                  */
+/*  v3.9.5  :  Fix -> > and --> mess                                 */
