@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/python3.9
+#!/usr/bin/python3.10
 import socket
 import threading
 import random
@@ -10,7 +10,7 @@ import datetime
 from dataclasses import dataclass
 
 
-# Copyright 2023 by moshix
+# Copyright 2023-2024 by moshix
 # License: All rights restricted. You may not copy, use, or re-use parts or all of this code and algorithms  without my written permission.
 # v 0.1  humble beginnings
 # v 0.2  Added random names
@@ -39,8 +39,9 @@ from dataclasses import dataclass
 # v 2.4  TODO: don't send broadcast to blocked users for certain client_socket
 # v 2.4  BUGS: after /nick operation no further commands work
 # v 2.4  BUGS: broadcasting is currently not working
+# v 2.5  Some statistics
 
-Version = "2.4"
+Version = "2.5"
 
 class bcolors:
       HEADER = '\033[95m'
@@ -326,12 +327,14 @@ def handle_client(client_socket):
               keys = blocked_users.keys()
               for item in chat_userArray:
                       if item.socket != whosent:
-                         for key in keys:
-                             for value in blocked_users[key]:
-                               if value != item.socket:
-                                  totmsg = totmsg + 1
-                                  item.socket.send(formatmsg.encode('ascii'))
-            #[                                                                                       ]
+                         totmsg = totmsg + 1
+                         item.socket.send(formatmsg.encode('ascii'))
+             #            for key in keys:
+             #                for value in blocked_users[key]:
+             #                  if value != item.socket:
+             #                     totmsg = totmsg + 1
+             #                     item.socket.send(formatmsg.encode('ascii'))
+            ##[                                                                                       ]
             #________________________________________________________________________________________
 
 
@@ -476,7 +479,7 @@ def greet_user(client_socket):
    whosent = client_socket
    user = clients[client_socket]["name"]
    formatmsg =  strhereis + bcolors.GREEN  +str(user) + bcolors.CYAN +  str("! ") +  bcolors.ENDC + newline
-   boilerplate = bcolors.CYAN + "\n\nMoshix Chat System - Version " + str(Version) + bcolors.BLUE + str(" -- /help for comands ") + bcolors.ENDC +  newline
+   boilerplate = bcolors.CYAN + "\n\nMoshix Chat System - Version " + str(Version) + bcolors.BLUE + str("\n/help for comands ") + bcolors.ENDC +  newline
    usergreet = bcolors.GREEN + "Welcome in, " + str(user) + bcolors.ENDC +  newline
    usergreetCount = bcolors.CYAN + "Currently there are: " + str(currentusers) + " users in this chat. Including you, of course. " + bcolors.ENDC +  newline
 
@@ -511,6 +514,7 @@ def name_client(client_socket):
                 'Everybody listen up! Her Roal Highness has shown up: ',
                 'Yo, yo yo! A new chatter has appeared: ',
                 'The bus arrived and it brought: ',
+                'Look what the tide brought in: ',
                 'Yeah! And in comes ']
    hereis = random.choice(informmsg)
    strhereis = bcolors.CYAN + str(hereis)
@@ -573,7 +577,7 @@ if __name__=='__main__':
       UNDERLINE = '\033[4m'
 
    # default values
-   HOST = "localhost"
+   HOST = "0.0.0.0"
    PORT = 8000
    if len(sys.argv) == 3:
       HOST=sys.argv[1]
@@ -594,7 +598,7 @@ if __name__=='__main__':
    currentusers = 0
    started = datetime.datetime.now()
    strhereis = " "
-   helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/silence user to turn off msgs from user\n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
+   helpmsg = bcolors.CYAN + "Available Commands\n\r==================\n\r/who for list of users\n\r/nick SoandSo to change your nick to SoandSo\n\r/version for version info\n\r/help for help\n\r/motd for message of the day\n\r/dm user to send a Direct Message to a user\n\r/silence user to turn off msgs from user\n\r/away to stop receiving messages for a while\n\r/stats for some statistics \n\r/logoff to log off the chat server\n\r\n\r"  + bcolors.ENDC
    Motd=bcolors.FAIL + "***NEW !!***\n\rYou can now change your nick name with /nick Sigfrid\n\r" + bcolors.ENDC
    startchatmsg=bcolors.BLUE + "Start chatting now\n\r\n\r" + bcolors.ENDC
 
