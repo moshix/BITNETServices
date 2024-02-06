@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 
 # Copyright 2023-2024 by moshix
+# Does not currently work with anything above Python 3.11 becuase of some new threading stuff in python
 # License: All rights restricted. You may not copy, use, or re-use parts or all of this code and algorithms  without my written permission.
 # v 0.1  humble beginnings
 # v 0.2  Added random names
