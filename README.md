@@ -5,7 +5,15 @@
 
 # Modern Implementations of Traditional BITNET Services
 
-RELAY CHAT, TRICKLE, LOOKUP, LISTSERV, ELIZA, QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN, XYZZY, XYZIUCV
+
+In this repository you find out the most important software to run a fully-featured NJE BITNET network, like the HNET NJE network. 
+
+The main servers are RELAY CHAT, TRICKLE, LOOKUP, LISTSERV, ELIZA.   
+
+XYZZY is a chat client in REXX for VM/SP and z/VM. 
+
+
+And QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN,  XYZIUCV are tools to ether triap NJE messages or handle them.   
 
 
 <h1>RELAY CHAT Implementation</h1>
@@ -264,28 +272,28 @@ following options: automatic logging to disk of all messages, a provision
 for modifying your NAMES file, and the help facility you are presently
 using.  These and all other functions are PF-key driven as follows:
  
-PF01:^^^^^Invokes the help facility and displays the panel you are
+PF01: Invokes the help facility and displays the panel you are
 presently reading.  If, however, the word 'pf' is on the command line,
 the settings of the function keys will be displayed in the message area,
 and the help screen will not be invoked.
  
-PF02:^^^^^Places you in the CMS subset environment where you may execute
+PF02: Places you in the CMS subset environment where you may execute
 CMS and CP commands.  Incoming messages are still trapped by PHONE, and
 will be displayed upon your exit from CMS subset.  However, PHONE will
 only trap 255 messages.  Any messages in excess of this number which
 arrive while you are in subset will be displayed on your screen in the
 normal (CMS) fashion.
  
-PF03:^^^^^Will have you exit the PHONE full screen environment and
+PF03: Will have you exit the PHONE full screen environment and
 return to CMS.
  
-PF04:^^^^^Will toggle the PHONE TAP.  When the phone tap is on, all
+PF04: Will toggle the PHONE TAP.  When the phone tap is on, all
 messages, whether incoming or outgoing, are written into a disk file
 called 'PHONE TAP A'.  The current setting of the phone tap toggle is
 displayed in the upper lefthand corner of the screen.  If the tap is
 active, the word 'Tap' is displayed there.
  
-PF05:^^^^^Assumes that a nickname or userid is present on the command
+PF05: Assumes that a nickname or userid is present on the command
 line, in one of the following forms: 'nickname', 'userid',
 'userid@nodeid', or 'userid AT nodeid'.  If the nickname or userid is
 alone on the command line, it is entered into the nickname list
@@ -298,36 +306,36 @@ on the command line.  If the nickname or userid is followed by text, a
 single message will be sent to this user who will not be added to the
 nickname list.
  
-PF06:^^^^^Rotates the 3 userids in the nickname list, allowing you to
+PF06: Rotates the 3 userids in the nickname list, allowing you to
 quickly switch from one to the other.  Keep in mind that the active
 nickname or userid is the leftmost, highlighted one.
  
-PF07:^^^^^Having set scroll off, will move back in the message buffer
+PF07: Having set scroll off, will move back in the message buffer
 maintained by PHONE.  The last one hundred messages are remembered.
 If less than that number have been received, you will back up only as
 far as the oldest message.  To return to the end of the buffer and
 resume reception and scrolling of incoming messages, use PF12 to toggle
 the scroll setting.
  
-PF08:^^^^^Will move forward in the message buffer described above.
+PF08: Will move forward in the message buffer described above.
 This key will not alter the setting of the scroll toggle.  If presently
 scrolling, this key is ignored.
  
-PF09:^^^^^Will execute the CMS command 'NAMES', placing you in an full
+PF09: Will execute the CMS command 'NAMES', placing you in an full
 screen environment suitable for the creation and modification of
 nicknames.  For more information, type 'HELP NAMES'.
  
-PF10:^^^^^Will retrieve your last message line.  Repeated invocation
+PF10: Will retrieve your last message line.  Repeated invocation
 of this function will retrieve up to the last four message lines, and
 then loop back to the first.
  
-PF11:^^^^^Will toggle the setting that determines whether the node IDs
+PF11: Will toggle the setting that determines whether the node IDs
 associated with the displayed messages are to be visible.  When these
 are not displayed, the screen may contain more messages.  An indicator
 of the current setting of this toggle is located to the left of the word
 'P H O N E' on the top line of the screen.
  
-PF12:^^^^^Will toggle the scroll setting.  When scrolling is off, the
+PF12: Will toggle the scroll setting.  When scrolling is off, the
 messages displayed on your screen will remain undisturbed (except for
 movement within the message buffer using PF07 (back) and PF08 (forward))
 until scrolling is resumed.  When this happens, your screen will display
@@ -335,16 +343,15 @@ the most recent messages.  An indicator of the current scroll setting
 is located immediately to the left of the word 'P H O N E' on the top
 line of the screen.
  
-PA2:^^^^^^Will clear the message buffer; the screen will become blank.
+PA2: Will clear the message buffer; the screen will become blank.
  
-Notes:^^^^PF13-PF24 duplicate PF01-PF12, respectively.
  
 To avoid the display of the Function Key layout upon entering
 phone, issue the following command from CMS:
  
 GLOBALV SELECT PHONE SETP PFKMSGS OFF
  
-Return^codes:^^^^^^^rc =    1 => IUCV error.
+Return^codes:       rc =    1 => IUCV error.
                     rc =    2 => I/O error to the terminal.
                     rc =    3 => I/O error to 'PHONE TAP A' file.
                     rc =    4 => IDENTIFY command error.
@@ -353,6 +360,6 @@ Return^codes:^^^^^^^rc =    1 => IUCV error.
 </pre>
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED:November 29, 2023 - Cutchogue, NY  <br>
+UPDATED:February 8, 2023- Milan, Italy  <br>
 Moshix
 
