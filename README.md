@@ -16,10 +16,10 @@ XYZZY is a chat client in REXX for VM/SP and z/VM.
 And QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN,  XYZIUCV are tools to ether triap NJE messages or handle them.   
 
 
-<h1>RELAY CHAT Implementation</h1>
+<h1>RELAY CHAT Implementation(s)</h1>
 
+There is one version for z/VM and one for older VM versions (like VM/SP r5). 
 
-This is the actively maintained RELAY CHAT. 
 
 
 It's a re-implementation from scratch of the very famous RELAY chat written by  Jeff Kell (RIP) 
@@ -50,6 +50,7 @@ Commands supported by RELAY EXEC:
 10. /LOGON
 11. /LOGOFF
 12. /BENCHMARK
+13. /LAST
 
 
 
