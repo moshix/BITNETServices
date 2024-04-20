@@ -18,9 +18,9 @@ And QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN,  XYZIUCV ar
 
 <h1>RELAY CHAT Implementation(s)</h1>
 
-There is one version for z/VM and one for older VM versions (like VM/SP r5). 
+There is one version for z/VM and one for older VM versions (like VM/SP r5). You can find it here: https://github.com/moshix/BITNETServices/blob/master/RELAYVMSP.EXEC
 
-
+The version for newer VM/SP, VM/ESA and z/VM is here: https://github.com/moshix/BITNETServices/blob/master/relay.rexx
 
 It's a re-implementation from scratch of the very famous RELAY chat written by  Jeff Kell (RIP) 
 of the University of Tennessee at Chattanooga in 1985 using the REXX programming language.
@@ -57,20 +57,19 @@ Commands supported by RELAY EXEC:
 INSTALLATION
 ------------
 
-This program runs on z/VM, VM/ESA 2.x and VM/SP R4. No version earlier than VM/SP R4 is supported currently.  
+Fetch the correct RELAY CHAT version (either VM/SP r5 and up, VM/ESA and z/VM, or MVS 3.8).  No version earlier than VM/SP R2 is supported currently.  
 
 1. Upload RELAY EXEC to a VM account named RELAY with permissions G. 
 
 2. configure the first few environemnt-specific variables at the top of the program. Most important are NJE node name, time zone and sysop name
 
-3. for VM/ESA and up configure the compatibility variable to 2 .For VM/SP R4, use compatibility=1
 
-4. Give your RELAY virtual machine the necessary class to enable it to issue this command: 
+3. Give your RELAY virtual machine the necessary class to enable it to issue this command: 
    defaults set tell msgcmd msgnoh 
    
-5. Make sure your RSCS CONFIG has class B and the option MSGNOH enabled
+4. Make sure your RSCS CONFIG has class B and the option MSGNOH enabled
 
-6. start with "RELAY" and disconnect the terminal
+5. start with "RELAY" and disconnect the terminal
 
 
 
@@ -82,7 +81,7 @@ This program runs on z/VM, VM/ESA 2.x and VM/SP R4. No version earlier than VM/S
 RELAY CHAT on MVS 3.8
 =====================
 <br>
-An MVS 3.8 version of RELAY CHAT is also availble in thi repo here: https://github.com/moshix/BITNETServices/blob/master/MVS.RELAY.EXEC
+An MVS 3.8 version of RELAY CHAT is also availble in this repo here: https://github.com/moshix/BITNETServices/blob/master/MVS.RELAY.EXEC
 <br><br><br><br>
 
 FUTURE FEATURES
