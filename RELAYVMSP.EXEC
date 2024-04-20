@@ -10,95 +10,25 @@
 /***************************************/
 
 /* configuration parameters - IMPORTANT */
-relaychatversion="2.6.0" /* needed for federation compatibility check */
-timezone="CDT"           /* adjust for your server IMPORTANT */
-maxdormant =  3000       /* max time user can be dormat */
-localnode ="MOSHIX"      /* IMPORTANT configure your RSCS node here!! */
-shutdownpswd="12dfda189" /* any user who sends this password shuts down the chat server*/
-osversion="VM/SP r5"     /* OS version for enquries and stats         */
-typehost="Hercules"      /* what kind of machine                      */
-hostloc  ="Chicago, IL" /* where is this machine                   */
-sysopname="Mmmmmm  "     /* who is the sysop for this chat server     */
-sysopemail="madfaf@gmail" /* where to contact this systop            */
-compatibility=1            /* 1 VM/SP 6, 2=VM/ESA and up              */
-history.0=15              /* history goes back n  last chat lines */
-ushistory.0=15            /* user logon/logff history n entries   */
-historypointer=1         /* pointer to last entry in history     */
-ushistorypointer=1       /* pointer to last entry in user history*/
-
-if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
-     sl = c2d(right(diag(0), 2))
-     cplevel = space(cp_id) sl
-     strlen = length(cplevel)
-     say "CP LEVEL: "cplevel
-
-     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
-            with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
-     cpu = right( cpu+0, 3)
-     say "CPU%: "cpu
-
-     Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
-     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
-     say ProdName
-     say ipltime
-          parse value stsi(1,1,1) with 49  type   +4 ,
-                                  81  seq   +16 ,
-                                 101  model +16 .
-
-     parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
-                                  39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
-                                  45 lname  +8    /* partition name         */
-
-     parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
-                                  57 cp_id +16
-
-     parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
-            with     lnum      lcpus      vcpus        ser    lname model .
-
-     blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
-             "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
-
-     brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
-
-     cfg = htopversion lcpus" CPUs" brand
-     parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
-     if rstor? <> "" then     /* We have real storage */
-       cfg = cfg " " rstor
-
-     cfg = type
-parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
-       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
-
- cpu = right( cpu+0, 3)
-
- say 'All CPU avg: 'cpu '%     Paging: 'page
-
-     say 'Machine type: 'cfg'     RAM: 'rstor
-     say 'Number of CPU: in LPAR: 'lcpus
-         /* indicators cpu page cfg rstor lcpus */
-
-  END
-/* global vars       */
-
-loggedonusers = 0        /* online user at any given moment        */
-highestusers = 0         /* most users online at any given moment  */
-totmessages  = 0         /* total number of msgs sent */
-otime = 0                /* overtime to log off users after n minutes */
-starttime=mytime()       /* time this server started */
-logline = " "            /* initialize log line      */
-
-/* some simple logging  for stats etc        */
-
-CALL     log('RELAY chat '||relaychatversion||' started. ')
+relaychatversion="2.8.0" /* needed for federation compatibility check      */
+timezone="CDT"           /* adjust for your server IMPORTANT               */
+maxdormant =  3000       /* max time user can be dormat                    */
+localnode ="MOSHIX"      /* IMPORTANT configure your RSCS node here!!      */
+shutdownpswd="12dfda189" /* any user who sends this pswrd shuts down server*/
+osversion="VM/SP r5"     /* OS version for enquries and stats              */
+typehost="Hercules"      /* what kind of machine                           */
+hostloc  ="Gcloud IL"    /* where is this machine                          */
+sysopname="Mmmmmm  "     /* who is the sysop for this chat server          */
+sysopemail="madfaf@gmail"/* where to contact this systop                   */
+compatibility=1          /* 1 VM/SP 6, 2=VM/ESA and up                     */
+history.0=15             /* history goes back n  last chat lines           */
+ushistory.0=15           /* user logon/logff history n entries             */
+historypointer=1         /* pointer to last entry in history               */
+ushistorypointer=1       /* pointer to last entry in user history          */
+sentlast=''              /* last sent user to user message                 */
 
 
-/* init double linked list of online users   */
-call @init
-if inithistory() = 0 then do               /* init history vars */
-    SAY   'History initialization passed'
-end
-
-
+call console             /* start printing relevant info on console        */
 
 
 
@@ -158,26 +88,34 @@ handlemsg:
     userid=strip(userid)
     node=strip(node)
     CurrentTime=Extime()
+   consolemsg=mytime()||'  'userid||' @ '||node||' : '||msg
+    say consolemsg
    umsg = translate(msg)  /* make upper case */
    updbuff=1
    SELECT                             /* HANDLE MESSAGE TYPES  */
       when (umsg = "/WHO") then
            call sendwho userid,node
+
       when (umsg = "/SYSTEM") then
            call systeminfo userid,node
+
       when (umsg = "/STATS") then
            call sendstats userid,node
+
       when (umsg = "/LOGOFF") then do
            call logoffuser userid,node
            updbuff=0                 /* removed, nothing to update */
       end
+
       when (umsg = "/LOGON") then do
            call logonuser  userid,node
            updbuff=0                    /* already up-to-date */
       end
+
       when (umsg = "/HELP") then do
            call helpuser  userid,node
       end
+
       when (umsg = shutdownpswd) then do
            call  log( "Shutdown initiated by: "||userid||" at node "||node)
            signal xit
@@ -193,7 +131,11 @@ handlemsg:
 
       when (umsg = "/USERS") then do
             call users   userid,node
-       end
+      end
+
+      when (umsg = "/LAST") then do
+            call lastmsg userid,node
+      end
 
       otherwise
            call sendchatmsg userid,node,msg
@@ -206,6 +148,9 @@ sendchatmsg:
 /* what we got is a message to be distributed to all online users */
     parse ARG userid,node,msg
     listuser = userid || "@"||node
+    amsg=mytime()||'  'user||' @ '||node||' : '||msg
+    sentlast=amsg
+
     if pos('/'listuser,$.@)>0 then do
       /*  USER IS ALREADY LOGGED ON */
              do ci=1 to words($.@)
@@ -215,10 +160,9 @@ sendchatmsg:
                 hmsg=mytime()||'  'cuser||' @ '||cnode||' : '||msg
                 call inserthistory hmsg,historypointer
                 if  historypointer < history.0 then historypointer=historypointer +1
-                  if userid ¬= cuser then do
+                  if userid ?= cuser then do
                     'TELL' cuser 'AT' cnode '<> 'userid'@'node':'msg
-
-                      totmessages = totmessages+ 1
+                     totmessages = totmessages+ 1
                   end
              end
     end
@@ -229,6 +173,7 @@ sendchatmsg:
             'TELL' userid 'AT' node '/HELP for help, or /LOGON to logon on'
             totmessages = totmessages + 3
        end
+
 return
 
 sendwho:
@@ -272,6 +217,27 @@ logoffuser:
    histuser=mytime()||" User: "userid||" @ "||node||" logged off"
    call insertusrhist histuser,ushistorypointer
    if  ushistorypointer < ushistory.0 then ushistorypointer=ushistorypointer +1
+
+return
+
+lastmsg:
+/* show last message received with user date and time
+   if no message has been received yet, say so */
+parse ARG userid,node
+listuser = userid || "@"||node
+
+ totmessages = totmessages + 1
+
+say 'sentlast contains: 'sentlast
+if strip(sentlast) = '' then do
+       'TELL 'userid' AT 'node '> No user message processed so far...'
+       totmessages = totmessages + 1
+end
+else do
+       'TELL 'userid' AT 'node '> Last message received: '
+       'TELL 'userid' AT 'node '> 'sentlast
+       totmessages = totmessages + 1
+end
 
 return
 
@@ -762,11 +728,96 @@ end
 return 0
 
 
+console:
+/* start printing relevant info on console        */
+if compatibility >1 then do /* this is not VM/SP 6, ie min requirement VM level*/
+     sl = c2d(right(diag(0), 2))
+     cplevel = space(cp_id) sl
+     strlen = length(cplevel)
+     say "CP LEVEL: "cplevel
+
+     parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+            with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+     cpu = right( cpu+0, 3)
+     say "CPU%: "cpu
+
+     Parse Value Diag(8,'QUERY CPLEVEL') With ProdName .
+     Parse Value Diag(8,'QUERY CPLEVEL') With uptime  , . . .  .  .  .  . ipltime
+     say ProdName
+     say ipltime
+          parse value stsi(1,1,1) with 49  type   +4 ,
+                                  81  seq   +16 ,
+                                 101  model +16 .
+
+     parse value stsi(2,2,2) with 33 lnum   +2 ,  /* Partition number       */
+                                  39 lcpus  +2 ,  /* # of CPUs in the LPAR  */
+                                  45 lname  +8    /* partition name         */
+
+     parse value stsi(3,2,2) with 39 vcpus  +2 ,  /* # of CPUs in the v.m.  */
+                                  57 cp_id +16
+
+     parse value c2d(lnum) c2d(lcpus) c2d(vcpus) right(seq,5) lname model ,
+            with     lnum      lcpus      vcpus        ser    lname model .
+
+     blist = "- 2097 z10-EC 2098 z10-BC 2817 z196 2818 z114",
+             "  2827 zEC12  2828 zBC12 2964 z13 2965 z13s"
+
+     brand = strip(translate( word(blist, wordpos(type, blist)+1), " ", "-"))
+
+     cfg = htopversion lcpus" CPUs" brand
+     parse value diag(8,"QUERY STORAGE")   with . . rstor rstor? . "15"x
+     if rstor? <> "" then     /* We have real storage */
+       cfg = cfg " " rstor
+
+     cfg = type
+parse value translate(diag(8,"INDICATE LOAD"), " ", "15"x) ,
+       with 1 "AVGPROC-" cpu "%" 1 "PAGING-"  page "/"
+
+ cpu = right( cpu+0, 3)
+
+ say 'All CPU avg: 'cpu '%     Paging: 'page
+
+     say 'Machine type: 'cfg'     RAM: 'rstor
+     say 'Number of CPU: in LPAR: 'lcpus
+         /* indicators cpu page cfg rstor lcpus */
+
+  END
+/* global vars       */
+
+loggedonusers = 0        /* online user at any given moment        */
+highestusers = 0         /* most users online at any given moment  */
+totmessages  = 0         /* total number of msgs sent */
+otime = 0                /* overtime to log off users after n minutes */
+starttime=mytime()       /* time this server started */
+logline = " "            /* initialize log line      */
+
+say 'Global variables initialized'
+
+srtime=0
+/* init double linked list of online users   */
+call @init
+if inithistory() = 0 then do               /* init history vars */
+    SAY   'History initialization passed'
+end
+say ' '
+
+say 'Server up since      : 'starttime' 'timezone
+
+say 'NJE node name        : 'localnode
+say 'Relay chat version   : 'relaychatversion
+say 'OS for this host     : 'osversion
+say 'Type of host         : 'typehost
+say 'Location of this host: 'hostloc
+say 'Time Zone of         : 'timezone
+say ' '
+say '******************************************************'
+CALL     log('RELAY chat '||relaychatversion||' started. ')
+say '******************************************************'
+say ' '
+return
 
 
 
-
-
-
-
-
+/* Version history                                     */
+/* v 2.7.0   Provide last message function /last       */
+/* v 2.8.0   Better start info for console             */
