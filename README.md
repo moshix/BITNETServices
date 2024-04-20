@@ -82,7 +82,7 @@ This program runs on z/VM, VM/ESA 2.x and VM/SP R4. No version earlier than VM/S
 RELAY CHAT on MVS 3.8
 =====================
 <br>
-An MVS 3.8 version of RELAY CHAT is also availble in this repo. 
+An MVS 3.8 version of RELAY CHAT is also availble in thi repo here: https://github.com/moshix/BITNETServices/blob/master/MVS.RELAY.EXEC
 <br><br><br><br>
 
 FUTURE FEATURES
