@@ -360,6 +360,6 @@ Return^codes:       rc =    1 => IUCV error.
 </pre>
 <br><br>
 ORIGINAL RELEASE: November 2020<br>
-UPDATED:February 8, 2023- Milan, Italy  <br>
-Moshix
+UPDATED: April 20, 2024 - Paris, France  <br>
+All the code I wrote is copyright 2020-2024 by moshix
 
