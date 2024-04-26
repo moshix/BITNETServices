@@ -360,7 +360,7 @@ Return^codes:       rc =    1 => IUCV error.
                     rc =  159 => insufficient memory.
 </pre>
 <br><br>
-ORIGINAL RELEASE: November 2020<br>
-UPDATED: April 20, 2024 - Paris, France  <br>
+ORIGINAL RELEASE: November 2020<br><br>
+UPDATED: April 26, 2024 - Cutchogue, NY  <br>
 All the code I wrote is copyright 2020-2024 by moshix
 
