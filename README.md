@@ -264,7 +264,7 @@ The format of the PHONE command is:
 |           |  +-                     -+                                      |
 |           |                                                                 |
 -------------------------------------------------------------------------------
- 
+</pre>
 This program offers a full screen environment capable of sending
 messages to both local users and those on other systems.  In addition to
 its ability to send messages to one of three users, PHONE features the
@@ -348,7 +348,8 @@ PA2: Will clear the message buffer; the screen will become blank.
  
 To avoid the display of the Function Key layout upon entering
 phone, issue the following command from CMS:
- 
+
+<pre> 
 GLOBALV SELECT PHONE SETP PFKMSGS OFF
  
 Return^codes:       rc =    1 => IUCV error.
