@@ -196,7 +196,7 @@ by IUCVTRAP. The following CP SET commands have explanations provided:
  CP SET SMSG IUCV    - intercept incoming Special Messages.
  CP SET VMCONIO IUCV - intercept CMS generated console output.
  CP SET CPCONIO IUCV - intercept CP generated console output.
- 
+ </pre>
 Type HELP CP SET for more information on the above mentioned command.
  
 When any of the above options are set to IUCV, IUCVTRAP may be used
@@ -226,7 +226,7 @@ A full 255 characters will be stacked for each stacked line,
 although EXEC2 may only access
 the first 130 characters of each line.
 Rexx may access all 255.
-</pre>
+
 <br><br>Find BITNET goodies in the VM Workshop tape collection http://www.vmworkshop.org/1986/86tools.shtml
 <h1>SUPERMSG</h1>
 <br>
