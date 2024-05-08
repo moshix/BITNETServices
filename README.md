@@ -13,7 +13,7 @@ The main servers are RELAY CHAT, TRICKLE, LOOKUP, LISTSERV, ELIZA.
 XYZZY is a chat client in REXX for VM/SP and z/VM. 
 
 
-And QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN,  XYZIUCV are tools to ether triap NJE messages or handle them.   
+And QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN,  XYZIUCV are tools to ether trap NJE messages or to handle them.   
 
 
 <h1>RELAY CHAT Implementation(s)</h1>
