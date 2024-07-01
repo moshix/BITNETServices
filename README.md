@@ -6,14 +6,11 @@
 # Modern Implementations of Traditional BITNET Services
 
 
-In this repository you find out the most important software to run a fully-featured NJE BITNET network, like the HNET NJE network. 
+In this repository you find out the most important software to run a fully-featured NJE BITNET network, like the HNET NJE network. Many of these tools are written by me. Some others are historical tools written by others, more famous developers from the Golden Age of NJE.   
 
-The main servers are RELAY CHAT, TRICKLE, LOOKUP, LISTSERV, ELIZA.   
+The main programs are RELAY CHAT, TRICKLE, LOOKUP, LISTSERV, ELIZA.    
 
-XYZZY is a chat client in REXX for VM/SP and z/VM. 
-
-
-And QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN,  XYZIUCV are tools to ether trap NJE messages or to handle them.   
+XYZZY is a chat client in REXX for VM/SP and z/VM. And QBIT, QUSER, MTRAP, YWAKEUP, NSCAN, IUCVTRAP, SUPERMSG, CLRSCRN,  XYZIUCV are tools to ether trap NJE messages or to handle them.   
 
 
 <h1>RELAY CHAT Implementation(s)</h1>
