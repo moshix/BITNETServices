@@ -81,17 +81,6 @@ RELAY CHAT on MVS 3.8
 An MVS 3.8 version of RELAY CHAT is also availble in this repo here: https://github.com/moshix/BITNETServices/blob/master/MVS.RELAY.EXEC
 <br><br><br><br>
 
-FUTURE FEATURES
----------------
-<br><br>
-- Federation of relay chat servers                  <br>
-- Loop detection                                    [DONE]<br>
-- Message throttling                                    [DONE]<br>
-- Persisting users unto a file for crash recovery<br>
-- MVS 3.8 port with BREXX[DONE]<br>
-- recent chat history upon login [DONE]<br>
-- system benchmarking for user reference and flagellation [DONE]<br>
-<br><br>
 
 relay.bash for Linux
 ====================
