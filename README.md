@@ -19,7 +19,7 @@ There is one version for z/VM and one for older VM versions (like VM/SP r5). You
 
 The version for newer VM/SP, VM/ESA and z/VM is here: https://github.com/moshix/BITNETServices/blob/master/relay.rexx
 
-It's a re-implementation from scratch of the very famous RELAY chat written by  Jeff Kell (RIP) 
+It's a re-implementation by me, from scratch, of the very famous RELAY chat written by  Jeff Kell (RIP) 
 of the University of Tennessee at Chattanooga in 1985 using the REXX programming language.
 
 Before BITNET Relay was implemented, any form of communication over BITNET required identifying the remote user and host.
