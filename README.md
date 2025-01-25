@@ -1,6 +1,6 @@
 [![Discord](https://img.shields.io/discord/423767742546575361.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/vpEv3HJ)
 <a href="https://hits.seeyoufarm.com"><img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fmoshix%2FBITNETServices&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false"/></a>
-[![View SBOM](https://img.shields.io/badge/sbom.sh-viewSBOM-blue?link=https%3A%2F%2Fsbom.sh%2F0ff42f94-545a-4ffe-a7d0-4da9d6b24c2b)](https://sbom.sh/0ff42f94-545a-4ffe-a7d0-4da9d6b24c2b)
+
 <br>
 
 # Modern Implementations of Traditional BITNET Services
