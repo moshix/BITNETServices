@@ -1,6 +1,7 @@
-#!/bin/bash510
+#!/usr/local/bin/bash52  # or wherever your bash rel > 4.2 resides
+
 # RELAY CHAT SERVER WITH FEDERATION
-# COPYRIGHT 2021 BY MOSHIX
+# COPYRIGHT 2021-2025 BY MOSHIX
 # This script is loaded at boot time and stays residdent reading from a named pipe
 # This requires bash > 4.2.0
 # best start this program like this:
@@ -44,12 +45,14 @@
 # Ver 0.65 - trap exit and cleanup
 # Ver 0.66 - fix CPU busy calculation
 # Ver 0.70 - History of last n users
-# TODO !!  - 
+# Ver 0.80 - Chat history 
+# Ver 0.90 - Fixed various small issues (July 2025)
+# TODO !!  - Chat lines history for people newly logged in
 
 # Global Variables
-VERSION="0.70"
-MYNODENAME="ROOT@RELAY"
-SHUTDOWNPSWD="777777777"  # any user with this passwd shuts down rver
+VERSION="0.80"
+MYNODENAME="CHAT@RELAY"
+SHUTDOWNPSWD="========="  # any user with this passwd shuts down rver
 OSVERSION="RHEL 7 "       # OS version for enquries and stats       
 TYPEHOST="GCLOUD SERVER"  # what kind of machine                     
 HOSTLOC="TIMBUKTU    "    # where is this machine                
@@ -63,8 +66,8 @@ SEND2ALL=1                #  0 send chat msgs to users in same room
 LOG2FILE=1                #  all calls to log also in RELAY LOG A 
                           #  make sure to not run out of space !!!
 FEDERATION=0              #  Do we want federation? =1 yes, =0 no
-HISTORY=15                #  history goes back n  last chat lines 
-USHISTORY=15              #  user logon/logff history n entries  
+CHATHISTORY=15            #  history goes back n  last chat lines 
+HISTORY=15                #  user logon/logff history n entries  
 SILENTLOGOFF=0            #  silently logg off user by 1/min wakeup call 
 EXPIRE=30                 # expire users after n minutes
 EXPIRESECONDS=$(( 60 * $EXPIRE ))
@@ -111,6 +114,7 @@ INCOMINGMSG=""             # this incoming message in handling
 NUMBERMSGS=0               # number of messages sent and received
 NUMBERUSERS=0              # number of users currently online
 MAXUSERS=0                 # maximum number of users seen online
+receivedmsgnumber=0        # number of received messages for throttling
 # all functions here. MAIN loop much further below 
 # in VIM search for MAINLOOP to get there
 
@@ -126,7 +130,7 @@ echo "${yellow}Welcome to RELAY CHAT NJE for funetnje, SNA NJE on Linux  ${reset
 echo " " 
 echo  "${red}RELAY CHAT ${green}v$VERSION ${red}SERVER BASH VERSION STARTING...${reset}" 
 result=`check_pipe`
-echo "result: $result"
+#echo "result: $result"
 if [[ $result != "true" ]]; then
  tput blink; tput rev;  echo -e  "\033[33;5mNamed pipe /root/chat/chat.pipe does not exist!! RELAY CHAT shutting down now !!\033[0m" ; tput sgr0 
 fi
@@ -146,6 +150,7 @@ echo " "
 echo " "
 echo "RELAY CHAT is now running. Console messages below: ${reset} " 
 echo " "
+touch recent.tmp
 }
 
 cleanup () {
@@ -165,13 +170,17 @@ if [[ $content != *"@"* ]]; then
   echo "RELAY CHAT: good bye"
 else
   echo "${yellow} This NJE message will be lost: $content ${reset}"
+  echo "going..."
+  sleep 0.2s
+  echo "going...going..."
+  sleep 0.2s
+  echo "going...going......."
   echo "RELAY CHAT: good bye"
 fi
-rm recent.tmp
-rm sorted.recent.tmp # clean up old files from last_seen function
+[ -e  recent.tmp ] && rm recent.tmp
+[ -e  sorted.recent.tmp ] && rm sorted.recent.tmp  # clean up old files from last_seen function
 exit
 }
-
 
 check_pipe () {
 # this function checks if the named pipe exists
@@ -280,17 +289,23 @@ printf "%s\n" "${onlineusers[*]}"  > users.txt
 }
 
 printarr() { 
-declare -n __p="$1"
-for k in "${!__p[@]}"; do
-   printf "%s %s\n" "$k" "${__p[$k]}" > recent.tmp
+# print entire array of onlineusers into a file
+declare -n p="$1"
+for k in "${!p[@]}"; do
+   printf "%s %s\n" "$k" "${p[$k]}" >> recent.tmp
  done  
 }  
 
 
 last_seen () {
 # send list of last seen $HISTORY users to $1
-printarr onlineusers # print to recent.tmp
-head "-$HISTORY" recent.tmp | sort -k2 -n  > sorted.recent.tmp
+for k in "${!onlineusers[@]}"; do
+   printf "%s %s\n" "$k" "${onlineusers[$k]}" > recent.tmp
+done
+
+#printarr "$onlineusers" # print to recent.tmp
+echo "/users debug: "`head -n "$HISTORY" recent.tmp | sort -k2 -n `
+head -n "$HISTORY" recent.tmp | sort -k2 -n  > sorted.recent.tmp
 readarray -t lines < sorted.recent.tmp
 ltnow=`date +%s` # now now in seconds
 for line in "${lines[@]}"; do
@@ -307,8 +322,8 @@ for line in "${lines[@]}"; do
    
    send_msg "$1" "User $key seen last $lseemin ago"
 done
-rm sorted.recent.tmp
-rm recent.tmp
+[ -e  sorted.recent.tmp ] && rm sorted.recent.tmp
+[ -e recent.tmp ] &&  rm recent.tmp
 }
 
 add_user() {
@@ -338,6 +353,7 @@ send_chatmsg() {
 # send non-command chat message to all logged in users $1 is user and $2 is message
 # this function only gets one parameter, ie the message
 # make sure the sender is actually logged on!
+# also keep last 15 messages in a chat array
 if [ -v 'onlineusers[$1]' ]; then
   # yes, user is logged on and can send messages
 
@@ -354,7 +370,7 @@ fi
 
 remove_user() {
 # remove user from array because of logout or expiry or error message NJE
-unset $onlineusers[$1]
+unset onlineusers[$1]
 send_msg "$1" ">> You have been logged off"
 }
 
@@ -380,7 +396,7 @@ let receivedmsgnumber++ # update number of incoming messages
 last=$1
 elapsed=$((last - lastbefore))
 if (($receivedmsgnumber == 0 )); then
-  receivedmsgnumber = 1 # avoid division by zero
+  receivedmsgnumber=1 # avoid division by zero
 fi
 watermark=$((elapsed / receivedmsgnumber))
 if ((watermark > 50 )); then
@@ -389,7 +405,7 @@ if ((watermark > 50 )); then
 
   sleep 0.5s
 fi
-if ((watermark >> 100 )); then
+if ((watermark > 100 )); then
   echo "CHAT801S 100  / SEC WATERMARK REACHED. PAUSING 1S"
   log_error "CHAT801S 100  / SEC WATERMARK REACHED. PAUSING 1S"
   sleep 1s
@@ -484,7 +500,7 @@ if [[ $uppermsg == "/HELP" ]]; then
    send_msg "$1" "To see details about this chat server:.............../SYSTEM"
    send_msg "$1" "To see statistics about this chat server:............/STATS"
    send_msg "$1" "To see who is online now:............................/WHO"
-   send_msg "$1" "To see list of recently seen users..................../USERS"
+   send_msg "$1" "To see list of recently seen users.................../USERS"
    send_msg "$1" "To send a direct message to another user............./DM" 
    send_msg "$1" "To see this help menu:.............................../HELP"
 fi
@@ -543,7 +559,7 @@ if read line < /root/chat/chat.pipe; then
            fi
        fi
   fi
-
+sleep 0.5
 done
 
 # time to shutdown 
