@@ -347,6 +347,6 @@ Return^codes:       rc =    1 => IUCV error.
 </pre>
 <br><br>
 ORIGINAL RELEASE: November 2020<br><br>
-UPDATED: January 2025 - Cutchogue, NY  <br>
+UPDATED: July 2025 - Montafon, Austria  <br>
 All the code I wrote is copyright 2020-2025 by moshix
 
