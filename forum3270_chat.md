@@ -14,6 +14,9 @@ The TSU (forum3270) chat system is a real-time, multi-user messaging system desi
 It supports multiple concurrent users in a global chat room with live message 
 distribution, user presence tracking, and realtime screen updates.
 
+It uses of goroutines, channels, and careful synchronization to provide a robust and scalable chat system, 
+indepentely on the connection client, ie 3270 or ssh (which is also supported!). 
+
 ### Key Features:
 - Realtime message broadcasting to all connected users
 - Thread-safe connection management
@@ -27,7 +30,7 @@ distribution, user presence tracking, and realtime screen updates.
 
 ### 2.1 LiveChat Manager (models/chat.go)
 
-The LiveChat struct is the central coordinator for all chat operations:
+The LiveChat structure is the central coordinator for all chat operations:
 
      type LiveChat struct {
          activeUsers   map[int64]*ChatUser      // Currently active users
@@ -47,7 +50,7 @@ This structure manages:
 
 ### 2.2 Connection Management (chat.go)
 
-The system uses a thread-safe connection wrapper to prevent race conditions:
+The system uses a thread-safe connection wrapper to prevent race codnitions:
 
      type safeConn struct {
          conn net.Conn
@@ -73,7 +76,7 @@ A global connection map tracks all active chat connections:
 
 ### 2.3 Message Structure
 
-Messages use a standardized format for both database storage and in-memory handling:
+Mesages use a standardized format for both database storage and in-memory handling:
 
      type ChatMessage struct {
          ID        int64
@@ -110,7 +113,7 @@ When a user enters chat, the system performs several registration steps:
 
 ### 3.2 Message Broadcasting Mechanism
 
-The system uses a publisher-subscriber pattern for message distribution:
+The system uses a publisher/subscriber pattern for message distriution:
 
      func (lc *LiveChat) Subscribe(userID int64) chan ChatMessage {
          lc.mu.Lock()
@@ -156,7 +159,7 @@ Each user's chat session runs in the main thread, handling:
 
 ### 4.2 Background Update Thread
 
-Each user also has a dedicated background thread (`chatUpdateThread`) that handles:
+Each user also has a dedicated backgound thread (`chatUpdateThread`) that handles:
 
      func (s *session) chatUpdateThread(conn *safeConn, done chan struct{}, 
          backgroundComplete chan struct{}, updateChan chan models.ChatMessage, 
@@ -208,7 +211,7 @@ A single system-wide thread polls the database for new messages:
      }
 
 This thread:
-- Queries the database every 2 seconds (configurable)
+- Queries teh  database every 2 seconds (configurable)
 - Checks for messages with ID > lastMessageID
 - Broadcasts new messages to all subscribers
 - Updates the lastMessageID tracker
@@ -217,7 +220,7 @@ This thread:
 
 ### 5.1 Reader-Writer Locks
 
-The system uses `sync.RWMutex` for the LiveChat manager to allow:
+The system uses `sync.RWMutex` for    the LiveChat manager to allow:
 - Multiple concurrent readers (checking user lists, broadcasting messages)
 - Exclusive writers (adding/removing users, modifying subscriptions)
 
@@ -324,7 +327,7 @@ The system supports adaptive layouts based on terminal capabilities:
 
 ## 8. GO3270 SCREEN PRESERVATION TECHNIQUES
 
-The chat system employs sophisticated screen update mechanisms using the go3270 library to 
+The chat system employs a sophisticated screen update mechanisms using the go3270 library to 
 ensure that user input is never lost during real-time updates. This is achieved through 
 careful use of the `ShowScreenOpts` function with specific options that control screen 
 behavior.
