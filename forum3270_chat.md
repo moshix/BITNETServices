@@ -17,6 +17,13 @@ distribution, user presence tracking, and realtime screen updates.
 It uses of goroutines, channels, and careful synchronization to provide a robust and scalable chat system, 
 indepentely on the connection client, ie 3270 or ssh (which is also supported!). 
 
+Key architectural strengths:
+- Clear separation between data layer (models/chat.go) and presentation (chat.go)
+- Robust error handling and resource cleanup
+- Scalable publisher-subscriber pattern
+- Adaptive UI layout support
+- Thread-safe operations through-out
+
 ### Key Features:
 - Realtime message broadcasting to all connected users
 - Thread-safe connection management
@@ -548,13 +555,3 @@ provides excellent performance while maintaining thread safety. The separation o
 concerns between message persistence, distribution, and presentation allows for 
 maintainable and extensible code.
 
-Key architectural strengths:
-- Clear separation between data layer (models/chat.go) and presentation (chat.go)
-- Robust error handling and resource cleanup
-- Scalable publisher-subscriber pattern
-- Adaptive UI layout support
-- Thread-safe operations throughout
-
-This design could be extended to support additional features like private messaging,
-multiple chat rooms, or message history search while maintaining the same underlying
-architectural principles.
