@@ -4,13 +4,13 @@ TECHNICAL DOCUMENTATION: TSU (Forum3270) CHAT SYSTEM ARCHITECTURE
 (c) Moshix 2025 
 v1.12 - July 2025
 
-This docmuent provides a comprhensive technical overview of the TSU chat system implementation, 
+This docmuent provides a comprehensive technical overview of the TSU chat system implementation, 
 covering its multi-user architecture, threading model, synchronization mechanisms, and key 
 code components.
 
 ## 1. SYSTEM OVERVIEW
 
-The TSU (forum3270) chat system is a real-time, multi-user messaging system designed for 3270 terminals. 
+The TSU (forum3270) chat sytsem is a real-time, multi-user messaging system designed for 3270 terminals. 
 It supports multiple concurrent users in a global chat room with live message 
 distribution, user presence tracking, and realtime screen updates.
 
@@ -18,7 +18,7 @@ It uses of goroutines, channels, and careful synchronization to provide a robust
 indepentely on the connection client, ie 3270 or ssh (which is also supported!). 
 
 Key architectural strengths:
-- Clear separation between data layer (models/chat.go) and presentation (chat.go)
+- Clear separetion between data layer (models/chat.go) and presentation (chat.go)
 - Robust error handling and resource cleanup
 - Scalable publisher-subscriber pattern
 - Adaptive UI layout support
@@ -37,7 +37,7 @@ Key architectural strengths:
 
 ### 2.1 LiveChat Manager (models/chat.go)
 
-The LiveChat structure is the central coordinator for all chat operations:
+The LiveChat structure is teh central coordinator for all chat operations:
 
      type LiveChat struct {
          activeUsers   map[int64]*ChatUser      // Currently active users
@@ -70,7 +70,7 @@ The system uses a thread-safe connection wrapper to prevent race codnitions:
          return sc.conn.Write(b)
      }
 
-A global connection map tracks all active chat connections:
+A global connection map tracs all active chat connections:
 
      type chatConnectionMap struct {
          connections map[int64]net.Conn
@@ -159,9 +159,9 @@ The chat system employs a sophisticated multi-threaded architecture:
 ### 4.1 Main Chat Thread
 
 Each user's chat session runs in the main thread, handling:
-- User input processing
+- User input procesing
 - Screen rendering with user input
-- Message composition and sending
+- Message compsition and sending
 - Function key handling (F3=Exit, etc.)
 
 ### 4.2 Background Update Thread
@@ -341,7 +341,7 @@ behavior.
 
 ### 8.1 Dual Screen Update Modes
 
-The system uses two distinct screen update approaches:
+The system uses two distict screen update approaches:
 
 #### Full Screen Updates (Main Thread)
 When waiting for user input or initially displaying the screen:
@@ -390,7 +390,7 @@ For terminals supporting larger than 24x80 dimensions:
          screenOpts.AltScreen = dev
      }
 
-This ensures proper screen handling on larger terminals while maintaining the same 
+This ensures poper screen handling on larger terminals while maintaining the same 
 input preservation behavior.
 
 ### 8.3 Targeted Screen Updates
@@ -522,7 +522,7 @@ Messages are persisted in SQLite with the following schema:
 - `chat.room_id`: Room identifier ('global' for main chat)
 - `chat.created_at`: Timestamp
 
-The polling mechanism uses message_id for efficient incremental queries:
+The polling mechanim uses message_id for efficient incremental queries:
 
      SELECT c.message_id, c.user_id, u.username, c.message, c.created_at, c.room_id
      FROM chat c
